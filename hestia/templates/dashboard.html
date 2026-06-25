@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ tenant.name }}</h1>
+    <span class="muted">{{ shoot_type_labels.get(tenant.shoot_type, tenant.shoot_type) }} studio ·
+      <span class="pill">{{ plan.name }} · {{ plan.price }}</span></span>
+  </div>
+  <a class="btn" href="/galleries/new">+ New gallery</a>
+</div>
+
+<div class="grid cols-2">
+  <div class="card stack">
+    <h3>Recent galleries</h3>
+    {% if galleries %}
+      <table>
+        <thead><tr><th>Gallery</th><th>Images</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for g in galleries %}
+          <tr>
+            <td><a href="/galleries/{{ g.id }}">{{ g.title }}</a>
+              {% if g.client_name %}<span class="muted"> · {{ g.client_name }}</span>{% endif %}</td>
+            <td>{{ g.image_count }}</td>
+            <td><span class="pill {{ 'on' if g.status == 'published' else 'off' }}">{{ g.status }}</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <a class="btn ghost" href="/galleries">All galleries →</a>
+    {% else %}
+      <p class="muted">No galleries yet.</p>
+      <a class="btn" href="/galleries/new">Create your first gallery</a>
+    {% endif %}
+  </div>
+
+  <div class="card stack">
+    <h3>Recent pipeline runs</h3>
+    {% if runs %}
+      <table>
+        <thead><tr><th>Run</th><th>Gallery</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for r in runs %}
+          <tr>
+            <td><a href="/pipeline/{{ r.id }}">#{{ r.id }}</a></td>
+            <td>{{ r.source_id }}</td>
+            <td><span class="pill {{ 'on' if r.status == 'done' else 'off' }}">{{ r.status }}</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No runs yet. Open a gallery and click <strong>Process</strong> to
+        run vision → offer.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

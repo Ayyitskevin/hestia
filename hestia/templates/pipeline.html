@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Pipeline run #{{ run.id }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Processing gallery</h1>
+    <span class="muted">Run #{{ run.id }} · gallery {{ run.gallery_id }}</span>
+  </div>
+  <a class="btn ghost" href="/galleries/{{ run.gallery_id }}">← Back to gallery</a>
+</div>
+
+<div class="card">
+  {% include "_stepper.html" %}
+</div>
+
+<script>
+(function () {
+  var url = "/pipeline/{{ run.id }}/partial";
+  function terminal(s) { return s === "done" || s === "error"; }
+  function poll() {
+    var el = document.getElementById("stepper");
+    if (!el || terminal(el.getAttribute("data-status"))) return;
+    fetch(url, { headers: { "X-Requested-With": "fetch" } })
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        var cur = document.getElementById("stepper");
+        if (cur) cur.outerHTML = html;
+        var next = document.getElementById("stepper");
+        if (next && !terminal(next.getAttribute("data-status"))) setTimeout(poll, 1500);
+      })
+      .catch(function () { setTimeout(poll, 3000); });
+  }
+  if (!terminal("{{ run.status }}")) setTimeout(poll, 1200);
+})();
+</script>
+{% endblock %}

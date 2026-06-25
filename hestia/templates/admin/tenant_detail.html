@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ tenant.name }} — Hestia admin{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ tenant.name }}</h1>
+    <span class="muted mono">{{ tenant.slug }}</span>
+  </div>
+  <a class="btn ghost" href="/admin/tenants">← All studios</a>
+</div>
+
+{% if created %}<div class="alert ok">Studio created. Save the API key below — it's shown once.</div>{% endif %}
+
+{% if new_api_key %}
+<div class="card stack" style="border-color:#f0d9b4; background:#fff7ec">
+  <h3>API key (shown once)</h3>
+  <p class="mono" style="word-break:break-all">{{ new_api_key }}</p>
+  <p class="hint">Bearer token for automation: <span class="mono">Authorization: Bearer {{ new_api_key }}</span></p>
+</div>
+{% endif %}
+
+<div class="grid cols-2" style="margin-top:18px">
+  <div class="card stack">
+    <h3>Shoot type</h3>
+    <p class="muted">Currently <strong>{{ shoot_type_labels.get(tenant.shoot_type, tenant.shoot_type) }}</strong> ·
+      album offer {{ 'on' if flags.album_offer else 'off' }} · {{ flags.hero_count }} hero picks</p>
+    <form method="post" action="/admin/tenants/{{ tenant.id }}/shoot-type" style="display:flex; gap:10px; align-items:center">
+      <select name="shoot_type">
+        {% for st in shoot_types %}
+          <option value="{{ st }}" {{ 'selected' if st == tenant.shoot_type else '' }}>{{ shoot_type_labels.get(st, st) }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn secondary" type="submit">Update</button>
+    </form>
+  </div>
+
+  <div class="card stack">
+    <h3>Plan</h3>
+    <p class="muted"><span class="pill">{{ plan.name }} · {{ plan.price }}</span> — {{ plan.blurb }}</p>
+    <p class="hint">Live Stripe billing is a Phase 1 deliverable.</p>
+  </div>
+</div>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>API keys</h3>
+  {% if api_keys %}
+    <table>
+      <thead><tr><th>Prefix</th><th>Created</th></tr></thead>
+      <tbody>
+        {% for k in api_keys %}<tr><td class="mono">{{ k.prefix }}</td><td class="muted">{{ k.created_at }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No API keys yet.</p>
+  {% endif %}
+  <form method="post" action="/admin/tenants/{{ tenant.id }}/api-key">
+    <button class="btn secondary" type="submit">Mint new API key</button>
+  </form>
+</div>
+{% endblock %}

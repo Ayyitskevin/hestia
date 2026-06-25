@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Onboard studio — Hestia admin{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>Onboard a studio</h1>
+  <p class="muted">Studio name → shoot type → owner login. The shoot type tunes offer
+    and album defaults.</p>
+  <form method="post" action="/admin/onboarding">
+    <label for="name">Studio name</label>
+    <input type="text" id="name" name="name" placeholder="Kevin Lee Photography" required autofocus>
+
+    <label for="shoot_type">Primary shoot type</label>
+    <select id="shoot_type" name="shoot_type">
+      {% for st in shoot_types %}
+        <option value="{{ st }}">{{ shoot_type_labels.get(st, st) }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="owner_email">Owner email</label>
+    <input type="email" id="owner_email" name="owner_email" required>
+
+    <label for="owner_password">Owner password</label>
+    <input type="password" id="owner_password" name="owner_password" required>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Create studio</button>
+      <a class="btn ghost" href="/admin/tenants">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

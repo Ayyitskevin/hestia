@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Studios — Hestia admin{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Studios</h1>
+  <a class="btn" href="/admin/onboarding">+ Onboard studio</a>
+</div>
+{% if tenants %}
+<div class="card">
+  <table>
+    <thead><tr><th>Studio</th><th>Slug</th><th>Shoot type</th><th>Plan</th><th>Created</th></tr></thead>
+    <tbody>
+      {% for t in tenants %}
+      <tr>
+        <td><a href="/admin/tenants/{{ t.id }}">{{ t.name }}</a></td>
+        <td class="mono">{{ t.slug }}</td>
+        <td>{{ shoot_type_labels.get(t.shoot_type, t.shoot_type) }}</td>
+        <td><span class="pill">{{ t.plan }}</span></td>
+        <td class="muted">{{ t.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card stack">
+  <p class="muted">No studios yet.</p>
+  <a class="btn" href="/admin/onboarding">Onboard the first studio</a>
+</div>
+{% endif %}
+{% endblock %}

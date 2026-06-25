@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}New gallery — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>New gallery</h1>
+  <form method="post" action="/galleries">
+    <label for="title">Gallery title</label>
+    <input type="text" id="title" name="title" placeholder="Sarah &amp; Tom — Wedding" required autofocus>
+    <label for="client_name">Client name <span class="muted">(optional)</span></label>
+    <input type="text" id="client_name" name="client_name" placeholder="Sarah Lin">
+    <label for="pin">Client PIN <span class="muted">(optional — gates the client gallery)</span></label>
+    <input type="text" id="pin" name="pin" placeholder="4-digit PIN" maxlength="12">
+    <div class="form-actions">
+      <button class="btn" type="submit">Create gallery</button>
+      <a class="btn ghost" href="/galleries">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

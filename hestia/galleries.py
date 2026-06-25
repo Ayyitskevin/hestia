@@ -1,0 +1,173 @@
+"""Native multi-tenant gallery + image hosting — the re-platformed Mise core.
+
+In the single-studio suite, galleries live in Mise (single-tenant, integer ids,
+shared local disk). For a multi-tenant SaaS that does not work, so Hestia hosts
+galleries itself: tenant-scoped rows here, blobs in :mod:`hestia.storage`. This
+is the part of Hestia that is genuinely a new product rather than orchestration.
+"""
+
+from __future__ import annotations
+
+import re
+import sqlite3
+from typing import BinaryIO
+
+from .storage import Storage, image_key
+
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _slugify(value: str) -> str:
+    return _SLUG_RE.sub("-", (value or "").strip().lower()).strip("-") or "gallery"
+
+
+# ── Galleries ───────────────────────────────────────────────────────────────
+
+
+def create_gallery(
+    conn: sqlite3.Connection,
+    *,
+    tenant_id: str,
+    title: str,
+    client_name: str = "",
+    pin: str | None = None,
+) -> dict:
+    base = _slugify(title)
+    slug = base
+    n = 2
+    while conn.execute(
+        "SELECT 1 FROM galleries WHERE tenant_id = ? AND slug = ?", (tenant_id, slug)
+    ).fetchone():
+        slug = f"{base}-{n}"
+        n += 1
+    cur = conn.execute(
+        "INSERT INTO galleries (tenant_id, slug, title, client_name, pin) VALUES (?, ?, ?, ?, ?)",
+        (tenant_id, slug, title, client_name, pin or None),
+    )
+    return get_gallery(conn, tenant_id, cur.lastrowid)
+
+
+def get_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM galleries WHERE id = ? AND tenant_id = ?", (gallery_id, tenant_id)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_gallery_by_slug(conn: sqlite3.Connection, tenant_id: str, slug: str) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM galleries WHERE tenant_id = ? AND slug = ?", (tenant_id, slug)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def list_galleries(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM galleries WHERE tenant_id = ? ORDER BY created_at DESC", (tenant_id,)
+    ).fetchall()
+    out = []
+    for r in rows:
+        g = dict(r)
+        g["image_count"] = image_count(conn, g["id"])
+        out.append(g)
+    return out
+
+
+def publish_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> None:
+    conn.execute(
+        "UPDATE galleries SET status = 'published', published_at = datetime('now') "
+        "WHERE id = ? AND tenant_id = ?",
+        (gallery_id, tenant_id),
+    )
+
+
+# ── Images ──────────────────────────────────────────────────────────────────
+
+
+def _dimensions(data: bytes) -> tuple[int | None, int | None]:
+    """Best-effort image dimensions (Pillow if available, else unknown)."""
+    try:
+        import io
+
+        from PIL import Image  # type: ignore
+
+        with Image.open(io.BytesIO(data)) as im:
+            return im.width, im.height
+    except Exception:
+        return None, None
+
+
+def add_image(
+    conn: sqlite3.Connection,
+    storage: Storage,
+    *,
+    tenant_id: str,
+    gallery_id: int,
+    filename: str,
+    fileobj: BinaryIO,
+    content_type: str = "application/octet-stream",
+) -> dict:
+    data = fileobj.read()
+    width, height = _dimensions(data)
+    position = image_count(conn, gallery_id)
+    ext = filename.rsplit(".", 1)[-1] if "." in filename else "bin"
+    # Insert first to get the id, then compute key and persist the blob.
+    cur = conn.execute(
+        """
+        INSERT INTO images (gallery_id, tenant_id, filename, storage_key, content_type,
+                            width, height, bytes, position)
+        VALUES (?, ?, ?, '', ?, ?, ?, ?, ?)
+        """,
+        (gallery_id, tenant_id, filename, content_type, width, height, len(data), position),
+    )
+    image_id = cur.lastrowid
+    key = image_key(tenant_id, gallery_id, image_id, ext)
+    import io
+
+    storage.put(key, io.BytesIO(data), content_type)
+    conn.execute("UPDATE images SET storage_key = ? WHERE id = ?", (key, image_id))
+    # First image becomes the cover.
+    conn.execute(
+        "UPDATE galleries SET cover_image_id = COALESCE(cover_image_id, ?) WHERE id = ?",
+        (image_id, gallery_id),
+    )
+    row = conn.execute("SELECT * FROM images WHERE id = ?", (image_id,)).fetchone()
+    return dict(row)
+
+
+def list_images(conn: sqlite3.Connection, gallery_id: int) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM images WHERE gallery_id = ? ORDER BY position, id", (gallery_id,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def image_count(conn: sqlite3.Connection, gallery_id: int) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM images WHERE gallery_id = ?", (gallery_id,)
+    ).fetchone()
+    return row["n"] if row else 0
+
+
+def get_image(conn: sqlite3.Connection, tenant_id: str, image_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM images WHERE id = ? AND tenant_id = ?", (image_id, tenant_id)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def image_manifest(conn: sqlite3.Connection, storage: Storage, gallery_id: int, *, limit: int | None = None) -> list[dict]:
+    """Image descriptors the engines consume: id, filename, storage key, URL."""
+    images = list_images(conn, gallery_id)
+    if limit:
+        images = images[:limit]
+    return [
+        {
+            "id": img["id"],
+            "filename": img["filename"],
+            "storage_key": img["storage_key"],
+            "url": storage.public_path(img["storage_key"]),
+            "content_type": img["content_type"],
+        }
+        for img in images
+    ]

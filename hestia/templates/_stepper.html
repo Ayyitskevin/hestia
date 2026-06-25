@@ -1,0 +1,28 @@
+<div id="stepper" data-status="{{ run.status }}">
+  <ol class="steps">
+    {% for s in run.steps %}
+    <li class="step {{ s.status }}">
+      <span class="marker">
+        {% if s.status == 'done' %}✓{% elif s.status == 'error' %}!{% elif s.status == 'running' %}●{% else %}{{ loop.index }}{% endif %}
+      </span>
+      <span class="body">
+        <span class="label">{{ s.label }}</span>
+        {% if s.detail %}<span class="detail"> · {{ s.detail }}</span>{% endif %}
+      </span>
+      <span class="status-tag">{{ s.status }}</span>
+    </li>
+    {% endfor %}
+  </ol>
+
+  {% if run.status == 'done' and run.offer_url %}
+  <div class="offer stack">
+    <div class="label">🔥 Client offer ready</div>
+    <a class="offer-url" href="{{ run.offer_url }}" target="_blank">{{ run.offer_url }}</a>
+    <p class="muted">Send this to your client. Re-run anytime — same link, never a duplicate.</p>
+  </div>
+  {% elif run.status == 'error' %}
+  <div class="alert error" style="margin-top:18px">Pipeline failed: {{ run.error }}</div>
+  {% else %}
+  <div class="alert warn" style="margin-top:18px">Working… vision then offer. This page updates live.</div>
+  {% endif %}
+</div>

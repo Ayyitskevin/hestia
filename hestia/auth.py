@@ -1,0 +1,154 @@
+"""Authentication: UI session cookies and API bearer tokens.
+
+Two ways in, mirroring the Plutus pattern:
+
+- **UI** — email/password login mints a row in ``sessions`` and sets the
+  ``hestia_session`` cookie. Admins log in with the master ``HESTIA_API_TOKEN``.
+- **API** — ``Authorization: Bearer hestia_tk_<slug>_<secret>`` resolves to a
+  tenant; the master ``HESTIA_API_TOKEN`` authenticates admin endpoints.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+
+from fastapi import Request
+
+from .config import Settings
+from .crypto import new_session_token, verify_password
+from .tenants import find_tenant_by_api_key, get_tenant, get_user_by_email
+
+SESSION_COOKIE = "hestia_session"
+SESSION_TTL = timedelta(hours=12)
+
+
+@dataclass
+class AuthContext:
+    kind: str  # "admin" | "user"
+    role: str
+    user: dict | None = None
+    tenant: dict | None = None
+
+    @property
+    def is_admin(self) -> bool:
+        return self.kind == "admin"
+
+    @property
+    def tenant_id(self) -> str | None:
+        return self.tenant["id"] if self.tenant else None
+
+
+# ── Session lifecycle ───────────────────────────────────────────────────────
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def create_session(
+    conn: sqlite3.Connection,
+    *,
+    role: str,
+    user_id: int | None = None,
+    tenant_id: str | None = None,
+    ttl: timedelta = SESSION_TTL,
+) -> str:
+    token = new_session_token()
+    expires = (_now() + ttl).isoformat()
+    conn.execute(
+        "INSERT INTO sessions (token, user_id, tenant_id, role, expires_at) VALUES (?, ?, ?, ?, ?)",
+        (token, user_id, tenant_id, role, expires),
+    )
+    return token
+
+
+def get_valid_session(conn: sqlite3.Connection, token: str | None) -> dict | None:
+    if not token:
+        return None
+    row = conn.execute("SELECT * FROM sessions WHERE token = ?", (token,)).fetchone()
+    if not row:
+        return None
+    try:
+        expires = datetime.fromisoformat(row["expires_at"])
+    except ValueError:
+        return None
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if expires < _now():
+        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        return None
+    return dict(row)
+
+
+def destroy_session(conn: sqlite3.Connection, token: str | None) -> None:
+    if token:
+        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+
+
+def authenticate_user(conn: sqlite3.Connection, email: str, password: str) -> dict | None:
+    user = get_user_by_email(conn, email)
+    if not user:
+        return None
+    if not verify_password(password, user["password_hash"]):
+        return None
+    return user
+
+
+# ── Request → AuthContext resolution ────────────────────────────────────────
+
+
+def context_from_session(conn: sqlite3.Connection, request: Request) -> AuthContext | None:
+    token = request.cookies.get(SESSION_COOKIE)
+    session = get_valid_session(conn, token)
+    if not session:
+        return None
+    if session["role"] == "admin":
+        return AuthContext(kind="admin", role="admin")
+    tenant = get_tenant(conn, session["tenant_id"]) if session["tenant_id"] else None
+    if not tenant:
+        return None
+    user = None
+    if session["user_id"]:
+        row = conn.execute(
+            "SELECT * FROM users WHERE id = ?", (session["user_id"],)
+        ).fetchone()
+        user = dict(row) if row else None
+    return AuthContext(kind="user", role=session["role"], user=user, tenant=tenant)
+
+
+def _bearer(request: Request) -> str | None:
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    return None
+
+
+def context_from_bearer(
+    conn: sqlite3.Connection, settings: Settings, request: Request
+) -> AuthContext | None:
+    token = _bearer(request)
+    if not token:
+        return None
+    # Admin master token.
+    if settings.api_token and token == settings.api_token:
+        return AuthContext(kind="admin", role="admin")
+    # Per-tenant API key.
+    tenant = find_tenant_by_api_key(conn, settings, token)
+    if tenant:
+        return AuthContext(kind="user", role="owner", tenant=tenant)
+    return None
+
+
+def resolve_context(
+    conn: sqlite3.Connection, settings: Settings, request: Request
+) -> AuthContext | None:
+    """Resolve auth from bearer header first, then session cookie."""
+    return context_from_bearer(conn, settings, request) or context_from_session(
+        conn, request
+    )
+
+
+def cookie_is_secure(settings: Settings) -> bool:
+    return settings.public_url.lower().startswith("https://")

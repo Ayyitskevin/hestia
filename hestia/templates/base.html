@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Hestia{% endblock %}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>%F0%9F%94%A5</text></svg>">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/">
+        <svg class="flame" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 2c1.5 3 5 5.2 5 9a5 5 0 1 1-10 0c0-1.6.7-2.8 1.5-3.7C9 9 9.5 10 10.5 10c.9 0 1-1 0-2.2C9.4 6.3 10 3.5 12 2z" fill="#c0552f"/>
+          <path d="M12 13c.9 1 1.6 1.8 1.6 2.9a1.6 1.6 0 1 1-3.2 0c0-.7.5-1.2 1-1.8.3.4.6.7 1 .7.3 0 .3-.4 0-.8-.3-.4-.6-.7-.4-1z" fill="#e0a458"/>
+        </svg>
+        Hestia <small>the studio</small>
+      </a>
+      <nav class="nav">
+        {% if auth and auth.is_admin %}
+          <a href="/admin/tenants">Studios</a>
+          <a href="/admin/logout">Sign out</a>
+        {% elif auth and auth.tenant %}
+          <a href="/dashboard">Dashboard</a>
+          <a href="/galleries">Galleries</a>
+          <span class="muted">{{ auth.tenant.name }}</span>
+          <a href="/logout">Sign out</a>
+        {% else %}
+          <a href="/admin">Admin</a>
+          <a class="btn secondary" href="/login">Sign in</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="wrap {% block wrap_class %}{% endblock %}">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      Hestia · the AI-native studio for photographers · v{{ app_version }}
+    </div>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

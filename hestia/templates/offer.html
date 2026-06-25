@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ offer.title }} — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>{{ offer.title }}</h1>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      {% if heroes %}
+      <section class="hero-strip">
+        {% for h in heroes %}
+          <img src="{{ h.url }}" alt="{{ h.filename }}" loading="lazy">
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      <section class="bundles">
+        {% for b in offer.bundles %}
+        <article class="bundle card">
+          <div class="bundle-cat">{{ b.category }}</div>
+          <h3>{{ b.name }}</h3>
+          <p class="muted">{{ b.blurb }}</p>
+          <p class="bundle-note">{{ b.note }}</p>
+          <div class="bundle-foot">
+            <span class="price">{{ b.price }}</span>
+            <button class="btn" disabled title="Secure checkout arrives in the next release">Reserve</button>
+          </div>
+        </article>
+        {% endfor %}
+      </section>
+
+      <p class="muted" style="text-align:center; margin-top:24px">
+        Secure Stripe checkout is arriving soon — for now, reply to your photographer to order.
+      </p>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">Delivered with 🔥 by {{ tenant.name }} on Hestia</div>
+  </footer>
+</body>
+</html>
