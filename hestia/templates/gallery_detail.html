@@ -5,6 +5,7 @@
   <div>
     <h1>{{ gallery.title }}</h1>
     <span class="muted">
+      {% if project %}<a href="/projects/{{ project.id }}">{{ project.name }}</a> · {% endif %}
       {{ gallery.client_name or "No client set" }} ·
       <span class="pill {{ 'on' if gallery.status == 'published' else 'off' }}">{{ gallery.status }}</span> ·
       {{ images|length }} image{{ '' if images|length == 1 else 's' }}

@@ -9,6 +9,13 @@
     <input type="text" id="title" name="title" placeholder="Sarah &amp; Tom — Wedding" required autofocus>
     <label for="client_name">Client name <span class="muted">(optional)</span></label>
     <input type="text" id="client_name" name="client_name" placeholder="Sarah Lin">
+    <label for="project_id">Project <span class="muted">(optional)</span></label>
+    <select id="project_id" name="project_id">
+      <option value="">— none —</option>
+      {% for p in projects %}
+        <option value="{{ p.id }}" {{ 'selected' if preselect_project == p.id else '' }}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
     <label for="pin">Client PIN <span class="muted">(optional — gates the client gallery)</span></label>
     <input type="text" id="pin" name="pin" placeholder="4-digit PIN" maxlength="12">
     <div class="form-actions">

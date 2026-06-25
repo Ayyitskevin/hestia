@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}New project — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>New project</h1>
+  <form method="post" action="/projects">
+    <label for="name">Project name</label>
+    <input type="text" id="name" name="name" placeholder="Sarah &amp; Tom — Wedding" required autofocus>
+
+    <label for="client_id">Client</label>
+    <select id="client_id" name="client_id">
+      <option value="">— none —</option>
+      {% for c in clients %}
+        <option value="{{ c.id }}" {{ 'selected' if preselect_client == c.id else '' }}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="shoot_type">Shoot type</label>
+    <select id="shoot_type" name="shoot_type">
+      {% for st in shoot_types %}<option value="{{ st }}">{{ shoot_type_labels.get(st, st) }}</option>{% endfor %}
+    </select>
+
+    <label for="status">Status</label>
+    <select id="status" name="status">
+      {% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+    </select>
+
+    <label for="event_date">Event date <span class="muted">(optional)</span></label>
+    <input type="text" id="event_date" name="event_date" placeholder="2026-09-12">
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Create project</button>
+      <a class="btn ghost" href="/projects">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

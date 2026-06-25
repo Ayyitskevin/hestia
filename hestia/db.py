@@ -61,9 +61,32 @@ CREATE TABLE IF NOT EXISTS tenant_api_keys (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS clients (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id  TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    email      TEXT NOT NULL DEFAULT '',
+    phone      TEXT NOT NULL DEFAULT '',
+    notes      TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id   TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    client_id   INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+    name        TEXT NOT NULL,
+    shoot_type  TEXT NOT NULL DEFAULT 'other',
+    status      TEXT NOT NULL DEFAULT 'lead',   -- lead|booked|shooting|delivered|archived
+    event_date  TEXT,
+    notes       TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS galleries (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id     TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    project_id    INTEGER REFERENCES projects(id) ON DELETE SET NULL,
     slug          TEXT NOT NULL,
     title         TEXT NOT NULL,
     client_name   TEXT NOT NULL DEFAULT '',
@@ -145,7 +168,15 @@ CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 CREATE INDEX IF NOT EXISTS idx_galleries_tenant ON galleries(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_images_gallery ON images(gallery_id, position);
 CREATE INDEX IF NOT EXISTS idx_offers_token ON offers(token);
+CREATE INDEX IF NOT EXISTS idx_clients_tenant ON clients(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_projects_tenant ON projects(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_projects_client ON projects(client_id);
 """
+
+# Idempotent column additions for databases created before a column existed.
+_MIGRATIONS = [
+    ("galleries", "project_id", "ALTER TABLE galleries ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL"),
+]
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:
@@ -162,7 +193,16 @@ def init_db(db_path: str | Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with connect(path) as conn:
         conn.executescript(SCHEMA_SQL)
+        _apply_migrations(conn)
         conn.commit()
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    """Add columns that post-date a table's original CREATE (idempotent)."""
+    for table, column, ddl in _MIGRATIONS:
+        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            conn.execute(ddl)
 
 
 @contextmanager

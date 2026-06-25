@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Projects — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Projects</h1>
+  <a class="btn" href="/projects/new">+ New project</a>
+</div>
+{% if projects %}
+<div class="card">
+  <table>
+    <thead><tr><th>Project</th><th>Client</th><th>Shoot type</th><th>Status</th><th>Galleries</th></tr></thead>
+    <tbody>
+      {% for p in projects %}
+      <tr>
+        <td><a href="/projects/{{ p.id }}">{{ p.name }}</a></td>
+        <td class="muted">{% if p.client_id %}<a href="/clients/{{ p.client_id }}">{{ p.client_name }}</a>{% else %}—{% endif %}</td>
+        <td>{{ shoot_type_labels.get(p.shoot_type, p.shoot_type) }}</td>
+        <td><span class="pill">{{ p.status }}</span></td>
+        <td>{{ p.gallery_count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card stack">
+  <p class="muted">No projects yet — a project is one shoot: an engagement, a wedding, a menu refresh.</p>
+  <a class="btn" href="/projects/new">Create your first project</a>
+</div>
+{% endif %}
+{% endblock %}

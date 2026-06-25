@@ -15,6 +15,7 @@ from ..auth import (
     destroy_session,
 )
 from ..billing import plan_status
+from ..crm import list_clients, list_projects
 from ..galleries import list_galleries
 from ..pipeline import list_runs
 from ..tenants import get_tenant, tenant_flags
@@ -71,5 +72,10 @@ def dashboard(request: Request):
         galleries = list_galleries(conn, tenant["id"])[:6]
         runs = list_runs(conn, tenant["id"], limit=6)
         plan = plan_status(tenant)
+        counts = {
+            "clients": len(list_clients(conn, tenant["id"])),
+            "projects": len(list_projects(conn, tenant["id"])),
+            "galleries": len(list_galleries(conn, tenant["id"])),
+        }
     return render(request, "dashboard.html", auth=auth, tenant=tenant, flags=flags,
-                  galleries=galleries, runs=runs, plan=plan)
+                  galleries=galleries, runs=runs, plan=plan, counts=counts)
