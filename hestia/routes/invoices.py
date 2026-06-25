@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
 from ..crm import list_clients, list_projects
+from ..email import notify
 from ..invoices import (
     create_invoice,
     get_invoice,
@@ -87,11 +88,26 @@ def invoice_detail(request: Request, invoice_id: int):
 
 @router.post("/{invoice_id}/send")
 def invoice_send(request: Request, invoice_id: int):
+    settings = settings_of(request)
     with db_conn(request) as conn:
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         send_invoice(conn, auth.tenant["id"], invoice_id)
+        invoice = get_invoice(conn, auth.tenant["id"], invoice_id)
+        # Email the client their pay link (mock records it; smtp also delivers).
+        if invoice and invoice.get("client_email"):
+            pay_url = invoice_public_url(settings, invoice["token"])
+            studio = auth.tenant.get("name", "your photographer")
+            notify(
+                conn, settings, to=invoice["client_email"], tenant_id=auth.tenant["id"],
+                subject=f"{studio}: invoice for {invoice['title']} ({invoice['amount_display']})",
+                body=(f"Hi {invoice.get('client_name') or 'there'},\n\n"
+                      f"{studio} sent you an invoice for {invoice['title']} — "
+                      f"{invoice['amount_display']}.\n\nPay securely here:\n{pay_url}\n\n"
+                      f"Thank you!"),
+            )
+        conn.commit()
     return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)
 
 

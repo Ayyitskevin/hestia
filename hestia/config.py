@@ -66,6 +66,15 @@ class Settings:
     stripe_webhook_secret: str = ""
     currency: str = "usd"
 
+    # Email (transactional). mock = record to the outbox, send nothing (testable
+    # default). smtp = deliver over SMTP and still record. See hestia/email.py.
+    email_backend: str = "mock"  # mock | smtp
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+
     @classmethod
     def from_env(cls) -> Settings:
         data_dir = Path(os.getenv("HESTIA_DATA_DIR", "./data"))
@@ -96,6 +105,12 @@ class Settings:
             stripe_secret_key=os.getenv("HESTIA_STRIPE_SECRET_KEY", os.getenv("STRIPE_SECRET_KEY", "")),
             stripe_webhook_secret=os.getenv("HESTIA_STRIPE_WEBHOOK_SECRET", os.getenv("STRIPE_WEBHOOK_SECRET", "")),
             currency=os.getenv("HESTIA_CURRENCY", "usd"),
+            email_backend=os.getenv("HESTIA_EMAIL_BACKEND", "mock"),
+            smtp_host=os.getenv("HESTIA_SMTP_HOST", ""),
+            smtp_port=int(os.getenv("HESTIA_SMTP_PORT", "587")),
+            smtp_user=os.getenv("HESTIA_SMTP_USER", ""),
+            smtp_password=os.getenv("HESTIA_SMTP_PASSWORD", ""),
+            smtp_from=os.getenv("HESTIA_SMTP_FROM", ""),
         )
 
     @property
