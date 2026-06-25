@@ -95,3 +95,25 @@ def test_http_generate_and_view(client):
     assert "/products/" in str(r.url)
     page = client.get(str(r.url).replace("http://testserver", ""))
     assert page.status_code == 200 and "Catalog square" in page.text
+
+
+_IMG = {"storage_key": "t/1/2.jpg", "filename": "p.jpg"}
+
+
+def test_xai_renderer_falls_back_without_key(settings):
+    r = XaiRenderer(settings).render(image=_IMG, preset=PRESETS[0], storage=None)
+    assert r["status"] == "planned" and "no xai key" in r["note"]
+
+
+def test_xai_renderer_falls_back_without_storage(settings):
+    s = dataclasses.replace(settings, xai_api_key="test-key")
+    # has a key, but no storage to read source / write output → still degrades safely
+    r = XaiRenderer(s).render(image=_IMG, preset=PRESETS[0], storage=None)
+    assert r["status"] == "planned"
+
+
+def test_variants_include_output_ref(conn, storage, settings):
+    t, g = _gallery(conn, storage, n=1)
+    pset = generate_product_set(conn, settings, tenant=t, gallery=g, storage=storage)
+    assert all("output_ref" in v for v in pset["variants"])
+    assert pset["variants"][0]["output_ref"]  # mock → the source key

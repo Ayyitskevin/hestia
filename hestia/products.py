@@ -16,6 +16,7 @@ Idempotent: one variant set per gallery, regenerated in place.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 
 from .config import Settings
@@ -36,10 +37,26 @@ PRESETS = [
 PRESETS_BY_KEY = {p["key"]: p for p in PRESETS}
 
 
+# xAI Grok Imagine image model. Env-overridable so it can be corrected without a
+# code change; verify against xAI's current image API before going live.
+XAI_IMAGE_MODEL = os.getenv("HESTIA_XAI_IMAGE_MODEL", "grok-2-image-1212")
+
+
+def _prompt_for(preset: dict) -> str:
+    bg = {
+        "white": "on a clean seamless white background",
+        "transparent": "with the product cleanly cut out on a transparent background",
+        "lifestyle": "in a tasteful lifestyle setting",
+    }.get(preset["background"], "on a clean background")
+    return (f"Re-render this product photo as a {preset['label']} packshot, {bg}, "
+            f"composed for {preset['width']}×{preset['height']}, e-commerce ready, "
+            f"photorealistic, no text or watermarks.")
+
+
 class MockRenderer:
     backend = "mock"
 
-    def render(self, *, image: dict, preset: dict) -> dict:
+    def render(self, *, image: dict, preset: dict, storage=None) -> dict:
         # Plan the variant; do not fabricate rendered pixels.
         return {"status": "planned", "output_ref": image["storage_key"],
                 "note": f"{preset['background']} bg → {preset['width']}×{preset['height']} {preset['format']}"}
@@ -51,14 +68,36 @@ class XaiRenderer:
     def __init__(self, settings: Settings):
         self.settings = settings
 
-    def render(self, *, image: dict, preset: dict) -> dict:
-        # Real generation via Grok Imagine needs the source bytes + a key; on any
-        # gap we degrade to a plan so the set still completes.
-        if not self.settings.xai_api_key:
-            return {"status": "planned", "output_ref": image["storage_key"], "note": "no xai key — planned only"}
-        # A full implementation uploads image bytes to /images/edits with a prompt
-        # built from the preset; left as a documented integration point.
-        return {"status": "planned", "output_ref": image["storage_key"], "note": "xai renderer stub"}
+    def render(self, *, image: dict, preset: dict, storage=None) -> dict:
+        planned = {"status": "planned", "output_ref": image["storage_key"]}
+        # Need both a key and somewhere to read the source / write the output.
+        if not self.settings.xai_api_key or storage is None:
+            return {**planned, "note": "no xai key — planned only"}
+        try:
+            return self._render_live(image=image, preset=preset, storage=storage)
+        except Exception as exc:  # noqa: BLE001 - never break the set on a render miss
+            return {**planned, "note": f"xai render failed, planned: {exc}"}
+
+    def _render_live(self, *, image: dict, preset: dict, storage) -> dict:
+        import base64
+        import io
+
+        import httpx
+
+        source = storage.open(image["storage_key"])
+        with httpx.Client(base_url=self.settings.xai_base_url, timeout=120) as c:
+            resp = c.post(
+                "/images/edits",
+                headers={"Authorization": f"Bearer {self.settings.xai_api_key}"},
+                data={"model": XAI_IMAGE_MODEL, "prompt": _prompt_for(preset),
+                      "response_format": "b64_json"},
+                files={"image": (image["filename"], source, "application/octet-stream")},
+            )
+        resp.raise_for_status()
+        out = base64.b64decode(resp.json()["data"][0]["b64_json"])
+        out_key = f"{image['storage_key']}.{preset['key']}.{preset['format']}"
+        storage.put(out_key, io.BytesIO(out), f"image/{preset['format']}")
+        return {"status": "rendered", "output_ref": out_key, "note": f"{preset['label']} rendered"}
 
 
 def build_renderer(settings: Settings):
@@ -75,6 +114,7 @@ def generate_product_set(
     gallery: dict,
     preset_keys: list[str] | None = None,
     renderer=None,
+    storage=None,
 ) -> dict:
     from .galleries import list_images
 
@@ -87,12 +127,13 @@ def generate_product_set(
     variants = []
     for img in images:
         for preset in presets:
-            r = renderer.render(image=img, preset=preset)
+            r = renderer.render(image=img, preset=preset, storage=storage)
             variants.append({
                 "image_id": img["id"], "filename": img["filename"],
                 "preset": preset["key"], "label": preset["label"],
                 "width": preset["width"], "height": preset["height"],
-                "format": preset["format"], "status": r["status"], "note": r.get("note", ""),
+                "format": preset["format"], "status": r["status"],
+                "output_ref": r.get("output_ref", ""), "note": r.get("note", ""),
             })
 
     existing = conn.execute(
