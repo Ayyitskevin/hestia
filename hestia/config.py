@@ -49,6 +49,9 @@ class Settings:
     # Marketing content provider (shot lists, captions, campaign copy)
     content_backend: str = "mock"  # mock | xai
 
+    # Product-photo variant renderer (marketplace-spec packshots)
+    product_backend: str = "mock"  # mock | xai
+
     # Storage (native gallery hosting). Local now; S3/R2 in Phase 1.
     storage_backend: str = "local"  # local | s3
     media_dir: Path = field(default_factory=lambda: Path("./data/media"))
@@ -77,6 +80,7 @@ class Settings:
             xai_model=os.getenv("HESTIA_XAI_MODEL", "grok-2-vision-1212"),
             album_backend=os.getenv("HESTIA_ALBUM_BACKEND", "mock"),
             content_backend=os.getenv("HESTIA_CONTENT_BACKEND", "mock"),
+            product_backend=os.getenv("HESTIA_PRODUCT_BACKEND", "mock"),
             storage_backend=os.getenv("HESTIA_STORAGE_BACKEND", "local"),
             media_dir=media_dir,
             payments_backend=os.getenv("HESTIA_PAYMENTS_BACKEND", "mock"),

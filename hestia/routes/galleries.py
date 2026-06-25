@@ -17,6 +17,7 @@ from ..galleries import (
     publish_gallery,
 )
 from ..pipeline import execute_run, start_run
+from ..products import get_set_for_gallery
 from ..sales import get_offer_for_gallery, offer_public_url
 from ..tenants import get_tenant, tenant_flags
 from .deps import db_conn, render, settings_of, storage_of
@@ -94,10 +95,12 @@ def gallery_detail(request: Request, gallery_id: int):
         flags = tenant_flags(get_tenant(conn, auth.tenant["id"]))
         project = get_project(conn, auth.tenant["id"], gallery["project_id"]) if gallery.get("project_id") else None
         album = get_album_for_gallery(conn, auth.tenant["id"], gallery_id)
+        product_set = get_set_for_gallery(conn, auth.tenant["id"], gallery_id)
     offer_url = offer_public_url(settings_of(request), auth.tenant["slug"], offer["token"]) if offer else None
     return render(request, "gallery_detail.html", auth=auth, gallery=gallery, images=images,
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
-                  storage=storage_of(request), flags=flags, project=project, album=album)
+                  storage=storage_of(request), flags=flags, project=project, album=album,
+                  product_set=product_set)
 
 
 @router.post("/{gallery_id}/images")
