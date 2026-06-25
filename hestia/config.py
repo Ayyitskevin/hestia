@@ -85,6 +85,12 @@ class Settings:
     smtp_password: str = ""
     smtp_from: str = ""
 
+    # Print fulfillment. mock = record the lab order, simulate acceptance (testable
+    # default). lab = submit to a real print lab (WHCC/Bay Photo class) over HTTP.
+    fulfillment_backend: str = "mock"  # mock | lab
+    fulfillment_api_key: str = ""
+    fulfillment_endpoint: str = ""
+
     @classmethod
     def from_env(cls) -> Settings:
         data_dir = Path(os.getenv("HESTIA_DATA_DIR", "./data"))
@@ -126,6 +132,9 @@ class Settings:
             subscription_backend=os.getenv("HESTIA_SUBSCRIPTION_BACKEND", "mock"),
             stripe_price_studio=os.getenv("HESTIA_STRIPE_PRICE_STUDIO", ""),
             stripe_price_studio_pro=os.getenv("HESTIA_STRIPE_PRICE_STUDIO_PRO", ""),
+            fulfillment_backend=os.getenv("HESTIA_FULFILLMENT_BACKEND", "mock"),
+            fulfillment_api_key=os.getenv("HESTIA_FULFILLMENT_API_KEY", ""),
+            fulfillment_endpoint=os.getenv("HESTIA_FULFILLMENT_ENDPOINT", ""),
         )
 
     def stripe_price_id(self, plan: str) -> str:
@@ -160,6 +169,11 @@ class Settings:
             warn.append("subscription_backend=stripe but the Stripe key or price IDs are unset")
         if {self.payments_backend, self.subscription_backend} & {"stripe"} and not self.stripe_webhook_secret:
             warn.append("a stripe backend is active but HESTIA_STRIPE_WEBHOOK_SECRET is unset (webhooks 503)")
+        if self.fulfillment_backend == "lab" and not (
+            self.fulfillment_api_key and self.fulfillment_endpoint
+        ):
+            warn.append("fulfillment_backend=lab but HESTIA_FULFILLMENT_API_KEY or "
+                        "HESTIA_FULFILLMENT_ENDPOINT is unset (paid orders record as 'failed')")
         if self.storage_backend == "s3" and not self.s3_bucket:
             warn.append("storage_backend=s3 but HESTIA_S3_BUCKET is unset")
         if self.email_backend == "smtp" and not self.smtp_host:

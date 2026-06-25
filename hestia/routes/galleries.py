@@ -11,6 +11,7 @@ from ..campaigns import create_campaign, end_campaign, get_active_campaign
 from ..crm import assign_gallery_to_project, get_client, get_project, list_projects
 from ..db import audit
 from ..email import notify
+from ..fulfillment import list_fulfillments
 from ..galleries import (
     add_image,
     create_gallery,
@@ -20,6 +21,7 @@ from ..galleries import (
     publish_gallery,
 )
 from ..jobs import drain, enqueue
+from ..orders import list_orders
 from ..pipeline import start_run
 from ..products import get_set_for_gallery
 from ..proofing import comments_for_gallery, favorite_image_ids
@@ -105,11 +107,15 @@ def gallery_detail(request: Request, gallery_id: int):
         favorites = favorite_image_ids(conn, gallery_id)
         comments = comments_for_gallery(conn, auth.tenant["id"], gallery_id)
         campaign = get_active_campaign(conn, gallery_id)
+        orders = list_orders(conn, auth.tenant["id"], gallery_id=gallery_id)
+        fulfillments = list_fulfillments(conn, auth.tenant["id"],
+                                         order_ids=[o["id"] for o in orders])
     offer_url = offer_public_url(settings_of(request), auth.tenant["slug"], offer["token"]) if offer else None
     return render(request, "gallery_detail.html", auth=auth, gallery=gallery, images=images,
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
                   storage=storage_of(request), flags=flags, project=project, album=album,
-                  product_set=product_set, favorites=favorites, comments=comments, campaign=campaign)
+                  product_set=product_set, favorites=favorites, comments=comments, campaign=campaign,
+                  orders=orders, fulfillments=fulfillments)
 
 
 @router.post("/{gallery_id}/campaign")
