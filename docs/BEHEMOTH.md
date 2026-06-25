@@ -13,9 +13,9 @@ bill, one database, modules composing around the studio's real workflow.
 | Vision (cull · keyword · hero) | **argus** | ✅ shipped (`mock`/`xai`) |
 | Sales · idempotent client offers | **plutus** | ✅ shipped |
 | CRM: clients + projects | **mise** back-office | ✅ shipped |
-| **Invoicing + payments (mock/stripe)** | **mise** invoices + **plutus** checkout | ✅ shipped |
-| Album designer (LLM spreads) | **mnemosyne** | ▢ next |
-| Marketing content (shot lists, captions, campaigns) | **dionysus** | ▢ |
+| Invoicing + payments (mock/stripe) | **mise** invoices + **plutus** checkout | ✅ shipped |
+| **Album designer (model proposes, code validates)** | **mnemosyne** | ✅ shipped |
+| Marketing content (shot lists, captions, campaigns) | **dionysus** | ▢ next |
 | Product photography (packshots, variants) | **aphrodite** | ▢ |
 | Public studio site / booking | **mise** site | ▢ |
 

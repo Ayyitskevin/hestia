@@ -43,6 +43,9 @@ class Settings:
     xai_base_url: str = "https://api.x.ai/v1"
     xai_model: str = "grok-2-vision-1212"
 
+    # Album arrangement provider (model proposes order, code validates placement)
+    album_backend: str = "mock"  # mock | xai
+
     # Storage (native gallery hosting). Local now; S3/R2 in Phase 1.
     storage_backend: str = "local"  # local | s3
     media_dir: Path = field(default_factory=lambda: Path("./data/media"))
@@ -69,6 +72,7 @@ class Settings:
             xai_api_key=os.getenv("HESTIA_XAI_API_KEY", os.getenv("XAI_API_KEY", "")),
             xai_base_url=os.getenv("HESTIA_XAI_BASE_URL", "https://api.x.ai/v1"),
             xai_model=os.getenv("HESTIA_XAI_MODEL", "grok-2-vision-1212"),
+            album_backend=os.getenv("HESTIA_ALBUM_BACKEND", "mock"),
             storage_backend=os.getenv("HESTIA_STORAGE_BACKEND", "local"),
             media_dir=media_dir,
             payments_backend=os.getenv("HESTIA_PAYMENTS_BACKEND", "mock"),

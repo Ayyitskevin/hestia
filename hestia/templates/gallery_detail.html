@@ -17,6 +17,13 @@
       <form method="post" action="/galleries/{{ gallery.id }}/process">
         <button class="btn" type="submit">⚡ Process — vision → offer</button>
       </form>
+      {% if album %}
+        <a class="btn secondary" href="/albums/{{ album.id }}">📖 Album ({{ album.spreads|length }} spreads)</a>
+      {% else %}
+        <form method="post" action="/galleries/{{ gallery.id }}/album">
+          <button class="btn secondary" type="submit">📖 Draft album</button>
+        </form>
+      {% endif %}
     {% endif %}
     {% if gallery.status != 'published' %}
       <form method="post" action="/galleries/{{ gallery.id }}/publish">

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ album.title }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ album.title }}</h1>
+    <span class="muted">
+      <a href="/galleries/{{ album.gallery_id }}">{{ gallery.title if gallery else 'gallery' }}</a> ·
+      {{ album.spreads|length }} spreads · {{ album.photo_count }} photos ·
+      arranged by <span class="pill">{{ album.backend }}</span>
+    </span>
+  </div>
+  <form method="post" action="/galleries/{{ album.gallery_id }}/album">
+    <button class="btn secondary" type="submit">↻ Regenerate</button>
+  </form>
+</div>
+
+<p class="muted" style="margin-bottom:18px">Every frame placed exactly once — the model proposes the
+  order, the code guarantees the layout. The ⭐ frame leads each spread.</p>
+
+<div class="stack">
+  {% for spread in spreads %}
+  <div class="card">
+    <div class="muted" style="font-size:.82rem; text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px">
+      Spread {{ spread.position }}
+    </div>
+    <div class="thumb-grid">
+      {% for p in spread.photos %}
+        <figure class="thumb {{ 'hero' if p.is_hero else '' }}">
+          <img src="{{ p.url }}" alt="{{ p.filename }}" loading="lazy">
+          <figcaption>{{ '⭐ ' if p.is_hero else '' }}{{ p.filename }}</figcaption>
+        </figure>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
