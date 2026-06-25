@@ -53,6 +53,10 @@ def products_view(request: Request, set_id: int):
         # Group variants by source image, with a resolved source thumbnail.
         by_image: dict[int, dict] = {}
         for v in pset["variants"]:
+            # Variants whose pixels were actually rendered (xai) get a viewable
+            # thumbnail; planned (mock) variants only point at the source image.
+            if v.get("status") == "rendered" and v.get("output_ref"):
+                v["output_url"] = storage.public_path(v["output_ref"])
             grp = by_image.setdefault(v["image_id"], {"filename": v["filename"], "url": None, "variants": []})
             grp["variants"].append(v)
         for iid, grp in by_image.items():
@@ -60,4 +64,6 @@ def products_view(request: Request, set_id: int):
             if img:
                 grp["url"] = storage.public_path(img["storage_key"])
         groups = list(by_image.values())
-    return render(request, "products/set.html", auth=auth, pset=pset, gallery=gallery, groups=groups)
+        rendered_count = sum(1 for v in pset["variants"] if v.get("status") == "rendered")
+    return render(request, "products/set.html", auth=auth, pset=pset, gallery=gallery,
+                  groups=groups, rendered_count=rendered_count)

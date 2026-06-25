@@ -6,7 +6,8 @@
     <h1>Product variants</h1>
     <span class="muted">
       <a href="/galleries/{{ pset.gallery_id }}">{{ gallery.title if gallery else 'gallery' }}</a> ·
-      {{ pset.variant_count }} variants · rendered by <span class="pill">{{ pset.backend }}</span>
+      {{ pset.variant_count }} variants{% if rendered_count %} · {{ rendered_count }} rendered{% endif %} ·
+      via <span class="pill">{{ pset.backend }}</span>
     </span>
   </div>
   <form method="post" action="/galleries/{{ pset.gallery_id }}/products">
@@ -25,6 +26,17 @@
       {% if grp.url %}<img src="{{ grp.url }}" alt="{{ grp.filename }}" style="width:120px; height:120px; object-fit:cover; border-radius:10px; border:1px solid var(--line)">{% endif %}
       <div style="flex:1">
         <div style="font-weight:600; margin-bottom:8px">{{ grp.filename }}</div>
+        {% set rendered = grp.variants | selectattr('output_url') | list %}
+        {% if rendered %}
+        <div class="thumb-grid" style="margin-bottom:12px">
+          {% for v in rendered %}
+          <figure class="thumb">
+            <a href="{{ v.output_url }}" target="_blank" rel="noopener"><img src="{{ v.output_url }}" alt="{{ v.label }}"></a>
+            <figcaption>{{ v.label }} · {{ v.width }}×{{ v.height }} {{ v.format }}</figcaption>
+          </figure>
+          {% endfor %}
+        </div>
+        {% endif %}
         <div class="health-strip">
           {% for v in grp.variants %}
             <div class="health-item">
