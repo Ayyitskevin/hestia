@@ -11,6 +11,7 @@
     </span>
   </div>
   <div style="display:flex; gap:10px">
+    <a class="btn ghost" href="/contracts/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Contract</a>
     <a class="btn secondary" href="/invoices/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Invoice</a>
     <a class="btn" href="/galleries/new?project_id={{ project.id }}">+ Gallery</a>
   </div>
@@ -46,6 +47,26 @@
     {% else %}
       <p class="muted">No galleries in this project yet.</p>
       <a class="btn" href="/galleries/new?project_id={{ project.id }}">Add a gallery</a>
+    {% endif %}
+  </div>
+
+  <div class="card stack">
+    <h3>Contracts</h3>
+    {% if contracts %}
+      <table>
+        <thead><tr><th>Contract</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for ct in contracts %}
+          <tr>
+            <td><a href="/contracts/{{ ct.id }}">{{ ct.title }}</a></td>
+            <td><span class="pill {{ 'on' if ct.status == 'signed' else 'off' }}">{{ ct.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No contracts for this project yet.</p>
+      <a class="btn" href="/contracts/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Draft a contract</a>
     {% endif %}
   </div>
 
