@@ -6,6 +6,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
+from ..content import list_packs, recipes_for
 from ..crm import (
     PROJECT_STATUSES,
     create_client,
@@ -128,8 +129,11 @@ def project_detail(request: Request, project_id: int):
             return RedirectResponse("/projects", status_code=303)
         galleries = galleries_for_project(conn, auth.tenant["id"], project_id)
         invoices = list_invoices(conn, auth.tenant["id"], project_id=project_id)
+        packs = list_packs(conn, auth.tenant["id"], project_id=project_id)
+        recipes = recipes_for(project["shoot_type"])
     return render(request, "crm/project_detail.html", auth=auth, project=project,
-                  galleries=galleries, invoices=invoices, statuses=PROJECT_STATUSES)
+                  galleries=galleries, invoices=invoices, packs=packs, recipes=recipes,
+                  statuses=PROJECT_STATUSES)
 
 
 @router.post("/projects/{project_id}/status")
