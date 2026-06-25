@@ -21,6 +21,7 @@ from ..auth import (
     destroy_session,
 )
 from ..billing import PLANS, plan_status
+from ..ratelimit import enforce
 from ..tenants import (
     create_tenant,
     create_tenant_api_key,
@@ -54,6 +55,7 @@ def admin_home(request: Request):
 
 @router.post("/login")
 def admin_login(request: Request, token: str = Form(...)):
+    enforce(request, "admin_login")
     settings = settings_of(request)
     if not settings.api_token or not hmac.compare_digest(token, settings.api_token):
         return render(request, "admin/login.html", auth=None, error="Invalid admin token.")

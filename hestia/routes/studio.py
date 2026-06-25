@@ -6,6 +6,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
+from ..ratelimit import enforce
 from ..studio import create_inquiry, get_profile, upsert_profile
 from ..tenants import get_tenant, get_tenant_by_slug
 from .deps import db_conn, render
@@ -39,6 +40,7 @@ def public_site(request: Request, slug: str):
 def public_inquire(request: Request, slug: str, name: str = Form(...), email: str = Form(""),
                    message: str = Form(""), shoot_type: str = Form("other"),
                    event_date: str = Form("")):
+    enforce(request, "inquiry")
     with db_conn(request) as conn:
         tenant = get_tenant_by_slug(conn, slug)
         if not tenant:

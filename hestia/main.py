@@ -21,6 +21,7 @@ from . import __version__
 from .config import Settings, get_settings
 from .db import init_db
 from .features import SHOOT_TYPE_LABELS, SHOOT_TYPES
+from .ratelimit import RateLimiter
 from .routes import (
     admin,
     albums,
@@ -87,6 +88,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.templates = _build_templates()
     app.state.storage = build_storage(settings)
+    app.state.limiter = RateLimiter()
+
+    @app.middleware("http")
+    async def security_headers(request, call_next):
+        resp = await call_next(request)
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return resp
 
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
