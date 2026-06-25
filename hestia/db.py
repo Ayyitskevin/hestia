@@ -20,11 +20,14 @@ Migration rules
 
 from __future__ import annotations
 
+import logging
 import re
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+
+_audit_log = logging.getLogger("hestia.audit")
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 _VERSION_RE = re.compile(r"^(\d+)_")
@@ -123,6 +126,7 @@ def audit(
         "INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES (?, ?, ?, ?)",
         (tenant_id, actor, action, detail),
     )
+    _audit_log.info("audit", extra={"action": action, "tenant_id": tenant_id})
 
 
 def list_audit(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 100) -> list[dict]:

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from .csrf import csrf_protect
 from .db import init_db
 from .features import SHOOT_TYPE_LABELS, SHOOT_TYPES
 from .jobs import run_worker
+from .obs import access_log, configure_logging, new_request_id
 from .ratelimit import RateLimiter
 from .routes import (
     admin,
@@ -65,6 +67,7 @@ def _build_templates() -> Jinja2Templates:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    configure_logging(settings)
 
     # Initialize eagerly so the app works whether or not the ASGI lifespan runs
     # (e.g. TestClient without a context manager). init_db is idempotent.
@@ -112,6 +115,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         return resp
+
+    @app.middleware("http")
+    async def request_context(request, call_next):
+        rid = request.headers.get("X-Request-ID") or new_request_id()
+        request.state.request_id = rid
+        start = time.perf_counter()
+        response = await call_next(request)
+        access_log.info("request", extra={
+            "request_id": rid, "method": request.method, "path": request.url.path,
+            "status": response.status_code,
+            "duration_ms": round((time.perf_counter() - start) * 1000, 1),
+        })
+        response.headers["X-Request-ID"] = rid
+        return response
 
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

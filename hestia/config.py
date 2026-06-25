@@ -32,6 +32,10 @@ class Settings:
     data_dir: Path = field(default_factory=lambda: Path("./data"))
     public_url: str = "http://127.0.0.1:8500"
 
+    # Observability. json = one structured line per log record (default).
+    log_format: str = "json"  # json | plain
+    log_level: str = "INFO"
+
     # Secrets
     api_token: str = "CHANGE_ME_ADMIN"
     tenant_key_pepper: str = "CHANGE_ME"
@@ -91,6 +95,8 @@ class Settings:
             signup_enabled=_env_bool("HESTIA_SIGNUP_ENABLED", False),
             data_dir=data_dir,
             public_url=os.getenv("HESTIA_PUBLIC_URL", "http://127.0.0.1:8500"),
+            log_format=os.getenv("HESTIA_LOG_FORMAT", "json"),
+            log_level=os.getenv("HESTIA_LOG_LEVEL", "INFO"),
             api_token=os.getenv("HESTIA_API_TOKEN", "CHANGE_ME_ADMIN"),
             tenant_key_pepper=os.getenv("HESTIA_TENANT_KEY_PEPPER", "CHANGE_ME"),
             session_secret=os.getenv("HESTIA_SESSION_SECRET", "CHANGE_ME"),
