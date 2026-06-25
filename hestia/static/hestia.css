@@ -182,6 +182,8 @@ th { color: var(--muted); font-weight: 600; font-size: .82rem; text-transform: u
 .thumb img { width: 100%; height: 150px; object-fit: cover; display: block; }
 .thumb figcaption { font-size: .75rem; color: var(--muted); padding: 6px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .client-grid .thumb img { height: 220px; }
+.thumb.hero { border-color: var(--ember); box-shadow: 0 0 0 2px var(--ember); }
+.thumb.hero figcaption { color: var(--terracotta-dark); font-weight: 600; }
 
 /* Client-facing pages */
 body.client { background: var(--cream); }

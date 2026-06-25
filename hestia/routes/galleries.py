@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
 
+from ..albums import get_album_for_gallery
 from ..auth import context_from_session
 from ..crm import assign_gallery_to_project, get_project, list_projects
 from ..galleries import (
@@ -92,10 +93,11 @@ def gallery_detail(request: Request, gallery_id: int):
         ).fetchone()
         flags = tenant_flags(get_tenant(conn, auth.tenant["id"]))
         project = get_project(conn, auth.tenant["id"], gallery["project_id"]) if gallery.get("project_id") else None
+        album = get_album_for_gallery(conn, auth.tenant["id"], gallery_id)
     offer_url = offer_public_url(settings_of(request), auth.tenant["slug"], offer["token"]) if offer else None
     return render(request, "gallery_detail.html", auth=auth, gallery=gallery, images=images,
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
-                  storage=storage_of(request), flags=flags, project=project)
+                  storage=storage_of(request), flags=flags, project=project, album=album)
 
 
 @router.post("/{gallery_id}/images")

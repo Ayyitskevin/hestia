@@ -23,6 +23,7 @@ from .db import init_db
 from .features import SHOOT_TYPE_LABELS, SHOOT_TYPES
 from .routes import (
     admin,
+    albums,
     api,
     client,
     crm,
@@ -91,6 +92,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin.router)
     app.include_router(crm.router)
     app.include_router(galleries.router)
+    app.include_router(albums.router)
     app.include_router(invoices.router)
     app.include_router(pipeline_ui.router)
     app.include_router(api.router)

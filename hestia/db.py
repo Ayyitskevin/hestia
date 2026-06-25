@@ -154,6 +154,19 @@ CREATE TABLE IF NOT EXISTS offers (
     UNIQUE (tenant_id, gallery_id)
 );
 
+CREATE TABLE IF NOT EXISTS albums (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id    TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    gallery_id   INTEGER NOT NULL REFERENCES galleries(id) ON DELETE CASCADE,
+    title        TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'draft',   -- draft | final
+    backend      TEXT NOT NULL DEFAULT 'mock',
+    spreads_json TEXT NOT NULL DEFAULT '[]',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (tenant_id, gallery_id)
+);
+
 CREATE TABLE IF NOT EXISTS invoices (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id    TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -189,6 +202,7 @@ CREATE INDEX IF NOT EXISTS idx_projects_tenant ON projects(tenant_id, created_at
 CREATE INDEX IF NOT EXISTS idx_projects_client ON projects(client_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_tenant ON invoices(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_invoices_token ON invoices(token);
+CREATE INDEX IF NOT EXISTS idx_albums_gallery ON albums(gallery_id);
 """
 
 # Idempotent column additions for databases created before a column existed.
