@@ -24,6 +24,7 @@ from ..invoices import list_invoices
 from ..payment_plans import list_payment_plans
 from ..portal import enable_portal, portal_url, regenerate_portal_token
 from ..questionnaires import list_questionnaires
+from ..scheduler import list_appointments
 from .deps import db_conn, render, settings_of
 
 router = APIRouter()
@@ -167,12 +168,13 @@ def project_detail(request: Request, project_id: int):
         plans = list_payment_plans(conn, auth.tenant["id"], project_id=project_id)
         contracts = list_contracts(conn, auth.tenant["id"], project_id=project_id)
         questionnaires = list_questionnaires(conn, auth.tenant["id"], project_id=project_id)
+        appointments = list_appointments(conn, auth.tenant["id"], project_id=project_id)
         packs = list_packs(conn, auth.tenant["id"], project_id=project_id)
         recipes = recipes_for(project["shoot_type"])
     return render(request, "crm/project_detail.html", auth=auth, project=project,
                   galleries=galleries, invoices=invoices, plans=plans, contracts=contracts,
-                  questionnaires=questionnaires, packs=packs, recipes=recipes,
-                  statuses=PROJECT_STATUSES)
+                  questionnaires=questionnaires, appointments=appointments, packs=packs,
+                  recipes=recipes, statuses=PROJECT_STATUSES)
 
 
 @router.post("/projects/{project_id}/status")

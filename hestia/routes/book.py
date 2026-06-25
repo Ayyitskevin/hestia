@@ -1,0 +1,41 @@
+"""Public booking routes — the client-facing self-scheduling page."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import RedirectResponse
+
+from ..ratelimit import enforce
+from ..scheduler import book_appointment, get_appointment_by_token
+from ..tenants import get_tenant
+from .deps import db_conn, render
+
+router = APIRouter()
+
+
+@router.get("/book/{token}")
+def book_page(request: Request, token: str):
+    with db_conn(request) as conn:
+        appt = get_appointment_by_token(conn, token)
+        if not appt or appt["status"] == "canceled":
+            return render(request, "offer_missing.html", auth=None, status_code=404)
+        tenant = get_tenant(conn, appt["tenant_id"])
+    return render(request, "scheduler/book.html", auth=None, appt=appt, tenant=tenant)
+
+
+@router.post("/book/{token}")
+def book_submit(request: Request, token: str, option_id: str = Form("")):
+    enforce(request, "checkout")
+    with db_conn(request) as conn:
+        appt = get_appointment_by_token(conn, token)
+        if not appt or appt["status"] == "canceled":
+            return render(request, "offer_missing.html", auth=None, status_code=404)
+        # Already booked (or a double submit) → idempotent: show the confirmed page.
+        if appt["status"] == "confirmed":
+            return RedirectResponse(f"/book/{token}", status_code=303)
+        if not option_id.strip().isdigit():
+            tenant = get_tenant(conn, appt["tenant_id"])
+            return render(request, "scheduler/book.html", auth=None, appt=appt, tenant=tenant,
+                          error="Please choose a time.", status_code=400)
+        book_appointment(conn, token=token, option_id=int(option_id))
+    return RedirectResponse(f"/book/{token}", status_code=303)

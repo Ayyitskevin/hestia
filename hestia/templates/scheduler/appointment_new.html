@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}New session — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>New session</h1>
+  <p class="muted">Propose a few times; the client picks one from a private link and gets a
+    confirmation plus a day-before reminder.</p>
+  <form method="post" action="/schedule">
+    {% include "_csrf.html" %}
+    <label for="title">Title</label>
+    <input type="text" id="title" name="title" placeholder="Engagement consultation" required autofocus>
+
+    <label for="kind">Type</label>
+    <select id="kind" name="kind">
+      {% for k in kinds %}<option value="{{ k }}">{{ kind_labels.get(k, k) }}</option>{% endfor %}
+    </select>
+
+    <label for="options">Proposed times <span class="muted">(one per line, e.g. 2026-07-10 14:00)</span></label>
+    <textarea id="options" name="options" rows="5"
+      placeholder="2026-07-10 14:00&#10;2026-07-11 10:30&#10;2026-07-12 16:00"></textarea>
+
+    <label for="location">Location <span class="muted">(optional)</span></label>
+    <input type="text" id="location" name="location" placeholder="Studio / video call / venue">
+
+    <label for="duration_minutes">Duration (minutes)</label>
+    <input type="text" id="duration_minutes" name="duration_minutes" value="60">
+
+    <label for="client_id">Client <span class="muted">(optional)</span></label>
+    <select id="client_id" name="client_id">
+      <option value="">— none —</option>
+      {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if preselect_client == c.id else '' }}>{{ c.name }}</option>{% endfor %}
+    </select>
+
+    <label for="project_id">Project <span class="muted">(optional)</span></label>
+    <select id="project_id" name="project_id">
+      <option value="">— none —</option>
+      {% for p in projects %}<option value="{{ p.id }}" {{ 'selected' if preselect_project == p.id else '' }}>{{ p.name }}</option>{% endfor %}
+    </select>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Create session</button>
+      <a class="btn ghost" href="/schedule">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
