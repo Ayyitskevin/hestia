@@ -132,10 +132,17 @@ operation with no keys.
 
 ## Roadmap
 
-- **Now:** the full loop works end to end (inquiry → paid), mock-first, single-region.
-- **Next:** plan enforcement (quotas/feature gates), conversion analytics, richer
-  client portal, team roles, AI cost ledger, white-label client portal.
-- **Later:** live provider hardening + metering, deeper retention/upsell automation.
+Sequenced from a verified competitive analysis — full landscape, wedge, pricing, and
+the phased build list in **[`docs/COMPETITIVE-STRATEGY.md`](docs/COMPETITIVE-STRATEGY.md)**.
+
+- **Now:** the full delivery→paid loop works end to end (inquiry → paid), mock-first.
+- **Phase 1 — contract-to-cash credibility:** contracts + e-signature, payment plans,
+  client portal, questionnaires (the booking-side table stakes).
+- **Phase 2 — scheduling + automations:** self-booking calendar, event-triggered workflows.
+- **Phase 3 — defend the after-the-shoot loop:** gallery proofing/favorites, AI-curated
+  sales-automation campaigns, print-store fulfillment.
+- **Phase 4 — AI compounding + retention:** vision parity + studio AI profiles, upsell
+  automations, mobile surfaces.
 
 ## Status
 
