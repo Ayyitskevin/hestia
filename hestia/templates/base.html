@@ -17,6 +17,8 @@
         </svg>
         Hestia <small>the studio</small>
       </a>
+      <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Toggle menu">
+      <label for="nav-toggle" class="nav-burger" aria-hidden="true">☰</label>
       <nav class="nav">
         {% if auth and auth.is_admin %}
           <a href="/admin/tenants">Studios</a>
