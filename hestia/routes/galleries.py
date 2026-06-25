@@ -17,7 +17,8 @@ from ..galleries import (
     list_images,
     publish_gallery,
 )
-from ..pipeline import execute_run, start_run
+from ..jobs import drain, enqueue
+from ..pipeline import start_run
 from ..products import get_set_for_gallery
 from ..sales import get_offer_for_gallery, offer_public_url
 from ..tenants import get_tenant, tenant_flags
@@ -33,9 +34,10 @@ def _require_user(request: Request, conn):
     return auth
 
 
-def _schedule(request: Request, background_tasks: BackgroundTasks, run_id: int) -> None:
+def _schedule(request: Request, background_tasks: BackgroundTasks) -> None:
+    """Kick an inline drain so work starts now; the worker thread is the backstop."""
     settings = settings_of(request)
-    background_tasks.add_task(execute_run, settings.db_path, settings, run_id)
+    background_tasks.add_task(drain, settings.db_path, settings)
 
 
 @router.get("")
@@ -149,5 +151,6 @@ def gallery_process(request: Request, gallery_id: int, background_tasks: Backgro
             return RedirectResponse("/galleries", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
         run = start_run(conn, tenant=tenant, gallery_id=gallery_id)
-    _schedule(request, background_tasks, run["id"])
+        enqueue(conn, kind="pipeline.run", payload={"run_id": run["id"]}, tenant_id=tenant["id"])
+    _schedule(request, background_tasks)
     return RedirectResponse(f"/pipeline/{run['id']}", status_code=303)

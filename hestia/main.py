@@ -10,6 +10,7 @@ modules, not services — see :mod:`hestia.vision` and :mod:`hestia.sales`.
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from .config import Settings, get_settings
 from .csrf import csrf_protect
 from .db import init_db
 from .features import SHOOT_TYPE_LABELS, SHOOT_TYPES
+from .jobs import run_worker
 from .ratelimit import RateLimiter
 from .routes import (
     admin,
@@ -77,7 +79,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         ", ".join(settings.insecure_secrets))
         if settings.vision_backend == "mock":
             log.info("Vision backend = mock (deterministic; set HESTIA_VISION_BACKEND=xai for live).")
-        yield
+        # Durable background worker: drains the job queue (retries + crash recovery).
+        stop = threading.Event()
+        worker = threading.Thread(target=run_worker, args=(settings.db_path, settings, stop),
+                                  name="hestia-worker", daemon=True)
+        worker.start()
+        app.state.worker_stop = stop
+        log.info("Background job worker started.")
+        try:
+            yield
+        finally:
+            stop.set()
+            worker.join(timeout=2)
 
     app = FastAPI(
         title="Hestia",

@@ -21,6 +21,7 @@ from .config import Settings
 from .db import audit, connect
 from .features import FeatureFlags, flags_for
 from .galleries import get_gallery
+from .jobs import register
 from .sales import create_or_update_offer, offer_public_url
 from .storage import build_storage
 from .tenants import get_tenant
@@ -212,6 +213,12 @@ def _fail(conn: sqlite3.Connection, run: dict, message: str) -> dict:
           tenant_id=run["tenant_id"], detail=message)
     conn.commit()
     return run
+
+
+@register("pipeline.run")
+def _job_run_pipeline(settings: Settings, payload: dict) -> None:
+    """Job handler: run the gallery→vision→offer pipeline for a persisted run."""
+    execute_run(settings.db_path, settings, int(payload["run_id"]))
 
 
 # ── Presentation ────────────────────────────────────────────────────────────
