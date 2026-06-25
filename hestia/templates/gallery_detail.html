@@ -52,6 +52,27 @@
 </div>
 {% endif %}
 
+{% if favorites or comments %}
+<div class="card stack" style="margin-top:18px">
+  <h3>Client proofing · {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }}</h3>
+  <p class="muted">The frames your client loved (♥ in the grid below) and their notes — the signal for the album and print picks.</p>
+  {% if comments %}
+    <table>
+      <thead><tr><th>Frame</th><th>From</th><th>Note</th></tr></thead>
+      <tbody>
+        {% for c in comments %}
+        <tr>
+          <td class="mono muted">{{ c.filename }}</td>
+          <td class="muted">{{ c.author_name or 'Client' }}</td>
+          <td>{{ c.body }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="card stack" style="margin-top:18px">
   <h3>Upload images</h3>
   <form method="post" action="/galleries/{{ gallery.id }}/images" enctype="multipart/form-data">
@@ -69,8 +90,9 @@
   <h3>Frames</h3>
   <div class="thumb-grid">
     {% for img in images %}
-      <figure class="thumb">
+      <figure class="thumb{{ ' is-fav' if img.id in favorites else '' }}">
         <img src="{{ storage.public_path(img.storage_key) }}" alt="{{ img.filename }}" loading="lazy">
+        {% if img.id in favorites %}<span class="fav-badge" title="Client favorite">♥</span>{% endif %}
         <figcaption>{{ img.filename }}</figcaption>
       </figure>
     {% endfor %}

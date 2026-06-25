@@ -31,9 +31,30 @@
           <a class="offer-url" href="{{ offer_url }}">View your print &amp; album collection →</a>
         </div>
         {% endif %}
+        <p class="muted" style="margin-bottom:14px">Heart the frames you love and leave a note —
+          {{ favorites|length }} favorited so far. Your photographer sees these to build your album and prints.</p>
         <section class="thumb-grid client-grid">
           {% for img in images %}
-            <figure class="thumb"><img src="{{ storage.public_path(img.storage_key) }}" alt="{{ img.filename }}" loading="lazy"></figure>
+            <figure class="thumb proof" id="img-{{ img.id }}">
+              <img src="{{ storage.public_path(img.storage_key) }}" alt="{{ img.filename }}" loading="lazy">
+              <div class="proof-bar">
+                <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/favorite/{{ img.id }}">
+                  <button class="fav-btn {{ 'on' if img.id in favorites else '' }}" type="submit"
+                          title="{{ 'Remove favorite' if img.id in favorites else 'Add to favorites' }}">{{ '♥' if img.id in favorites else '♡' }}</button>
+                </form>
+                <details class="proof-note">
+                  <summary>💬 {{ comments.get(img.id, [])|length or '' }}</summary>
+                  {% for c in comments.get(img.id, []) %}
+                    <p class="proof-comment"><strong>{{ c.author_name or 'You' }}:</strong> {{ c.body }}</p>
+                  {% endfor %}
+                  <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/comment/{{ img.id }}">
+                    <input type="text" name="author_name" placeholder="Your name (optional)">
+                    <textarea name="body" rows="2" placeholder="Add a note…" required></textarea>
+                    <button class="btn secondary" type="submit">Add note</button>
+                  </form>
+                </details>
+              </div>
+            </figure>
           {% endfor %}
         </section>
       {% endif %}

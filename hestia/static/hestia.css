@@ -198,6 +198,21 @@ th { color: var(--muted); font-weight: 600; font-size: .82rem; text-transform: u
 .thumb.hero { border-color: var(--ember); box-shadow: 0 0 0 2px var(--ember); }
 .thumb.hero figcaption { color: var(--terracotta-dark); font-weight: 600; }
 
+/* Gallery proofing — client favorites + comments */
+.thumb { position: relative; }
+.thumb.is-fav { border-color: var(--ember); box-shadow: 0 0 0 2px var(--ember); }
+.fav-badge { position: absolute; top: 6px; right: 8px; color: var(--ember); font-size: 1.1rem;
+  text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.proof .proof-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px; }
+.fav-btn { background: none; border: none; cursor: pointer; font-size: 1.5rem; line-height: 1;
+  color: var(--muted); padding: 0; width: auto; }
+.fav-btn.on { color: var(--ember); }
+.proof-note { font-size: .85rem; }
+.proof-note summary { cursor: pointer; color: var(--muted); list-style: none; }
+.proof-note[open] { padding-bottom: 6px; }
+.proof-note textarea, .proof-note input { width: 100%; margin: 6px 0 0; }
+.proof-comment { margin: 6px 0 0; font-size: .85rem; color: var(--ink); }
+
 /* Client-facing pages */
 body.client { background: var(--cream); }
 .client-header { background: var(--paper); border-bottom: 1px solid var(--line); padding: 36px 0; }
