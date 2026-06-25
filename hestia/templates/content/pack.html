@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ pack.title }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ pack.body.headline }}</h1>
+    <span class="muted">
+      {{ pack.title }} ·
+      <a href="/projects/{{ pack.project_id }}">project</a> ·
+      drafted by <span class="pill">{{ pack.backend }}</span> ·
+      <span class="pill {{ 'on' if pack.status == 'approved' else 'off' }}">{{ pack.status }}</span>
+    </span>
+  </div>
+  {% if pack.status != 'approved' %}
+  <form method="post" action="/content/{{ pack.id }}/approve"><button class="btn" type="submit">Approve</button></form>
+  {% endif %}
+</div>
+
+<div class="grid cols-2">
+  <div class="card stack">
+    <h3>Strategy</h3>
+    <p class="muted">{{ pack.body.strategy }}</p>
+    <h3>Shot list</h3>
+    <ol class="stack" style="padding-left:18px">
+      {% for shot in pack.body.shot_list %}<li>{{ shot }}</li>{% endfor %}
+    </ol>
+  </div>
+
+  <div class="card stack">
+    <h3>Captions</h3>
+    {% for cap in pack.body.captions %}
+      <div class="card" style="padding:12px; box-shadow:none">{{ cap }}</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

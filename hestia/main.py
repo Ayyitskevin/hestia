@@ -26,6 +26,7 @@ from .routes import (
     albums,
     api,
     client,
+    content,
     crm,
     galleries,
     health,
@@ -94,6 +95,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(galleries.router)
     app.include_router(albums.router)
     app.include_router(invoices.router)
+    app.include_router(content.router)
     app.include_router(pipeline_ui.router)
     app.include_router(api.router)
     app.include_router(client.router)

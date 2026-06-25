@@ -68,5 +68,30 @@
       <a class="btn" href="/invoices/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Create an invoice</a>
     {% endif %}
   </div>
+
+  <div class="card stack">
+    <h3>Marketing content</h3>
+    <form method="post" action="/projects/{{ project.id }}/content" style="display:flex; gap:10px; align-items:center">
+      <select name="recipe">
+        {% for r in recipes %}<option value="{{ r.slug }}">{{ r.label }}</option>{% endfor %}
+      </select>
+      <button class="btn secondary" type="submit">Generate</button>
+    </form>
+    {% if packs %}
+      <table>
+        <thead><tr><th>Pack</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for p in packs %}
+          <tr>
+            <td><a href="/content/{{ p.id }}">{{ p.title }}</a></td>
+            <td><span class="pill {{ 'on' if p.status == 'approved' else 'off' }}">{{ p.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Shot lists, captions, and campaign copy — generated from this project's vision keywords.</p>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}
