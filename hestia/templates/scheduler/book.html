@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ appt.title }} — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>{{ appt.title }}</h1>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="padding-top:32px">
+      {% if appt.status == 'confirmed' %}
+        <div class="card stack">
+          <div class="alert ok">✓ You're booked for <strong>{{ appt.starts_at }}</strong>.</div>
+          <p class="muted">{% if appt.location %}Location: {{ appt.location }}. {% endif %}We've emailed
+            you a confirmation and will send a reminder before your {{ appt.kind_label|lower }}. See you then!</p>
+        </div>
+      {% else %}
+        <div class="card stack">
+          <h3>Pick a time</h3>
+          <p class="muted">Choose the time that works best for your {{ appt.kind_label|lower }}
+            {% if appt.location %}({{ appt.location }}){% endif %}.</p>
+          {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+          <form method="post" action="/book/{{ appt.token }}">
+            {% for o in appt.options %}
+            <label class="check">
+              <input type="radio" name="option_id" value="{{ o.id }}" {{ 'checked' if loop.first else '' }}>
+              {{ o.starts_at }}
+            </label>
+            {% endfor %}
+            <div class="form-actions">
+              <button class="btn" type="submit">Book this time</button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">Scheduled with 🔥 by {{ tenant.name }} on Hestia</div></footer>
+</body>
+</html>

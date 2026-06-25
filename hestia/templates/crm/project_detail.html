@@ -13,6 +13,7 @@
   <div style="display:flex; gap:10px">
     <a class="btn ghost" href="/contracts/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Contract</a>
     <a class="btn ghost" href="/questionnaires/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Form</a>
+    <a class="btn ghost" href="/schedule/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Session</a>
     <a class="btn ghost" href="/payment-plans/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Plan</a>
     <a class="btn secondary" href="/invoices/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Invoice</a>
     <a class="btn" href="/galleries/new?project_id={{ project.id }}">+ Gallery</a>
@@ -69,6 +70,30 @@
     {% else %}
       <p class="muted">No contracts for this project yet.</p>
       <a class="btn" href="/contracts/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Draft a contract</a>
+    {% endif %}
+  </div>
+
+  <div class="card stack">
+    <h3>Sessions</h3>
+    {% if appointments %}
+      <table>
+        <thead><tr><th>Session</th><th>When</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for a in appointments %}
+          <tr>
+            <td><a href="/schedule/{{ a.id }}">{{ a.title }}</a></td>
+            <td class="muted">{{ a.starts_at or "—" }}</td>
+            <td>
+              {% if a.status == 'canceled' %}<span class="pill off">canceled</span>
+              {% else %}<span class="pill {{ 'on' if a.status == 'confirmed' else 'off' }}">{{ a.status }}</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No sessions for this project yet.</p>
+      <a class="btn" href="/schedule/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Schedule a session</a>
     {% endif %}
   </div>
 

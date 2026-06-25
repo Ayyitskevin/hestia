@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ appt.title }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ appt.title }}</h1>
+    <span class="muted">
+      {{ appt.kind_label }}
+      {% if appt.client_name %} · <a href="/clients/{{ appt.client_id }}">{{ appt.client_name }}</a>{% endif %}
+      {% if appt.project_id %} · <a href="/projects/{{ appt.project_id }}">{{ appt.project_name }}</a>{% endif %}
+      {% if appt.status == 'canceled' %} · <span class="pill off">canceled</span>
+      {% else %} · <span class="pill {{ 'on' if appt.status == 'confirmed' else 'off' }}">{{ appt.status }}</span>{% endif %}
+    </span>
+  </div>
+  <div style="display:flex; gap:10px">
+    {% if appt.status != 'canceled' %}
+      <form method="post" action="/schedule/{{ appt.id }}/cancel"
+            onsubmit="return confirm('Cancel this session?')">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Cancel</button></form>
+    {% endif %}
+  </div>
+</div>
+
+{% if appt.status == 'confirmed' %}
+<div class="alert ok">✓ Confirmed for <strong>{{ appt.starts_at }}</strong>{% if appt.location %} · {{ appt.location }}{% endif %}. A confirmation was sent; a reminder is queued.</div>
+{% endif %}
+
+{% if appt.status == 'proposed' %}
+<div class="card stack">
+  <h3>Client booking link</h3>
+  <a class="offer-url" href="{{ book_url }}" target="_blank">{{ book_url }}</a>
+  <p class="muted">Share this so the client can pick a time. You can also confirm one yourself below.</p>
+</div>
+{% endif %}
+
+<div class="card stack">
+  <h3>Proposed times</h3>
+  {% if appt.options %}
+    <table>
+      <tbody>
+        {% for o in appt.options %}
+        <tr>
+          <td>{{ o.starts_at }}</td>
+          <td style="text-align:right">
+            {% if appt.status == 'proposed' %}
+              <form method="post" action="/schedule/{{ appt.id }}/confirm" style="display:inline">
+                {% include "_csrf.html" %}
+                <input type="hidden" name="starts_at" value="{{ o.starts_at }}">
+                <button class="btn ghost" type="submit">Confirm this time</button>
+              </form>
+            {% elif appt.starts_at == o.starts_at %}<span class="muted">✓ chosen</span>
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No times proposed.</p>
+  {% endif %}
+  {% if appt.notes %}<p class="muted">{{ appt.notes }}</p>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Schedule — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Schedule</h1>
+  <a class="btn" href="/schedule/new">+ New session</a>
+</div>
+{% if appointments %}
+<div class="card">
+  <table>
+    <thead><tr><th>Session</th><th>Client</th><th>Type</th><th>When</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for a in appointments %}
+      <tr>
+        <td><a href="/schedule/{{ a.id }}">{{ a.title }}</a></td>
+        <td class="muted">{{ a.client_name or a.project_name or "—" }}</td>
+        <td class="muted">{{ a.kind_label }}</td>
+        <td class="muted">{{ a.starts_at or "—" }}</td>
+        <td>
+          {% if a.status == 'canceled' %}<span class="pill off">canceled</span>
+          {% else %}<span class="pill {{ 'on' if a.status == 'confirmed' else 'off' }}">{{ a.status }}</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card stack">
+  <p class="muted">No sessions yet — propose a few times for a consultation or shoot and let the
+    client pick one. They'll get a confirmation and a reminder automatically.</p>
+  <a class="btn" href="/schedule/new">Schedule your first session</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -21,6 +21,7 @@ from .crypto import new_session_token
 from .invoices import invoice_public_url, list_invoices
 from .payment_plans import get_payment_plan, list_payment_plans
 from .questionnaires import list_questionnaires
+from .scheduler import list_appointments
 from .tenants import get_tenant
 
 
@@ -97,6 +98,11 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
     for q in questionnaires:
         q["fill_url"] = f"{settings.public_url.rstrip('/')}/q/{q['token']}"
 
+    appointments = [a for a in list_appointments(conn, tenant_id, client_id=client["id"])
+                    if a["status"] in ("proposed", "confirmed")]
+    for a in appointments:
+        a["book_url"] = f"{settings.public_url.rstrip('/')}/book/{a['token']}"
+
     return {
         "tenant": tenant,
         "projects": list_projects(conn, tenant_id, client_id=client["id"]),
@@ -105,4 +111,5 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
         "invoices": invoices,
         "galleries": galleries,
         "questionnaires": questionnaires,
+        "appointments": appointments,
     }

@@ -38,11 +38,21 @@ def register(kind: str):
 
 
 def enqueue(conn, *, kind: str, payload: dict | None = None, tenant_id: str | None = None,
-            max_attempts: int = 3) -> int:
-    cur = conn.execute(
-        "INSERT INTO jobs (tenant_id, kind, payload_json, max_attempts) VALUES (?, ?, ?, ?)",
-        (tenant_id, kind, json.dumps(payload or {}), max_attempts),
-    )
+            max_attempts: int = 3, run_at: str | None = None) -> int:
+    """Enqueue a job. ``run_at`` (a SQLite datetime string) delays the earliest
+    run — used for scheduled work like reminders; omit it to run as soon as a
+    worker is free."""
+    if run_at is None:
+        cur = conn.execute(
+            "INSERT INTO jobs (tenant_id, kind, payload_json, max_attempts) VALUES (?, ?, ?, ?)",
+            (tenant_id, kind, json.dumps(payload or {}), max_attempts),
+        )
+    else:
+        cur = conn.execute(
+            "INSERT INTO jobs (tenant_id, kind, payload_json, max_attempts, run_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (tenant_id, kind, json.dumps(payload or {}), max_attempts, run_at),
+        )
     return cur.lastrowid
 
 
