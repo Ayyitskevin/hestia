@@ -25,6 +25,16 @@ def test_dashboard_redirects_when_anonymous(client):
     assert r.headers["location"] == "/login"
 
 
+def test_dashboard_renders_studio_os_home(client):
+    creds = onboard_studio(client, name="Kevin Lee Photography", email="dash@example.com")
+    login_owner(client, creds)
+    page = client.get("/dashboard")
+    assert page.status_code == 200
+    # quick actions + the public-site link tie the whole OS together
+    assert "+ Invoice" in page.text
+    assert "/studio/kevin-lee-photography" in page.text
+
+
 def test_full_magic_moment(client):
     creds = onboard_studio(client, shoot_type="wedding")
     login_owner(client, creds)
