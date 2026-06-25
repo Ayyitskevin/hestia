@@ -12,6 +12,10 @@ Honesty: ``mock`` clearly labels payments as simulated; nothing is charged.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import time
 from dataclasses import dataclass
 
 from .config import Settings
@@ -19,6 +23,59 @@ from .config import Settings
 
 class PaymentError(RuntimeError):
     pass
+
+
+# ── Stripe webhook verification (completes the money path) ──────────────────
+
+
+def verify_stripe_signature(
+    payload: bytes, sig_header: str, secret: str, *, tolerance: int = 300, now: float | None = None
+) -> bool:
+    """Verify a Stripe-Signature header (``t=<ts>,v1=<sig>``) against the payload.
+
+    Same scheme Stripe's SDK uses: HMAC-SHA256 of ``"{t}.{payload}"`` keyed by the
+    endpoint secret. Constant-time compare; optional replay-window check.
+    """
+    if not secret or not sig_header:
+        return False
+    parts = dict(
+        p.split("=", 1) for p in sig_header.split(",") if "=" in p
+    )
+    timestamp = parts.get("t")
+    sent = parts.get("v1")
+    if not timestamp or not sent:
+        return False
+    signed = f"{timestamp}.{payload.decode('utf-8', 'replace')}".encode()
+    expected = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, sent):
+        return False
+    if tolerance > 0:
+        current = now if now is not None else time.time()
+        try:
+            if abs(current - int(timestamp)) > tolerance:
+                return False
+        except ValueError:
+            return False
+    return True
+
+
+def stripe_signature_header(payload: bytes, secret: str, *, timestamp: int) -> str:
+    """Build a valid Stripe-Signature header (used by tests and tooling)."""
+    signed = f"{timestamp}.{payload.decode('utf-8', 'replace')}".encode()
+    sig = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+    return f"t={timestamp},v1={sig}"
+
+
+def checkout_token_from_event(payload: bytes) -> str | None:
+    """Extract the invoice token from a ``checkout.session.completed`` event."""
+    try:
+        event = json.loads(payload)
+    except ValueError:
+        return None
+    if event.get("type") != "checkout.session.completed":
+        return None
+    obj = (event.get("data") or {}).get("object") or {}
+    return obj.get("client_reference_id") or (obj.get("metadata") or {}).get("invoice_token")
 
 
 @dataclass

@@ -59,6 +59,7 @@ class Settings:
     # Payments. mock = simulate checkout (no keys, testable). stripe = live API.
     payments_backend: str = "mock"  # mock | stripe
     stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
     currency: str = "usd"
 
     @classmethod
@@ -85,6 +86,7 @@ class Settings:
             media_dir=media_dir,
             payments_backend=os.getenv("HESTIA_PAYMENTS_BACKEND", "mock"),
             stripe_secret_key=os.getenv("HESTIA_STRIPE_SECRET_KEY", os.getenv("STRIPE_SECRET_KEY", "")),
+            stripe_webhook_secret=os.getenv("HESTIA_STRIPE_WEBHOOK_SECRET", os.getenv("STRIPE_WEBHOOK_SECRET", "")),
             currency=os.getenv("HESTIA_CURRENCY", "usd"),
         )
 
