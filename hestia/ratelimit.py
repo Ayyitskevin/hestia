@@ -20,6 +20,7 @@ LIMITS: dict[str, tuple[int, float]] = {
     "inquiry": (5, 60),
     "checkout": (15, 60),
     "password_reset": (5, 60),
+    "signup": (5, 60),
 }
 _DEFAULT = (30, 60)
 

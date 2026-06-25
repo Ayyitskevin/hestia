@@ -90,13 +90,18 @@ def create_user(
     email: str,
     password: str,
     role: str = "owner",
+    verified: int = 1,
 ) -> dict:
     cur = conn.execute(
-        "INSERT INTO users (tenant_id, email, password_hash, role) VALUES (?, ?, ?, ?)",
-        (tenant_id, email.strip().lower(), hash_password(password), role),
+        "INSERT INTO users (tenant_id, email, password_hash, role, verified) VALUES (?, ?, ?, ?, ?)",
+        (tenant_id, email.strip().lower(), hash_password(password), role, verified),
     )
     row = conn.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
     return dict(row)
+
+
+def mark_user_verified(conn: sqlite3.Connection, user_id: int) -> None:
+    conn.execute("UPDATE users SET verified = 1 WHERE id = ?", (user_id,))
 
 
 def get_user_by_email(conn: sqlite3.Connection, email: str) -> dict | None:

@@ -18,5 +18,8 @@
     </div>
   </form>
   <p class="hint"><a href="/forgot">Forgot your password?</a></p>
+  {% if settings.signup_enabled %}
+  <p class="hint">New here? <a href="/signup">Create a studio</a>.</p>
+  {% endif %}
 </div>
 {% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Verification failed — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>Link invalid or expired</h1>
+  <div class="alert error">This verification link is invalid or has already been used.</div>
+  <p class="hint"><a href="/signup">Sign up again</a> · <a href="/login">Sign in</a></p>
+</div>
+{% endblock %}
