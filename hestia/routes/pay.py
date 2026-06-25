@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 
 from ..invoices import get_invoice_by_token, mark_paid
 from ..payments import PaymentError, build_payments
+from ..ratelimit import enforce
 from ..tenants import get_tenant
 from .deps import db_conn, render, settings_of
 
@@ -25,6 +26,7 @@ def pay_page(request: Request, token: str):
 
 @router.post("/pay/{token}/checkout")
 def pay_checkout(request: Request, token: str):
+    enforce(request, "checkout")
     settings = settings_of(request)
     with db_conn(request) as conn:
         invoice = get_invoice_by_token(conn, token)

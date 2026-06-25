@@ -18,6 +18,7 @@ from ..billing import plan_status
 from ..crm import list_clients, list_projects
 from ..galleries import list_galleries
 from ..pipeline import list_runs
+from ..ratelimit import enforce
 from ..studio import get_profile
 from ..tenants import get_tenant, tenant_flags
 from .deps import db_conn, render, settings_of
@@ -39,6 +40,7 @@ def login_form(request: Request):
 
 @router.post("/login")
 def login_submit(request: Request, email: str = Form(...), password: str = Form(...)):
+    enforce(request, "login")
     settings = settings_of(request)
     with db_conn(request) as conn:
         user = authenticate_user(conn, email, password)
