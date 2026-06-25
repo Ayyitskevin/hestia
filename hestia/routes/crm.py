@@ -20,6 +20,7 @@ from ..crm import (
     set_project_status,
 )
 from ..invoices import list_invoices
+from ..payment_plans import list_payment_plans
 from .deps import db_conn, render
 
 router = APIRouter()
@@ -129,13 +130,15 @@ def project_detail(request: Request, project_id: int):
         if not project:
             return RedirectResponse("/projects", status_code=303)
         galleries = galleries_for_project(conn, auth.tenant["id"], project_id)
-        invoices = list_invoices(conn, auth.tenant["id"], project_id=project_id)
+        invoices = list_invoices(conn, auth.tenant["id"], project_id=project_id,
+                                 standalone_only=True)
+        plans = list_payment_plans(conn, auth.tenant["id"], project_id=project_id)
         contracts = list_contracts(conn, auth.tenant["id"], project_id=project_id)
         packs = list_packs(conn, auth.tenant["id"], project_id=project_id)
         recipes = recipes_for(project["shoot_type"])
     return render(request, "crm/project_detail.html", auth=auth, project=project,
-                  galleries=galleries, invoices=invoices, contracts=contracts, packs=packs,
-                  recipes=recipes, statuses=PROJECT_STATUSES)
+                  galleries=galleries, invoices=invoices, plans=plans, contracts=contracts,
+                  packs=packs, recipes=recipes, statuses=PROJECT_STATUSES)
 
 
 @router.post("/projects/{project_id}/status")
