@@ -19,11 +19,13 @@
 
       {% set unsigned = contracts | selectattr('status', 'equalto', 'sent') | list %}
       {% set open_invoices = invoices | rejectattr('status', 'in', ['paid', 'void']) | list %}
-      {% if unsigned or open_invoices or (plans | selectattr('progress', 'ne', 'paid') | list) %}
+      {% set to_fill = questionnaires | selectattr('status', 'equalto', 'sent') | list %}
+      {% if unsigned or open_invoices or to_fill or (plans | selectattr('progress', 'ne', 'paid') | list) %}
       <div class="card stack" style="border-color:#f0d9b4; background:#fff7ec">
         <h3>Needs your attention</h3>
         <ul class="portal-todo">
           {% for ct in unsigned %}<li>Sign <strong>{{ ct.title }}</strong> — <a href="{{ ct.sign_url }}">review &amp; sign →</a></li>{% endfor %}
+          {% for q in to_fill %}<li>Fill out <strong>{{ q.title }}</strong> — <a href="{{ q.fill_url }}">answer →</a></li>{% endfor %}
           {% for pl in plans if pl.status != 'void' and pl.progress != 'paid' %}<li>Payment plan <strong>{{ pl.title }}</strong> — {{ pl.paid_display }} of {{ pl.total_display }} paid</li>{% endfor %}
           {% for inv in open_invoices %}<li>Invoice <strong>{{ inv.title }}</strong> ({{ inv.amount_display }}) — <a href="{{ inv.pay_url }}">pay →</a></li>{% endfor %}
         </ul>
@@ -67,6 +69,26 @@
         </table>
         {% else %}<p class="muted">No contracts yet.</p>{% endif %}
       </div>
+
+      {% if questionnaires %}
+      <div class="card stack">
+        <h3>Questionnaires</h3>
+        <table>
+          <tbody>
+            {% for q in questionnaires %}
+            <tr>
+              <td>{{ q.title }}</td>
+              <td><span class="pill {{ 'on' if q.status == 'completed' else 'off' }}">{{ q.status }}</span></td>
+              <td style="text-align:right">
+                {% if q.status == 'sent' %}<a class="btn secondary" href="{{ q.fill_url }}">Fill out</a>
+                {% else %}<span class="muted">✓ Done</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
 
       <div class="card stack">
         <h3>Payments</h3>
