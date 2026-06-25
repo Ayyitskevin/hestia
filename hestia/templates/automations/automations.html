@@ -9,6 +9,21 @@
   <a class="btn" href="/automations/new">+ New automation</a>
 </div>
 
+<div class="card stack" style="margin-bottom:18px">
+  <h3>Retention recipes</h3>
+  <p class="muted">One-click re-engagement flows — they fire automatically, days after the moment.</p>
+  <div style="display:flex; gap:10px; flex-wrap:wrap">
+    {% for key, r in recipes.items() %}
+    <form method="post" action="/automations/recipe">
+      {% include "_csrf.html" %}
+      <input type="hidden" name="key" value="{{ key }}">
+      <button class="btn ghost" type="submit" title="{{ r.subject }}">+ {{ r.name }}
+        <span class="muted">({{ r.delay_days }}d after {{ r.trigger }})</span></button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+
 {% if automations %}
 <div class="card">
   <table>
@@ -17,7 +32,7 @@
       {% for a in automations %}
       <tr>
         <td><strong>{{ a.name }}</strong></td>
-        <td class="muted">{{ a.trigger_label }}</td>
+        <td class="muted">{{ a.trigger_label }}{% if a.delay_days %} · +{{ a.delay_days }}d{% endif %}</td>
         <td class="muted">email client</td>
         <td><span class="pill {{ 'on' if a.enabled else 'off' }}">{{ 'on' if a.enabled else 'off' }}</span></td>
         <td style="text-align:right; white-space:nowrap">

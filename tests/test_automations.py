@@ -135,19 +135,20 @@ def test_tenant_isolation(conn, settings):
 def test_http_create_toggle_delete(client):
     creds = onboard_studio(client, email="auto@example.com")
     login_owner(client, creds)
+    # a name unique to this rule (not shared with any retention-recipe UI text)
     client.post("/automations", data={
-        "name": "Welcome", "trigger": "contract.signed",
+        "name": "ZephyrSignal", "trigger": "contract.signed",
         "subject": "Hi {client_name}", "body": "Thanks", "action": "email_client",
     })
     page = client.get("/automations")
-    assert "Welcome" in page.text and "Contract signed" in page.text
+    assert "ZephyrSignal" in page.text and "Contract signed" in page.text
 
     # find the automation id from its toggle form action (regex avoids the /new link)
     aid = re.search(r"/automations/(\d+)/toggle", page.text).group(1)
     client.post(f"/automations/{aid}/toggle")
     assert "Enable" in client.get("/automations").text  # now disabled → shows "Enable"
     client.post(f"/automations/{aid}/delete")
-    assert "Welcome" not in client.get("/automations").text
+    assert "ZephyrSignal" not in client.get("/automations").text
 
 
 def test_http_end_to_end_through_routes(client, app):

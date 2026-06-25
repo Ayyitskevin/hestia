@@ -43,13 +43,20 @@ def emit_event(
     conn: sqlite3.Connection, *, tenant_id: str, event: str, context: dict | None = None
 ) -> int:
     """Enqueue a job for each enabled rule matching ``event``. Connection-only, so
-    it runs inside the triggering transaction. Returns the number of jobs queued."""
+    it runs inside the triggering transaction. A rule with ``delay_days > 0`` is
+    scheduled that many days out (retention); ``0`` fires as soon as a worker is
+    free. Returns the number of jobs queued."""
     rows = conn.execute(
-        "SELECT id FROM automations WHERE tenant_id = ? AND trigger = ? AND enabled = 1",
+        "SELECT id, delay_days FROM automations WHERE tenant_id = ? AND trigger = ? AND enabled = 1",
         (tenant_id, event),
     ).fetchall()
     for r in rows:
-        enqueue(conn, kind="automation.run", tenant_id=tenant_id,
+        run_at = None
+        if r["delay_days"] and int(r["delay_days"]) > 0:
+            run_at = conn.execute(
+                "SELECT datetime('now', ?)", (f"+{int(r['delay_days'])} days",)
+            ).fetchone()[0]
+        enqueue(conn, kind="automation.run", tenant_id=tenant_id, run_at=run_at,
                 payload={"automation_id": r["id"], "event": event, "context": context or {}})
     return len(rows)
 
@@ -118,16 +125,52 @@ def _execute(conn: sqlite3.Connection, settings: Settings, auto: dict, ctx: dict
 
 def create_automation(
     conn: sqlite3.Connection, *, tenant_id: str, name: str, trigger: str,
-    subject: str, body: str, action: str = "email_client",
+    subject: str, body: str, action: str = "email_client", delay_days: int = 0,
 ) -> dict | None:
     if trigger not in TRIGGERS or action not in ACTIONS:
         return None
     cur = conn.execute(
-        "INSERT INTO automations (tenant_id, name, trigger, action, subject, body) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (tenant_id, name.strip(), trigger, action, subject.strip(), body.strip()),
+        "INSERT INTO automations (tenant_id, name, trigger, action, subject, body, delay_days) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (tenant_id, name.strip(), trigger, action, subject.strip(), body.strip(),
+         max(0, int(delay_days))),
     )
     return get_automation(conn, tenant_id, cur.lastrowid)
+
+
+# One-click retention recipes: the timed re-engagement flows a studio should have.
+RETENTION_RECIPES = {
+    "review": {
+        "name": "Review request", "trigger": "invoice.paid", "delay_days": 3,
+        "subject": "How did we do, {client_name}?",
+        "body": ("Hi {client_name},\n\nThank you for your order with {studio_name}! If you have a "
+                 "moment, we'd be so grateful for a quick review of your experience.\n\n"
+                 "Warmly,\n{studio_name}"),
+    },
+    "rebook": {
+        "name": "Anniversary re-book", "trigger": "gallery.published", "delay_days": 365,
+        "subject": "It's been a year, {client_name}!",
+        "body": ("Hi {client_name},\n\nHard to believe it's been a year since {project_name}! If "
+                 "you're ready for new photos, we'd love to work with you again — just reply to "
+                 "book.\n\nWarmly,\n{studio_name}"),
+    },
+    "welcome": {
+        "name": "Post-booking welcome", "trigger": "project.booked", "delay_days": 1,
+        "subject": "Welcome to {studio_name}, {client_name}!",
+        "body": ("Hi {client_name},\n\nWe're so excited for {project_name}. Here's what happens "
+                 "next, and how to reach us any time.\n\nWarmly,\n{studio_name}"),
+    },
+}
+
+
+def create_from_recipe(conn: sqlite3.Connection, tenant_id: str, key: str) -> dict | None:
+    r = RETENTION_RECIPES.get(key)
+    if not r:
+        return None
+    return create_automation(
+        conn, tenant_id=tenant_id, name=r["name"], trigger=r["trigger"],
+        subject=r["subject"], body=r["body"], delay_days=r["delay_days"],
+    )
 
 
 def get_automation(conn: sqlite3.Connection, tenant_id: str, automation_id: int) -> dict | None:
