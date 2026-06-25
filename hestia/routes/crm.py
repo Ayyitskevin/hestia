@@ -19,9 +19,11 @@ from ..crm import (
     list_projects,
     set_project_status,
 )
+from ..db import audit
 from ..invoices import list_invoices
 from ..payment_plans import list_payment_plans
-from .deps import db_conn, render
+from ..portal import enable_portal, portal_url, regenerate_portal_token
+from .deps import db_conn, render, settings_of
 
 router = APIRouter()
 
@@ -77,7 +79,36 @@ def client_detail(request: Request, client_id: int):
         if not client:
             return RedirectResponse("/clients", status_code=303)
         projects = list_projects(conn, auth.tenant["id"], client_id=client_id)
-    return render(request, "crm/client_detail.html", auth=auth, client=client, projects=projects)
+    portal_link = portal_url(settings_of(request), client["portal_token"]) \
+        if client.get("portal_token") else None
+    return render(request, "crm/client_detail.html", auth=auth, client=client,
+                  projects=projects, portal_link=portal_link)
+
+
+@router.post("/clients/{client_id}/portal")
+def client_portal_enable(request: Request, client_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        token = enable_portal(conn, auth.tenant["id"], client_id)
+        if token:
+            audit(conn, actor="owner", action="client.portal_enabled",
+                  tenant_id=auth.tenant["id"], detail=f"client #{client_id}")
+    return RedirectResponse(f"/clients/{client_id}", status_code=303)
+
+
+@router.post("/clients/{client_id}/portal/regenerate")
+def client_portal_regenerate(request: Request, client_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        token = regenerate_portal_token(conn, auth.tenant["id"], client_id)
+        if token:
+            audit(conn, actor="owner", action="client.portal_rotated",
+                  tenant_id=auth.tenant["id"], detail=f"client #{client_id}")
+    return RedirectResponse(f"/clients/{client_id}", status_code=303)
 
 
 # ── Projects ────────────────────────────────────────────────────────────────

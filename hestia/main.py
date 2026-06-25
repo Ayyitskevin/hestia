@@ -43,6 +43,7 @@ from .routes import (
     pay,
     payment_plans,
     pipeline_ui,
+    portal,
     products,
     sign,
     studio,
@@ -158,6 +159,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(client.router)
     app.include_router(pay.router)
     app.include_router(sign.router)
+    app.include_router(portal.router)
     app.include_router(webhooks.router)
     app.include_router(media.router)
 

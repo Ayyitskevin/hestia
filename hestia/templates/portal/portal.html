@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your studio portal — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>Welcome, {{ client.name }}</h1>
+      <p class="muted">Everything for your shoots in one place — contracts, payments, and galleries.</p>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="padding-top:32px">
+
+      {% set unsigned = contracts | selectattr('status', 'equalto', 'sent') | list %}
+      {% set open_invoices = invoices | rejectattr('status', 'in', ['paid', 'void']) | list %}
+      {% if unsigned or open_invoices or (plans | selectattr('progress', 'ne', 'paid') | list) %}
+      <div class="card stack" style="border-color:#f0d9b4; background:#fff7ec">
+        <h3>Needs your attention</h3>
+        <ul class="portal-todo">
+          {% for ct in unsigned %}<li>Sign <strong>{{ ct.title }}</strong> — <a href="{{ ct.sign_url }}">review &amp; sign →</a></li>{% endfor %}
+          {% for pl in plans if pl.status != 'void' and pl.progress != 'paid' %}<li>Payment plan <strong>{{ pl.title }}</strong> — {{ pl.paid_display }} of {{ pl.total_display }} paid</li>{% endfor %}
+          {% for inv in open_invoices %}<li>Invoice <strong>{{ inv.title }}</strong> ({{ inv.amount_display }}) — <a href="{{ inv.pay_url }}">pay →</a></li>{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {% if projects %}
+      <div class="card stack">
+        <h3>Your projects</h3>
+        <table>
+          <tbody>
+            {% for p in projects %}
+            <tr>
+              <td>{{ p.name }}</td>
+              <td class="muted">{{ p.event_date or "" }}</td>
+              <td><span class="pill">{{ p.status }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      <div class="card stack">
+        <h3>Contracts</h3>
+        {% if contracts %}
+        <table>
+          <tbody>
+            {% for ct in contracts %}
+            <tr>
+              <td>{{ ct.title }}</td>
+              <td><span class="pill {{ 'on' if ct.status == 'signed' else 'off' }}">{{ ct.status }}</span></td>
+              <td style="text-align:right">
+                {% if ct.status == 'sent' %}<a class="btn secondary" href="{{ ct.sign_url }}">Review &amp; sign</a>
+                {% elif ct.status == 'signed' %}<span class="muted">✓ Signed</span>
+                {% else %}<span class="muted">—</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}<p class="muted">No contracts yet.</p>{% endif %}
+      </div>
+
+      <div class="card stack">
+        <h3>Payments</h3>
+        {% if plans %}
+          {% for pl in plans %}
+          <div class="portal-plan">
+            <p><strong>{{ pl.title }}</strong> —
+              {% if pl.status == 'void' %}<span class="pill off">void</span>
+              {% else %}<span class="pill {{ 'on' if pl.progress == 'paid' else 'off' }}">{{ pl.progress }}</span>{% endif %}
+              <span class="muted">{{ pl.paid_display }} of {{ pl.total_display }}</span>
+            </p>
+            <table>
+              <tbody>
+                {% for i in pl.installments %}
+                <tr>
+                  <td>{{ i.title.split('—')[-1].strip() }}</td>
+                  <td>{{ i.amount_display }}</td>
+                  <td class="muted">{{ i.due_date or "" }}</td>
+                  <td style="text-align:right">
+                    {% if i.status == 'paid' %}<span class="muted">✓ Paid</span>
+                    {% elif i.status == 'void' %}<span class="muted">—</span>
+                    {% else %}<a class="btn secondary" href="{{ i.pay_url }}">Pay {{ i.amount_display }}</a>{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endfor %}
+        {% endif %}
+        {% if invoices %}
+        <table>
+          <tbody>
+            {% for inv in invoices %}
+            <tr>
+              <td>{{ inv.title }}</td>
+              <td>{{ inv.amount_display }}</td>
+              <td><span class="pill {{ 'on' if inv.status == 'paid' else 'off' }}">{{ inv.status }}</span></td>
+              <td style="text-align:right">
+                {% if inv.status not in ['paid', 'void'] %}<a class="btn secondary" href="{{ inv.pay_url }}">Pay</a>
+                {% else %}<span class="muted">—</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+        {% if not plans and not invoices %}<p class="muted">No payments due.</p>{% endif %}
+      </div>
+
+      <div class="card stack">
+        <h3>Galleries</h3>
+        {% if galleries %}
+        <table>
+          <tbody>
+            {% for g in galleries %}
+            <tr>
+              <td>{{ g.title }}</td>
+              <td style="text-align:right"><a class="btn secondary" href="{{ g.view_url }}">View gallery</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}<p class="muted">Your galleries will appear here once they're published.</p>{% endif %}
+      </div>
+
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">Your studio hearth · {{ tenant.name }} on Hestia 🔥</div></footer>
+</body>
+</html>

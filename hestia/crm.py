@@ -142,3 +142,13 @@ def galleries_for_project(conn: sqlite3.Connection, tenant_id: str, project_id: 
         (tenant_id, project_id),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def galleries_for_client(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> list[dict]:
+    """Every gallery whose project belongs to this client (for the client portal)."""
+    rows = conn.execute(
+        "SELECT g.* FROM galleries g JOIN projects p ON p.id = g.project_id "
+        "WHERE g.tenant_id = ? AND p.client_id = ? ORDER BY g.created_at DESC",
+        (tenant_id, client_id),
+    ).fetchall()
+    return [dict(r) for r in rows]
