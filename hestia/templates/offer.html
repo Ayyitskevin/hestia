@@ -23,6 +23,25 @@
       </section>
       {% endif %}
 
+      {% if fav_pkg %}
+      <section class="fav-offer card stack">
+        <div class="label">♥ The photos you loved</div>
+        <div class="hero-strip fav-strip">
+          {% for f in fav_thumbs %}<img src="{{ f.url }}" alt="{{ f.filename }}" loading="lazy">{% endfor %}
+        </div>
+        <div class="bundle-foot">
+          <div>
+            <h3 style="margin:0 0 4px">{{ fav_pkg.name }}</h3>
+            <p class="muted" style="margin:0">{{ fav_pkg.blurb }} <em>{{ fav_pkg.note }}</em></p>
+          </div>
+          <div style="text-align:right; white-space:nowrap">
+            <span class="price">{{ fav_pkg.price }}</span>
+            <button class="btn" disabled title="Secure checkout arrives in the next release">Reserve</button>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+
       <section class="bundles">
         {% for b in offer.bundles %}
         <article class="bundle card">

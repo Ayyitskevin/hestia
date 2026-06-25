@@ -62,6 +62,34 @@ def _bundle(sku: str, *, note: str) -> dict:
     }
 
 
+# Per hearted frame, printed archival — the favorites set scales with the picks.
+FAVORITE_PRINT_CENTS = 1500
+
+
+def favorites_package(favorite_count: int) -> dict | None:
+    """A ready-to-order print set auto-built from the client's hearted frames.
+
+    Computed live at offer-render time (favorites accrue after the offer is
+    minted), so it always reflects the latest picks. Returns None when nothing is
+    favorited yet. This is the proofing→sales bridge: the client's own signal,
+    turned into a sellable package no point tool can assemble.
+    """
+    n = max(0, int(favorite_count))
+    if n == 0:
+        return None
+    price = n * FAVORITE_PRINT_CENTS
+    return {
+        "sku": "favorites",
+        "name": f"Your Favorites — {n} archival print{'' if n == 1 else 's'}",
+        "category": "print",
+        "blurb": "The frames you hearted, printed as a curated fine-art set.",
+        "note": "Auto-built from the photos you loved.",
+        "count": n,
+        "price_cents": price,
+        "price": f"${price / 100:,.0f}",
+    }
+
+
 # ── Offer persistence (idempotent: one offer/token per gallery) ─────────────
 
 
