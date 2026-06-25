@@ -2,8 +2,9 @@
 
 **The AI-native studio OS for photographers — run your whole studio from one place.**
 
-Clients and projects, gallery delivery, AI culling and keywording, print &
-album sales, invoicing and payments — one multi-tenant app, one login, one bill.
+A public studio site, clients and projects, gallery delivery, AI culling and
+keywording, album drafts, print sales, marketing copy, product-photo variants,
+and invoicing — one multi-tenant app, one login, one bill.
 
 > **For AI agents:** read [`AGENTS.md`](AGENTS.md) first, then
 > [`docs/BEHEMOTH.md`](docs/BEHEMOTH.md) (the module roadmap) and
@@ -22,12 +23,13 @@ API, a print/album sales layer, an album designer, and two adjacent bets) into
 billing, and storage and talking over HTTP, Hestia is a single FastAPI + HTMX +
 SQLite app with every capability as an in-process module.
 
-The studio's real workflow, end to end:
+The studio's real workflow, end to end — public visitor to paid:
 
 ```text
-client → project → gallery → AI vision (cull · keyword · heroes)
-                          → print & album offer → client buys
-                 → invoice → paid
+public site → inquiry → client → project (lead)
+   → gallery → AI vision (cull · keyword · heroes)
+   → print & album offer + album draft + marketing pack + product variants
+   → invoice → paid
 ```
 
 ---
@@ -53,16 +55,20 @@ $ bash scripts/dogfood-hestia.sh
 | Module | What it does | Best-of |
 |--------|--------------|---------|
 | `tenants.py` · `auth.py` | multi-tenant studios, users, API keys | (control plane) |
+| `studio.py` | public studio site + inquiry → CRM lead | Mise site |
 | `crm.py` | clients + projects — the studio backbone | Mise back-office |
-| `galleries.py` · `storage.py` | native gallery + image hosting (S3-ready seam) | Mise delivery |
-| `vision.py` | cull / keyword / hero scoring (pluggable: `mock`/`xai`) | Argus |
+| `galleries.py` · `storage.py` | native gallery + image hosting (`local`/`s3` seam) | Mise delivery |
+| `vision.py` | cull / keyword / hero scoring (`mock`/`xai`) | Argus |
 | `sales.py` | print/album bundles + **idempotent** client offers | Plutus |
-| `invoices.py` · `payments.py` | invoicing + checkout (pluggable: `mock`/`stripe`) | Mise + Plutus |
+| `albums.py` | drafted album spreads — model proposes, **code validates** | Mnemosyne |
+| `content.py` | shot lists, captions, campaign copy (`mock`/`xai`) | Dionysus |
+| `products.py` | marketplace-spec packshot variants (`mock`/`xai`) | Aphrodite |
+| `invoices.py` · `payments.py` | invoicing + checkout (`mock`/`stripe`) | Mise + Plutus |
 | `pipeline.py` | gallery → vision → offer (persisted, live stepper) | the dogfood loop |
 
-**Roadmap** ([`docs/BEHEMOTH.md`](docs/BEHEMOTH.md)): ✅ CRM · ✅ Invoicing &
-payments · next: album designer (Mnemosyne) → marketing content (Dionysus) →
-product photography (Aphrodite) → public studio site.
+**All six behemoth modules shipped** ([`docs/BEHEMOTH.md`](docs/BEHEMOTH.md)):
+✅ CRM · ✅ Invoicing & payments · ✅ Album designer · ✅ Marketing content ·
+✅ Product photography · ✅ Public studio site.
 
 ---
 
@@ -76,13 +82,15 @@ bash scripts/start-hestia.sh    # → http://127.0.0.1:8500
 ```
 
 - `/` landing · `/admin` (master `HESTIA_API_TOKEN`) onboards a studio
-- `/login` → dashboard → clients · projects · galleries · invoices
-- `/healthz` liveness + self checks
+- `/login` → dashboard → clients · projects · galleries · invoices · site
+- `/studio/{slug}` the studio's public page · `/healthz` liveness + self checks
 
-Everything runs with no external keys by default: vision is `mock` (deterministic)
-and payments are `mock` (simulated checkout). Set `HESTIA_VISION_BACKEND=xai` +
-`HESTIA_XAI_API_KEY` for live Grok vision, and `HESTIA_PAYMENTS_BACKEND=stripe` +
-`HESTIA_STRIPE_SECRET_KEY` for real checkout.
+Everything runs with **no external keys** by default — vision, album, content, and
+product backends are `mock` (deterministic), and payments are `mock` (simulated
+checkout). Flip any seam to live independently: `HESTIA_VISION_BACKEND`,
+`HESTIA_ALBUM_BACKEND`, `HESTIA_CONTENT_BACKEND`, `HESTIA_PRODUCT_BACKEND` → `xai`
+(+ `HESTIA_XAI_API_KEY`), and `HESTIA_PAYMENTS_BACKEND=stripe`
+(+ `HESTIA_STRIPE_SECRET_KEY`).
 
 ---
 
@@ -128,10 +136,10 @@ CI runs both on every push ([`.github/workflows/test.yml`](.github/workflows/tes
 
 | Item | State |
 |------|-------|
-| Shipped | studios · CRM · galleries · vision · sales offers · invoicing & payments |
-| Vision | `mock` (default) or xAI Grok |
+| Shipped | public site · CRM · galleries · vision · offers · albums · marketing · product variants · invoicing |
+| AI seams (vision · album · content · product) | `mock` (default) or xAI Grok |
 | Payments | `mock` (default) or Stripe |
-| Storage | local filesystem — S3/R2 next |
+| Storage | local filesystem (`local`/`s3` seam) |
 | Signup | invite-only (`HESTIA_SIGNUP_ENABLED=false`) |
 
 ---

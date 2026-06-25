@@ -5,9 +5,15 @@
   <div>
     <h1>{{ tenant.name }}</h1>
     <span class="muted">{{ shoot_type_labels.get(tenant.shoot_type, tenant.shoot_type) }} studio ·
-      <span class="pill">{{ plan.name }} · {{ plan.price }}</span></span>
+      <span class="pill">{{ plan.name }} · {{ plan.price }}</span> ·
+      site <span class="pill {{ 'on' if profile.published else 'off' }}">{{ 'live' if profile.published else 'draft' }}</span></span>
   </div>
-  <a class="btn" href="/galleries/new">+ New gallery</a>
+  <div style="display:flex; gap:8px; flex-wrap:wrap">
+    <a class="btn" href="/galleries/new">+ Gallery</a>
+    <a class="btn secondary" href="/clients/new">+ Client</a>
+    <a class="btn secondary" href="/projects/new">+ Project</a>
+    <a class="btn secondary" href="/invoices/new">+ Invoice</a>
+  </div>
 </div>
 
 <div class="health-strip" style="margin-bottom:18px">
@@ -15,6 +21,7 @@
   <a class="health-item" href="/projects"><span class="svc">{{ counts.projects }}</span> <span class="url">projects</span></a>
   <a class="health-item" href="/galleries"><span class="svc">{{ counts.galleries }}</span> <span class="url">galleries</span></a>
   <a class="health-item" href="/invoices"><span class="svc">{{ counts.unpaid }}</span> <span class="url">unpaid invoices</span></a>
+  <a class="health-item" href="/studio/{{ tenant.slug }}" target="_blank"><span class="svc">↗</span> <span class="url">public site</span></a>
 </div>
 
 <div class="grid cols-2">

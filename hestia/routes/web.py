@@ -18,6 +18,7 @@ from ..billing import plan_status
 from ..crm import list_clients, list_projects
 from ..galleries import list_galleries
 from ..pipeline import list_runs
+from ..studio import get_profile
 from ..tenants import get_tenant, tenant_flags
 from .deps import db_conn, render, settings_of
 
@@ -82,5 +83,6 @@ def dashboard(request: Request):
             "galleries": len(list_galleries(conn, tenant["id"])),
             "unpaid": unpaid,
         }
+        profile = get_profile(conn, tenant["id"])
     return render(request, "dashboard.html", auth=auth, tenant=tenant, flags=flags,
-                  galleries=galleries, runs=runs, plan=plan, counts=counts)
+                  galleries=galleries, runs=runs, plan=plan, counts=counts, profile=profile)
