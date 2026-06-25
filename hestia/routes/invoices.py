@@ -42,7 +42,8 @@ def invoices_list(request: Request):
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
-        invoices = list_invoices(conn, auth.tenant["id"])
+        # Plan installments live under their payment plan, not the flat list.
+        invoices = list_invoices(conn, auth.tenant["id"], standalone_only=True)
     return render(request, "invoices/invoices.html", auth=auth, invoices=invoices)
 
 

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ plan.title }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ plan.title }}</h1>
+    <span class="muted">
+      {% if plan.client_name %}<a href="/clients/{{ plan.client_id }}">{{ plan.client_name }}</a>{% endif %}
+      {% if plan.project_id %} · <a href="/projects/{{ plan.project_id }}">{{ plan.project_name }}</a>{% endif %}
+      {% if plan.status == 'void' %} · <span class="pill off">void</span>
+      {% else %} · <span class="pill {{ 'on' if plan.progress == 'paid' else 'off' }}">{{ plan.progress }}</span>{% endif %}
+    </span>
+  </div>
+  <div style="display:flex; gap:10px">
+    {% if plan.status != 'void' and plan.progress != 'paid' %}
+      <form method="post" action="/payment-plans/{{ plan.id }}/send">{% include "_csrf.html" %}<button class="btn" type="submit">Send schedule</button></form>
+      <form method="post" action="/payment-plans/{{ plan.id }}/void">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Void</button></form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid cols-2">
+  <div class="card stack">
+    <h3>Total</h3>
+    <p class="muted" style="font-size:1.4rem; color:var(--ink)">{{ plan.total_display }}</p>
+  </div>
+  <div class="card stack">
+    <h3>Collected</h3>
+    <p class="muted" style="font-size:1.4rem; color:var(--ink)">{{ plan.paid_display }}
+      <span class="muted" style="font-size:.9rem">of {{ plan.total_display }} · {{ plan.remaining_display }} remaining</span></p>
+  </div>
+</div>
+
+<div class="card stack">
+  <h3>Installments</h3>
+  <table>
+    <thead><tr><th>#</th><th>Installment</th><th>Amount</th><th>Due</th><th>Status</th><th>Pay link</th></tr></thead>
+    <tbody>
+      {% for i in plan.installments %}
+      <tr>
+        <td class="muted">{{ i.sequence }}</td>
+        <td><a href="/invoices/{{ i.id }}">{{ i.title }}</a></td>
+        <td>{{ i.amount_display }}</td>
+        <td class="muted">{{ i.due_date or "—" }}</td>
+        <td><span class="pill {{ 'on' if i.status == 'paid' else 'off' }}">{{ i.status }}</span></td>
+        <td>
+          {% if i.status not in ('paid', 'void') %}
+            <a class="mono" href="{{ pay_urls[i.id] }}" target="_blank" style="font-size:.82rem; word-break:break-all">{{ pay_urls[i.id] }}</a>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">Each installment is an independent pay link with the same idempotent settle path —
+    payments backend <span class="pill">{{ settings.payments_backend }}</span>.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Payment plans — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Payment plans</h1>
+  <a class="btn" href="/payment-plans/new">+ New plan</a>
+</div>
+{% if plans %}
+<div class="card">
+  <table>
+    <thead><tr><th>Plan</th><th>Client</th><th>Total</th><th>Collected</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for pl in plans %}
+      <tr>
+        <td><a href="/payment-plans/{{ pl.id }}">{{ pl.title }}</a>
+          <span class="muted">· {{ pl.installment_count }} installments</span></td>
+        <td class="muted">{{ pl.client_name or pl.project_name or "—" }}</td>
+        <td>{{ pl.total_display }}</td>
+        <td class="muted">{{ pl.paid_display }}</td>
+        <td>
+          {% if pl.status == 'void' %}<span class="pill off">void</span>
+          {% else %}<span class="pill {{ 'on' if pl.progress == 'paid' else 'off' }}">{{ pl.progress }}</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card stack">
+  <p class="muted">No payment plans yet — collect a deposit to book and the balance by the
+    event date, all on idempotent pay links.</p>
+  <a class="btn" href="/payment-plans/new">Create your first plan</a>
+</div>
+{% endif %}
+{% endblock %}

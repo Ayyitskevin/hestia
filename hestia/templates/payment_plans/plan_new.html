@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}New payment plan — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>New payment plan</h1>
+  <p class="muted">Split a booking into a deposit (due now) and a balance (due by the event date).
+    Each becomes its own pay link your client can settle independently.</p>
+  <form method="post" action="/payment-plans">
+    {% include "_csrf.html" %}
+    <label for="title">Title</label>
+    <input type="text" id="title" name="title" placeholder="Wedding photography" required autofocus>
+
+    <label for="total">Total ({{ settings.currency|upper }})</label>
+    <input type="text" id="total" name="total" placeholder="4000.00" required>
+
+    <label for="deposit">Deposit due now ({{ settings.currency|upper }})</label>
+    <input type="text" id="deposit" name="deposit" placeholder="1000.00" required>
+
+    <label for="balance_due_date">Balance due date <span class="muted">(optional)</span></label>
+    <input type="text" id="balance_due_date" name="balance_due_date" placeholder="2026-08-15">
+
+    <label for="client_id">Client <span class="muted">(optional)</span></label>
+    <select id="client_id" name="client_id">
+      <option value="">— none —</option>
+      {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if preselect_client == c.id else '' }}>{{ c.name }}</option>{% endfor %}
+    </select>
+
+    <label for="project_id">Project <span class="muted">(optional)</span></label>
+    <select id="project_id" name="project_id">
+      <option value="">— none —</option>
+      {% for p in projects %}<option value="{{ p.id }}" {{ 'selected' if preselect_project == p.id else '' }}>{{ p.name }}</option>{% endfor %}
+    </select>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Create plan</button>
+      <a class="btn ghost" href="/payment-plans">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
