@@ -11,6 +11,7 @@ import sqlite3
 
 from .config import Settings
 from .crypto import new_session_token
+from .db import audit
 
 INVOICE_STATUSES = ("draft", "sent", "paid", "void")
 
@@ -93,7 +94,10 @@ def void_invoice(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> N
 
 def mark_paid(conn: sqlite3.Connection, *, token: str, provider: str, ref: str) -> bool:
     """Idempotently settle an invoice. Returns True only on the transition to paid."""
-    row = conn.execute("SELECT status FROM invoices WHERE token = ?", (token,)).fetchone()
+    row = conn.execute(
+        "SELECT tenant_id, title, amount_cents, currency, status FROM invoices WHERE token = ?",
+        (token,),
+    ).fetchone()
     if not row or row["status"] == "paid":
         return False
     conn.execute(
@@ -101,6 +105,8 @@ def mark_paid(conn: sqlite3.Connection, *, token: str, provider: str, ref: str) 
         "paid_at = datetime('now') WHERE token = ?",
         (provider, ref, token),
     )
+    audit(conn, actor=f"payment:{provider}", action="invoice.paid", tenant_id=row["tenant_id"],
+          detail=f"{row['title']} · {money(row['amount_cents'], row['currency'])}")
     return True
 
 

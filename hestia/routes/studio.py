@@ -6,6 +6,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
+from ..db import list_audit
 from ..email import list_emails, notify
 from ..ratelimit import enforce
 from ..studio import create_inquiry, get_profile, upsert_profile
@@ -110,3 +111,13 @@ def outbox(request: Request):
         emails = list_emails(conn, auth.tenant["id"])
     return render(request, "studio/outbox.html", auth=auth, emails=emails,
                   email_backend=settings.email_backend)
+
+
+@router.get("/settings/activity")
+def activity(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        events = list_audit(conn, auth.tenant["id"])
+    return render(request, "studio/activity.html", auth=auth, events=events)
