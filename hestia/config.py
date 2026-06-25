@@ -47,6 +47,11 @@ class Settings:
     storage_backend: str = "local"  # local | s3
     media_dir: Path = field(default_factory=lambda: Path("./data/media"))
 
+    # Payments. mock = simulate checkout (no keys, testable). stripe = live API.
+    payments_backend: str = "mock"  # mock | stripe
+    stripe_secret_key: str = ""
+    currency: str = "usd"
+
     @classmethod
     def from_env(cls) -> Settings:
         data_dir = Path(os.getenv("HESTIA_DATA_DIR", "./data"))
@@ -66,6 +71,9 @@ class Settings:
             xai_model=os.getenv("HESTIA_XAI_MODEL", "grok-2-vision-1212"),
             storage_backend=os.getenv("HESTIA_STORAGE_BACKEND", "local"),
             media_dir=media_dir,
+            payments_backend=os.getenv("HESTIA_PAYMENTS_BACKEND", "mock"),
+            stripe_secret_key=os.getenv("HESTIA_STRIPE_SECRET_KEY", os.getenv("STRIPE_SECRET_KEY", "")),
+            currency=os.getenv("HESTIA_CURRENCY", "usd"),
         )
 
     @property

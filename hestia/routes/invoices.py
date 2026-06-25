@@ -1,0 +1,105 @@
+"""Invoice routes (studio side) — create, send, and track payment."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import RedirectResponse
+
+from ..auth import context_from_session
+from ..crm import list_clients, list_projects
+from ..invoices import (
+    create_invoice,
+    get_invoice,
+    invoice_public_url,
+    list_invoices,
+    send_invoice,
+    void_invoice,
+)
+from .deps import db_conn, render, settings_of
+
+router = APIRouter(prefix="/invoices")
+
+
+def _user(request: Request, conn):
+    auth = context_from_session(conn, request)
+    if not auth or not auth.tenant:
+        return None
+    return auth
+
+
+def _to_cents(raw: str) -> int:
+    try:
+        return int(round(float(raw.replace("$", "").replace(",", "").strip()) * 100))
+    except (ValueError, AttributeError):
+        return 0
+
+
+@router.get("")
+def invoices_list(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        invoices = list_invoices(conn, auth.tenant["id"])
+    return render(request, "invoices/invoices.html", auth=auth, invoices=invoices)
+
+
+@router.get("/new")
+def invoice_new(request: Request, project_id: int | None = None, client_id: int | None = None):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        clients = list_clients(conn, auth.tenant["id"])
+        projects = list_projects(conn, auth.tenant["id"])
+    return render(request, "invoices/invoice_new.html", auth=auth, clients=clients,
+                  projects=projects, preselect_project=project_id, preselect_client=client_id)
+
+
+@router.post("")
+def invoice_create(request: Request, title: str = Form(...), amount: str = Form("0"),
+                   client_id: str = Form(""), project_id: str = Form("")):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        invoice = create_invoice(
+            conn, settings_of(request), tenant_id=auth.tenant["id"], title=title,
+            amount_cents=_to_cents(amount),
+            client_id=int(client_id) if client_id.strip().isdigit() else None,
+            project_id=int(project_id) if project_id.strip().isdigit() else None,
+        )
+    return RedirectResponse(f"/invoices/{invoice['id']}", status_code=303)
+
+
+@router.get("/{invoice_id}")
+def invoice_detail(request: Request, invoice_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        invoice = get_invoice(conn, auth.tenant["id"], invoice_id)
+        if not invoice:
+            return RedirectResponse("/invoices", status_code=303)
+    pay_url = invoice_public_url(settings_of(request), invoice["token"])
+    return render(request, "invoices/invoice_detail.html", auth=auth, invoice=invoice, pay_url=pay_url)
+
+
+@router.post("/{invoice_id}/send")
+def invoice_send(request: Request, invoice_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        send_invoice(conn, auth.tenant["id"], invoice_id)
+    return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)
+
+
+@router.post("/{invoice_id}/void")
+def invoice_void(request: Request, invoice_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        void_invoice(conn, auth.tenant["id"], invoice_id)
+    return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)

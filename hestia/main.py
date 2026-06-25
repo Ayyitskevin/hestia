@@ -21,7 +21,19 @@ from . import __version__
 from .config import Settings, get_settings
 from .db import init_db
 from .features import SHOOT_TYPE_LABELS, SHOOT_TYPES
-from .routes import admin, api, client, crm, galleries, health, media, pipeline_ui, web
+from .routes import (
+    admin,
+    api,
+    client,
+    crm,
+    galleries,
+    health,
+    invoices,
+    media,
+    pay,
+    pipeline_ui,
+    web,
+)
 from .storage import build_storage
 
 log = logging.getLogger("hestia")
@@ -79,9 +91,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin.router)
     app.include_router(crm.router)
     app.include_router(galleries.router)
+    app.include_router(invoices.router)
     app.include_router(pipeline_ui.router)
     app.include_router(api.router)
     app.include_router(client.router)
+    app.include_router(pay.router)
     app.include_router(media.router)
 
     return app

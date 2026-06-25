@@ -12,9 +12,9 @@ bill, one database, modules composing around the studio's real workflow.
 | Galleries · object storage | **mise** delivery | ✅ shipped |
 | Vision (cull · keyword · hero) | **argus** | ✅ shipped (`mock`/`xai`) |
 | Sales · idempotent client offers | **plutus** | ✅ shipped |
-| **CRM: clients + projects** | **mise** back-office | 🔨 this PR |
-| Invoicing + Stripe checkout | **mise** invoices + **plutus** checkout | ▢ next |
-| Album designer (LLM spreads) | **mnemosyne** | ▢ |
+| CRM: clients + projects | **mise** back-office | ✅ shipped |
+| **Invoicing + payments (mock/stripe)** | **mise** invoices + **plutus** checkout | ✅ shipped |
+| Album designer (LLM spreads) | **mnemosyne** | ▢ next |
 | Marketing content (shot lists, captions, campaigns) | **dionysus** | ▢ |
 | Product photography (packshots, variants) | **aphrodite** | ▢ |
 | Public studio site / booking | **mise** site | ▢ |
@@ -46,8 +46,9 @@ bill, one database, modules composing around the studio's real workflow.
 tenant (studio)
   └─ client
        └─ project (shoot_type, status, event_date)
-            └─ gallery ── images ── image_analyses
-                   └─ offer (idempotent client link)
+            ├─ gallery ── images ── image_analyses
+            │      └─ offer (idempotent client link)
+            └─ invoice (draft → sent → paid, public pay link)
 ```
 
 Everything added later (invoice, album, campaign, packshot) attaches to a
