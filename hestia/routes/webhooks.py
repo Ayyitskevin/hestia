@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from ..invoices import mark_paid
 from ..payments import checkout_token_from_event, verify_stripe_signature
+from ..subscriptions import apply_plan, canceled_tenant_from_event, subscription_from_event
 from .deps import db_conn, settings_of
 
 router = APIRouter()
@@ -29,9 +30,18 @@ async def stripe_webhook(request: Request):
     if not verify_stripe_signature(payload, sig, settings.stripe_webhook_secret):
         return JSONResponse({"error": "invalid signature"}, status_code=400)
 
-    token = checkout_token_from_event(payload)
-    paid = False
-    if token:
-        with db_conn(request) as conn:
-            paid = mark_paid(conn, token=token, provider="stripe", ref="stripe_checkout")
-    return {"received": True, "paid": paid}
+    result = {"received": True, "paid": False, "subscription": None}
+    token = checkout_token_from_event(payload)         # invoice payment
+    sub = subscription_from_event(payload)             # studio subscription started
+    canceled = canceled_tenant_from_event(payload)     # studio subscription canceled
+    with db_conn(request) as conn:
+        if token:
+            result["paid"] = mark_paid(conn, token=token, provider="stripe", ref="stripe_checkout")
+        if sub:
+            tenant_id, plan, ref = sub
+            apply_plan(conn, tenant_id, plan=plan, provider="stripe", provider_ref=ref)
+            result["subscription"] = f"{plan}:active"
+        elif canceled:
+            apply_plan(conn, canceled, plan="beta", status="canceled", provider="stripe")
+            result["subscription"] = "beta:canceled"
+    return result
