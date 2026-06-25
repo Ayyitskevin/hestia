@@ -64,7 +64,7 @@
   {% else %}
     <p class="muted">Launch a limited-time sale — the offer page shows the deadline and discounted
       prices, and (if the gallery has a client on file) Hestia emails them the offer.</p>
-    <form method="post" action="/galleries/{{ gallery.id }}/campaign" style="display:grid; gap:10px; grid-template-columns:1fr auto auto auto; align-items:end">
+    <form method="post" action="/galleries/{{ gallery.id }}/campaign" class="inline-grid-form">
       {% include "_csrf.html" %}
       <div><label>Headline</label><input type="text" name="headline" placeholder="Holiday print sale"></div>
       <div><label>% off</label><input type="text" name="discount_pct" value="15" style="width:70px"></div>
