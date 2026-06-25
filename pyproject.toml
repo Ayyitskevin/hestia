@@ -35,6 +35,11 @@ dev = [
 [tool.setuptools.packages.find]
 include = ["hestia*"]
 
+# Bundle the runtime resources the package reads from disk at import/boot, so a
+# built wheel works as well as an editable install does.
+[tool.setuptools.package-data]
+hestia = ["migrations/*.sql", "templates/**/*.html", "static/*.css"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
