@@ -1,262 +1,157 @@
 # Hestia
 
-**The hearth of the photography studio** — one SaaS platform for all photographers: deliver
-galleries, run AI vision on every image, and turn each delivery into print and album revenue.
+**The AI-native studio for photographers — gallery to paid, in one app.**
 
-> **For AI agents:** This README is the canonical project brief. Read it fully before editing
-> code or proposing architecture. Phase scope lives in [`docs/PHASE-0.md`](docs/PHASE-0.md).
-> Suite integration contracts are in [`docs/SUITE.md`](docs/SUITE.md).
+Deliver galleries, let AI understand every frame, and turn each gallery into print
+& album revenue — one login, one pipeline, one bill. No fleet of services to wire.
 
----
-
-## Status
-
-| Item | State |
-|------|--------|
-| Repo | Bootstrapping — shell not yet implemented |
-| Phase | **0** — prove orchestrated pipeline before billing/signup |
-| Audience | All professional photographers (horizontal product) |
-| Signup | Invite-only (`HESTIA_SIGNUP_ENABLED=false` by default) |
-| Port | **8500** |
+> **For AI agents:** read [`AGENTS.md`](AGENTS.md) first, then
+> [`docs/PHASE-0.md`](docs/PHASE-0.md). The product is a single multi-tenant app
+> (modules, not microservices). The decision to consolidate rather than orchestrate
+> is documented — with evidence — in [`docs/SUITE-RESEARCH.md`](docs/SUITE-RESEARCH.md).
 
 ---
 
-## One-liner
+## What this is
 
-**Deliver galleries → AI understands every image → client buys prints/albums — one login, one pipeline.**
+Hestia distills the essence of a six-project photography suite (a studio OS, a
+vision API, a print/album sales layer, an album designer, and two adjacent bets)
+into **one coherent product**. Instead of six services duplicating identity,
+billing, and storage six times over and talking over HTTP, Hestia is a single
+FastAPI + HTMX + SQLite app with the AI engines as in-process modules.
 
----
-
-## What Hestia is (and is not)
-
-### Hestia IS
-
-- The **unified SaaS shell**: auth, tenants, onboarding, dashboard, billing scaffold, pipeline orchestration.
-- The **hearth** where suite services connect — hospitality metaphor (clients gather here).
-- A **horizontal** product: wedding, portrait, commercial, event, and food photographers use the same app; **shoot-type presets** enable optional modules.
-
-### Hestia IS NOT
-
-- A rewrite of Mise, Argus, Plutus, Mnemosyne, or Dionysus.
-- A gallery host on day one (uses existing services).
-- A niche F&B-only product (food is one shoot type, not the brand).
-
----
-
-## Core loop (universal)
-
-Every shoot type gets this path in Phase 0:
+The core loop:
 
 ```text
-Gallery source → Argus (vision) → Plutus (bundles + offer link) → client checkout
+Upload gallery → AI vision (cull · keyword · pick heroes)
+              → auto-built print & album offer → shareable client link → client buys
 ```
 
-Optional modules (feature-flagged by shoot type):
+That whole loop is a function call, not a network of services — which is the point.
+
+---
+
+## The magic moment
+
+A photographer uploads a gallery and within seconds has a **client-ready offer
+URL** — print and album bundles curated from the gallery's own vision signal,
+behind one shareable link. Re-process all you like: the link never duplicates.
 
 ```text
-Mnemosyne (album drafts)     — wedding, event
-Dionysus (campaign copy)     — commercial, food
-Mise (full studio OS / CRM)  — Phase 2
+$ bash scripts/dogfood-hestia.sh
+🔥 MAGIC MOMENT
+   offer URL : http://127.0.0.1:8590/s/dogfood-studio/EEUeZqZsBbyqR2XdjviNpVDvB7bX
+   vision→offer in 0.5s
+   idempotent: re-process produced the same link ✓
 ```
 
 ---
 
-## Suite map
+## Quickstart
 
-Hestia orchestrates existing repos via HTTP. **Do not copy their code into a monolith** until
-Phase 0 magic is proven.
-
-| Service | Repo | Default port | Role |
-|---------|------|--------------|------|
-| **Hestia** | `github.com/Ayyitskevin/hestia` | 8500 | Shell: auth, tenant, pipeline, UI |
-| Mise | `github.com/Ayyitskevin/mise` | 8400 | Studio OS: CRM, galleries, site, money |
-| Argus | `github.com/Ayyitskevin/argus` | 8010 / 8020 | Vision: keywords, culling, hero scores |
-| Plutus | `github.com/Ayyitskevin/plutus` | 8030 / 8031 | Print/album upsell, Stripe checkout |
-| Mnemosyne | `github.com/Ayyitskevin/mnemosyne` | 8000 | Album spread drafts |
-| Dionysus | `github.com/Ayyitskevin/dionysus` | 8450 | Campaign copy, shot lists, captions |
-
-```mermaid
-flowchart TB
-  subgraph hestia [Hestia :8500]
-    auth[Auth + tenants]
-    pipe[Pipeline orchestrator]
-    dash[Dashboard]
-  end
-  subgraph services [Suite services]
-    mise[Mise :8400]
-    argus[Argus :8010]
-    plutus[Plutus :8031]
-    mnemo[Mnemosyne :8000]
-    dio[Dionysus :8450]
-  end
-  dash --> pipe
-  pipe --> argus
-  pipe --> plutus
-  pipe --> mnemo
-  pipe --> dio
-  mise -.->|gallery publish| pipe
-  plutus -->|offer URL| dash
+```bash
+python3.12 -m venv .venv && . .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env            # set real secrets; chmod 600 .env
+bash scripts/start-hestia.sh    # → http://127.0.0.1:8500
 ```
 
-**Reference E2E (today):** `plutus/scripts/dogfood-suite-loop.sh` on the operator fleet.
+- `/` — landing
+- `/admin` — admin (master `HESTIA_API_TOKEN`) → onboard a studio
+- `/login` — studio owner → dashboard → galleries → process → offer
+- `/healthz` — liveness + self checks
+
+With `HESTIA_VISION_BACKEND=mock` (default) everything runs with no API key.
+Set `HESTIA_VISION_BACKEND=xai` + `HESTIA_XAI_API_KEY` for live Grok vision.
+
+---
+
+## Architecture (one app, modules not microservices)
+
+```text
+hestia/
+  main.py config.py db.py auth.py crypto.py
+  tenants.py            # studios + users + API keys
+  features.py           # shoot-type presets → offer/album tuning
+  storage.py            # object storage (local now, S3/R2 in Phase 1)
+  galleries.py          # native multi-tenant gallery + image hosting
+  vision.py             # AI vision module (mock | xAI Grok)  ← essence of Argus
+  sales.py              # offer builder + idempotent client offers  ← essence of Plutus
+  pipeline.py           # gallery → vision → offer (persisted, idempotent)
+  billing.py            # plan scaffold (live Stripe = Phase 1)
+  routes/  templates/  static/
+```
+
+| Concern | Where |
+|---------|-------|
+| Multi-tenant studios, auth, API keys | `tenants.py`, `auth.py` |
+| Native galleries + images | `galleries.py` + `storage.py` |
+| Understand every frame | `vision.py` (pluggable provider) |
+| Turn galleries into revenue | `sales.py` (idempotent offers) |
+| Run state + live stepper | `pipeline.py` |
+
+See [`docs/architecture.md`](docs/architecture.md) for the data flow and diagram.
+
+---
+
+## Why one app and not an orchestrator?
+
+This repo began as a shell to orchestrate six existing services over HTTP. Reading
+the actual code of all six changed the plan: they are mature and deployed, but they
+reimplement identity, billing, and storage six times, and the gallery→offer loop
+already worked *without* a shell. The duplication — not the orchestration — was the
+real problem. So Hestia **consolidates** the essence into one product and keeps the
+differentiated engines (vision, sales, albums) as modules. The full evidence,
+including the real (and corrected) service contracts, is in
+[`docs/SUITE-RESEARCH.md`](docs/SUITE-RESEARCH.md).
+
+Notably, the real Plutus mints a **new** client link on every call (no idempotency).
+Hestia fixes that by design: one offer/token per gallery, reused on every re-run.
 
 ---
 
 ## Shoot-type presets
 
-Implement in `hestia/features.py`. Same product; modules toggle by tenant `shoot_type`.
+Same product for every studio; shoot type tunes offer/album defaults
+([`hestia/features.py`](hestia/features.py)).
 
-| `shoot_type` | Mnemosyne | Dionysus | Mise CRM |
-|--------------|-----------|----------|----------|
-| `wedding` | on | off | Phase 2 |
-| `event` | on | off | Phase 2 |
-| `portrait` | off | off | Phase 2 |
-| `commercial` | off | on | Phase 2 |
-| `food` | off | on | Phase 2 |
-| `other` | off | off | Phase 2 |
-
----
-
-## Phase discipline
-
-| Phase | Goal |
-|-------|------|
-| **0** | Orchestrate Mise gallery (or upload batch) → Argus → Plutus offer; dashboard stepper; dogfood script; CI smoke |
-| **1** | Unified Stripe subscription; upload-without-Mise; optional public signup |
-| **2** | Mise CRM module; white-label domains; deeper embedded UIs |
-
-**Phase 0 OUT:** public signup floodgate, multi-tenant Mise rewrite, production WHCC, replacing sibling admin UIs.
-
-Details: [`docs/PHASE-0.md`](docs/PHASE-0.md)
+| `shoot_type` | Album bundle | Hero picks |
+|--------------|--------------|-----------|
+| wedding | yes | 8 |
+| event | yes | 6 |
+| portrait | yes | 5 |
+| commercial | no | 5 |
+| food | no | 5 |
+| other | no | 5 |
 
 ---
 
-## Planned stack & conventions
-
-Match the Kevin Lee photography suite patterns:
-
-| Layer | Choice |
-|-------|--------|
-| Runtime | Python 3.12+, FastAPI, uvicorn |
-| UI | Jinja2 + HTMX (warm, clean — not generic purple SaaS) |
-| Control-plane DB | SQLite → optional Postgres later |
-| HTTP clients | httpx, typed per service under `hestia/clients/` |
-| Auth | Session cookies (UI); `hestia_tk_<tenant>_<secret>` bearer (API) |
-| Config | `python-dotenv`, `.env.example`, no secrets in repo |
-| Ops | `scripts/dogfood-hestia.sh`, `scripts/ci-smoke.sh`, `/healthz` |
-| CI | GitHub Actions `ci-smoke` (ruff + pytest), like plutus |
-
-### Planned layout
-
-```text
-hestia/
-  main.py config.py auth.py tenants.py pipeline.py features.py db.py
-  clients/   mise.py argus.py plutus.py mnemosyne.py dionysus.py
-  routes/    admin.py api.py pipeline.py health.py
-  templates/ landing.html dashboard.html pipeline.html admin/
-  scripts/   dogfood-hestia.sh ci-smoke.sh start-hestia.sh
-  docs/      PHASE-0.md SUITE.md architecture.md
-  tests/
-```
-
----
-
-## Environment variables
+## Tests, CI, dogfood
 
 ```bash
-HESTIA_PORT=8500
-HESTIA_SAAS_MODE=true
-HESTIA_SIGNUP_ENABLED=false
-HESTIA_DATA_DIR=./data
-HESTIA_API_TOKEN=CHANGE_ME_ADMIN
-HESTIA_TENANT_KEY_PEPPER=CHANGE_ME
-HESTIA_SESSION_SECRET=CHANGE_ME
-HESTIA_PUBLIC_URL=http://127.0.0.1:8500
-
-# Default service URLs (overridable per tenant in DB)
-HESTIA_MISE_URL=http://flow:8400
-HESTIA_ARGUS_URL=http://127.0.0.1:8010
-HESTIA_PLUTUS_URL=http://127.0.0.1:8031
-HESTIA_MNEMOSYNE_URL=http://127.0.0.1:8000
-HESTIA_DIONYSUS_URL=http://127.0.0.1:8450
+bash scripts/ci-smoke.sh        # ruff + pytest + /healthz boot
+bash scripts/dogfood-hestia.sh  # boot the app, drive the magic moment, assert an offer
 ```
 
----
-
-## Pipeline contract (Phase 0)
-
-**Trigger:** `POST /api/pipeline/run`
-
-```json
-{
-  "source": "mise_gallery",
-  "source_id": "1"
-}
-```
-
-**Steps (persisted, idempotent):**
-
-1. `vision` — Argus analyze or attach existing run
-2. `recommend` — Plutus recommend + mint share/offer link
-3. `album` — Mnemosyne import (if shoot type enables)
-4. `campaign` — Dionysus pack (if shoot type enables)
-
-Re-run on the same `source_id` must **update** the existing pipeline run, not duplicate offers.
-
-**Status:** `GET /api/pipeline/runs/{id}` — stepper JSON for UI.
+CI runs both on every push ([`.github/workflows/test.yml`](.github/workflows/test.yml)).
 
 ---
 
-## Magic moment (success criterion)
+## Status & phase
 
-An operator publishes a real gallery and within minutes sees in Hestia:
+| Item | State |
+|------|-------|
+| Phase | **0** — prove the magic moment in one app |
+| Signup | Invite-only (`HESTIA_SIGNUP_ENABLED=false`) |
+| Vision | mock (default) or xAI Grok |
+| Billing | scaffold — live Stripe is Phase 1 |
+| Storage | local filesystem — S3/R2 is Phase 1 |
 
-- Vision step complete (Argus)
-- A live Plutus offer URL ready to send to the client
-- Optional album/campaign steps queued or complete per shoot type
-
-If that does not feel faster than running five separate tabs, Phase 0 is not done.
-
----
-
-## Rules for AI contributors
-
-1. **Read** `docs/PHASE-0.md` and `docs/SUITE.md` before large changes.
-2. **Orchestrate** sibling services via HTTP clients — do not vendor their codebases in Phase 0.
-3. **Fail gracefully** — Dionysus/Mnemosyne down must not block Argus → Plutus.
-4. **Idempotent pipelines** — no duplicate Stripe offers or share links on retry.
-5. **No scope creep** — CRM, public signup, and unified billing are Phase 1+ unless explicitly requested.
-6. **Match suite style** — same auth patterns as plutus, same phase IN/OUT docs as argus/plutus.
-7. **Dogfood first** — `scripts/dogfood-hestia.sh` must pass on the operator fleet before claiming done.
-8. **Document assumptions** in `docs/` when you make product or integration decisions.
-
----
-
-## Operator fleet (dogfood)
-
-Kevin Lee Photography runs a homelab fleet used for integration dogfood:
-
-| Host | Typical service |
-|------|-----------------|
-| `flow` | Mise `:8400`, production site `kleephotography.com` |
-| local / `strix-halo` | Plutus SaaS `:8031`, Argus `:8010`, Mnemosyne `:8000`, Dionysus `:8450` |
-
-Hestia dogfood targets this fleet; CI uses mocked HTTP clients.
-
----
-
-## Related reading
-
-| Doc | Purpose |
-|-----|---------|
-| [`docs/PHASE-0.md`](docs/PHASE-0.md) | IN/OUT scope, first PR checklist |
-| [`docs/SUITE.md`](docs/SUITE.md) | Sibling repo integration endpoints & tokens |
-| [`docs/architecture.md`](docs/architecture.md) | Module diagram and data flow |
-| [plutus PHASE-0](https://github.com/Ayyitskevin/plutus/blob/main/docs/PHASE-0.md) | Phase discipline template |
-| [argus ROADMAP](https://github.com/Ayyitskevin/argus/blob/main/docs/ROADMAP.md) | Vision service north star |
+Phase 1: live Stripe checkout on offers, S3/R2 storage, public signup, and the
+album-design module (the essence of Mnemosyne) — see [`docs/PHASE-1.md`](docs/PHASE-1.md).
 
 ---
 
 ## License
 
-TBD — suite is under active development by [Kevin Lee](https://github.com/Ayyitskevin).
+TBD — under active development by [Kevin Lee](https://github.com/Ayyitskevin).

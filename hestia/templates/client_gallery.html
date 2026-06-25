@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ gallery.title }} — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>{{ gallery.title }}</h1>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      {% if not unlocked %}
+        <div class="card narrow stack" style="margin:40px auto">
+          <h3>🔒 This gallery is protected</h3>
+          <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/pin">
+            <label for="pin">Enter your PIN</label>
+            <input type="text" id="pin" name="pin" autofocus required>
+            <div class="form-actions"><button class="btn" type="submit">Unlock</button></div>
+          </form>
+        </div>
+      {% else %}
+        {% if offer_url %}
+        <div class="offer stack" style="margin-bottom:20px">
+          <div class="label">🔥 Prints &amp; albums</div>
+          <a class="offer-url" href="{{ offer_url }}">View your print &amp; album collection →</a>
+        </div>
+        {% endif %}
+        <section class="thumb-grid client-grid">
+          {% for img in images %}
+            <figure class="thumb"><img src="{{ storage.public_path(img.storage_key) }}" alt="{{ img.filename }}" loading="lazy"></figure>
+          {% endfor %}
+        </section>
+      {% endif %}
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">Delivered with 🔥 by {{ tenant.name }} on Hestia</div></footer>
+</body>
+</html>

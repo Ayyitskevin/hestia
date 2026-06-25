@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Galleries — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Galleries</h1>
+  <a class="btn" href="/galleries/new">+ New gallery</a>
+</div>
+{% if galleries %}
+<div class="card">
+  <table>
+    <thead><tr><th>Gallery</th><th>Client</th><th>Images</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for g in galleries %}
+      <tr>
+        <td><a href="/galleries/{{ g.id }}">{{ g.title }}</a></td>
+        <td class="muted">{{ g.client_name or "—" }}</td>
+        <td>{{ g.image_count }}</td>
+        <td><span class="pill {{ 'on' if g.status == 'published' else 'off' }}">{{ g.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card stack">
+  <p class="muted">No galleries yet — create one, upload a few frames, and let Hestia do the rest.</p>
+  <a class="btn" href="/galleries/new">Create your first gallery</a>
+</div>
+{% endif %}
+{% endblock %}

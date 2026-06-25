@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Admin — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>Admin</h1>
+  <p class="muted">Invite-only beta. Enter the master admin token to manage studios.</p>
+  {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+  <form method="post" action="/admin/login">
+    <label for="token">Admin token</label>
+    <input type="password" id="token" name="token" required autofocus>
+    <div class="form-actions"><button class="btn" type="submit">Sign in</button></div>
+  </form>
+  <p class="hint">Set via <span class="mono">HESTIA_API_TOKEN</span>.</p>
+</div>
+{% endblock %}

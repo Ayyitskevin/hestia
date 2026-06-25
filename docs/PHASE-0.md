@@ -1,46 +1,56 @@
 # Hestia — Phase 0 scope
 
-**One-line promise:** one login, one pipeline — publish a gallery and get a client-ready
-print offer link without opening five browser tabs.
+**One-line promise:** upload a gallery and get a client-ready print & album offer
+link in seconds — in one app, no fleet of services.
 
-Phase 0 is **not** public signup, unified Stripe billing, or multi-tenant Mise. It proves the
-orchestrated magic moment before we wire money and scale.
+Phase 0 proves the magic moment as a single consolidated product. It is **not**
+live billing, public signup, or cloud storage — those are Phase 1.
 
-## IN
+## Context
 
-- FastAPI shell on port **8500**
-- SQLite: tenants, users, sessions, service credentials, pipeline runs, audit log
-- Admin: create tenant, set `shoot_type`, wire service URLs + tokens
-- Onboarding: studio name → shoot type → health check
-- Dashboard: service health strip + recent pipeline runs
-- Pipeline orchestrator: `mise_gallery` → Argus → Plutus offer URL
-- Optional steps when shoot type enables: Mnemosyne, Dionysus
-- Pipeline UI stepper with live status
-- `hestia/clients/*.py` typed HTTP wrappers
-- `scripts/dogfood-hestia.sh` — E2E on operator fleet
-- `scripts/ci-smoke.sh` + GitHub Actions
-- `/healthz` aggregating sibling services
+This repo started as an orchestration shell over six separate services. After
+reading all six (see [`SUITE-RESEARCH.md`](SUITE-RESEARCH.md)) the plan changed to
+**consolidation**: the services duplicate identity/billing/storage six times and the
+gallery→offer loop already worked without a shell. Hestia is now one multi-tenant
+app with the AI engines as in-process modules.
 
-## OUT
+## IN (this phase)
 
-- Public self-service signup (`HESTIA_SIGNUP_ENABLED` stays false)
-- Live unified Stripe subscription
-- Multi-tenant Mise rewrite
-- Native gallery hosting (use Mise or Plutus upload paths)
-- Embedded replacement of Plutus/Argus/Mnemosyne admin UIs
+- One FastAPI + Jinja2 + HTMX + SQLite app on port **8500**
+- Multi-tenant studios: tenants, users, sessions, `hestia_tk_*` API keys
+- **Native gallery hosting**: create gallery → upload images → object storage
+  (local backend, S3/R2-ready interface) → PIN-gated client delivery
+- **Vision module** (`hestia/vision.py`): pluggable provider — deterministic
+  `mock` (no key) or live xAI Grok — culls keepers, picks heroes, keywords frames
+- **Sales module** (`hestia/sales.py`): builds print/album bundles from the vision
+  signal and shoot type; mints **one idempotent** shareable client offer per gallery
+- **Pipeline** (`hestia/pipeline.py`): gallery → vision → offer, persisted and
+  idempotent, with a live stepper UI
+- Admin onboarding, dashboard, gallery UI, public client offer page
+- Billing **scaffold** (`hestia/billing.py`) — plans only
+- `/healthz`, `scripts/ci-smoke.sh`, `scripts/dogfood-hestia.sh`, GitHub Actions
+
+## OUT (deferred — Phase 1+)
+
+- Live Stripe checkout on offers (scaffold only now)
+- Public self-service signup (`HESTIA_SIGNUP_ENABLED=false`)
+- Cloud object storage (S3/R2) — local filesystem for now
+- The album-design module (essence of Mnemosyne)
+- Marketing-copy and e-commerce-packshot product lines (Dionysus/Aphrodite — out of scope)
 - White-label domains, mobile apps
-- Full Mise CRM (Phase 2)
 
 ## Magic moment
 
-Open Hestia after triggering a pipeline on a real gallery and think:
-*"I'd send that offer link to a client right now — and I didn't touch Argus or Plutus directly."*
+Upload a gallery, click **Process**, and within seconds the stepper goes
+vision → offer and renders a real, clickable client offer URL. Re-process: same
+link, never a duplicate. That is the whole product in one screen.
 
 ## First PR checklist
 
-- [ ] `uvicorn hestia.main:app --port 8500` runs
-- [ ] Admin login + tenant create + shoot type select
-- [ ] `POST /api/pipeline/run` happy path → Plutus offer URL
-- [ ] Pipeline stepper UI
-- [ ] `dogfood-hestia.sh` passes (real or documented mock)
-- [ ] CI green
+- [x] `uvicorn hestia.main:app --port 8500` boots
+- [x] Admin onboards a studio; owner logs in
+- [x] Create gallery → upload frames → process → vision + offer
+- [x] Public client offer page renders bundles
+- [x] **Idempotent**: double-process yields exactly one offer (test-proven)
+- [x] `scripts/dogfood-hestia.sh` drives the magic moment live (no fleet)
+- [x] `scripts/ci-smoke.sh` green (ruff + pytest + healthz)

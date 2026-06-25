@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Hestia — the AI-native studio for photographers{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="eyebrow">One home for your studio</div>
+  <h1>Gallery to paid, in one app.</h1>
+  <p class="lead">
+    Hestia is the AI-native studio for photographers: deliver galleries, let AI
+    understand every frame, and turn each gallery into print &amp; album revenue —
+    <span class="tagline">without juggling five separate tools.</span>
+  </p>
+  <div class="loop-line">
+    <strong>Upload gallery</strong> <span class="arrow">→</span>
+    <strong>AI vision</strong> <span class="arrow">→</span>
+    <strong>Print &amp; album offer</strong> <span class="arrow">→</span>
+    <strong>Client buys</strong>
+  </div>
+  <p style="margin-top:28px">
+    {% if auth and auth.tenant %}
+      <a class="btn" href="/dashboard">Go to your dashboard →</a>
+    {% else %}
+      <a class="btn" href="/login">Sign in to your studio →</a>
+    {% endif %}
+  </p>
+</section>
+
+<section class="grid cols-2" style="margin-top:24px">
+  <div class="card stack">
+    <h3>👁 Understand every image</h3>
+    <p class="muted">AI culls keepers, picks heroes, and keywords your whole gallery
+      the moment you upload — no separate cataloguing pass.</p>
+  </div>
+  <div class="card stack">
+    <h3>💳 Sell while it's warm</h3>
+    <p class="muted">Every gallery auto-builds a print &amp; album collection with one
+      shareable client link. Idempotent — re-run all you like, one link.</p>
+  </div>
+  <div class="card stack">
+    <h3>🤝 One login, one bill</h3>
+    <p class="muted">Studios, galleries, vision, and sales live in one place. No fleet
+      of services, no five dashboards.</p>
+  </div>
+  <div class="card stack">
+    <h3>🔥 Built for every studio</h3>
+    <p class="muted">Wedding, portrait, event, commercial, food — shoot-type presets tune
+      your offers; it's the same warm home for all of them.</p>
+  </div>
+</section>
+{% endblock %}

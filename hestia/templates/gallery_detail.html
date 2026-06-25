@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ gallery.title }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ gallery.title }}</h1>
+    <span class="muted">
+      {{ gallery.client_name or "No client set" }} ·
+      <span class="pill {{ 'on' if gallery.status == 'published' else 'off' }}">{{ gallery.status }}</span> ·
+      {{ images|length }} image{{ '' if images|length == 1 else 's' }}
+      {% if gallery.pin %} · 🔒 PIN set{% endif %}
+    </span>
+  </div>
+  <div style="display:flex; gap:10px">
+    {% if images %}
+      <form method="post" action="/galleries/{{ gallery.id }}/process">
+        <button class="btn" type="submit">⚡ Process — vision → offer</button>
+      </form>
+    {% endif %}
+    {% if gallery.status != 'published' %}
+      <form method="post" action="/galleries/{{ gallery.id }}/publish">
+        <button class="btn secondary" type="submit">Publish</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if offer %}
+<div class="offer stack">
+  <div class="label">Client offer ready · {{ offer.bundles|length }} bundles</div>
+  <a class="offer-url" href="{{ offer_url }}" target="_blank">{{ offer_url }}</a>
+  <p class="muted">Idempotent — re-process this gallery as often as you like; this link never changes.</p>
+</div>
+{% endif %}
+
+<div class="card stack" style="margin-top:18px">
+  <h3>Upload images</h3>
+  <form method="post" action="/galleries/{{ gallery.id }}/images" enctype="multipart/form-data">
+    <input type="file" name="files" multiple accept="image/*" required>
+    <div class="form-actions">
+      <button class="btn" type="submit">Upload</button>
+      {% if run %}<a class="btn ghost" href="/pipeline/{{ run.id }}">View last run ({{ run.status }})</a>{% endif %}
+    </div>
+  </form>
+</div>
+
+{% if images %}
+<div class="card" style="margin-top:18px">
+  <h3>Frames</h3>
+  <div class="thumb-grid">
+    {% for img in images %}
+      <figure class="thumb">
+        <img src="{{ storage.public_path(img.storage_key) }}" alt="{{ img.filename }}" loading="lazy">
+        <figcaption>{{ img.filename }}</figcaption>
+      </figure>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<p class="muted" style="margin-top:18px">No frames yet — upload a few to enable processing.</p>
+{% endif %}
+{% endblock %}
