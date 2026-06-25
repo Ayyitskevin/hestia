@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}New automation — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>New automation</h1>
+  <p class="muted">Pick a trigger and write the email Hestia should send the client when it fires.</p>
+  <form method="post" action="/automations">
+    {% include "_csrf.html" %}
+    <label for="name">Name <span class="muted">(for your reference)</span></label>
+    <input type="text" id="name" name="name" placeholder="Welcome after signing" required autofocus>
+
+    <label for="trigger">When this happens</label>
+    <select id="trigger" name="trigger" required>
+      {% for key, label in triggers.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+    </select>
+
+    <input type="hidden" name="action" value="email_client">
+
+    <label for="subject">Email subject</label>
+    <input type="text" id="subject" name="subject" placeholder="Welcome to {studio_name}, {client_name}!" required>
+
+    <label for="body">Email body</label>
+    <textarea id="body" name="body" rows="8"
+      placeholder="Hi {client_name},&#10;&#10;Thank you for booking with {studio_name} — we can't wait for {project_name}. Here's what happens next...&#10;&#10;Warmly,&#10;{studio_name}"></textarea>
+
+    <p class="hint">Placeholders: <span class="mono">{client_name}</span>,
+      <span class="mono">{studio_name}</span>, <span class="mono">{project_name}</span>,
+      <span class="mono">{title}</span> — filled in when the automation runs.</p>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Create automation</button>
+      <a class="btn ghost" href="/automations">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

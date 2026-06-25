@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Automations — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Automations</h1>
+    <span class="muted">When something happens, Hestia emails the client for you.</span>
+  </div>
+  <a class="btn" href="/automations/new">+ New automation</a>
+</div>
+
+{% if automations %}
+<div class="card">
+  <table>
+    <thead><tr><th>Automation</th><th>When</th><th>Action</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for a in automations %}
+      <tr>
+        <td><strong>{{ a.name }}</strong></td>
+        <td class="muted">{{ a.trigger_label }}</td>
+        <td class="muted">email client</td>
+        <td><span class="pill {{ 'on' if a.enabled else 'off' }}">{{ 'on' if a.enabled else 'off' }}</span></td>
+        <td style="text-align:right; white-space:nowrap">
+          <form method="post" action="/automations/{{ a.id }}/toggle" style="display:inline">{% include "_csrf.html" %}<button class="btn ghost" type="submit">{{ 'Disable' if a.enabled else 'Enable' }}</button></form>
+          <form method="post" action="/automations/{{ a.id }}/delete" style="display:inline"
+                onsubmit="return confirm('Delete this automation?')">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Delete</button></form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card stack">
+  <p class="muted">No automations yet — e.g. <em>when a contract is signed, email the client a
+    warm welcome and what happens next</em>, or <em>when an invoice is paid, send the next steps</em>.</p>
+  <a class="btn" href="/automations/new">Create your first automation</a>
+</div>
+{% endif %}
+
+<div class="card stack" style="margin-top:18px">
+  <h3>Recent runs</h3>
+  {% if runs %}
+    <table>
+      <thead><tr><th>When</th><th>Automation</th><th>Trigger</th><th>Result</th></tr></thead>
+      <tbody>
+        {% for r in runs %}
+        <tr>
+          <td class="muted">{{ r.created_at }}</td>
+          <td>{{ r.automation_name or "—" }}</td>
+          <td class="muted">{{ r.trigger }}</td>
+          <td><span class="pill {{ 'on' if r.status == 'sent' else 'off' }}">{{ r.status }}</span>
+            {% if r.detail %}<span class="muted">· {{ r.detail }}</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No runs yet. When a matching event fires, you'll see it here.</p>
+  {% endif %}
+</div>
+{% endblock %}

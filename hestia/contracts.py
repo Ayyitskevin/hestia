@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from .automations import emit_event
 from .config import Settings
 from .crypto import new_session_token
 from .db import audit
@@ -133,10 +134,13 @@ def sign_contract(
     if cur.rowcount == 0:
         return False
     row = conn.execute(
-        "SELECT tenant_id, title FROM contracts WHERE token = ?", (token,)
+        "SELECT tenant_id, title, client_id, project_id FROM contracts WHERE token = ?", (token,)
     ).fetchone()
     audit(conn, actor="client", action="contract.signed", tenant_id=row["tenant_id"],
           detail=f"{row['title']} · signed by {signature}")
+    emit_event(conn, tenant_id=row["tenant_id"], event="contract.signed",
+               context={"client_id": row["client_id"], "project_id": row["project_id"],
+                        "title": row["title"]})
     return True
 
 
