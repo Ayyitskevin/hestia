@@ -12,6 +12,7 @@ import hmac
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
+from .. import __version__
 from ..auth import (
     SESSION_COOKIE,
     SESSION_TTL,
@@ -21,6 +22,8 @@ from ..auth import (
     destroy_session,
 )
 from ..billing import PLANS, plan_status
+from ..db import applied_migrations
+from ..jobs import queue_stats
 from ..ratelimit import enforce
 from ..tenants import (
     create_tenant,
@@ -84,6 +87,34 @@ def tenants_list(request: Request):
             return _redirect_login()
         tenants = list_tenants(conn)
     return render(request, "admin/tenants.html", auth=None, tenants=tenants)
+
+
+@router.get("/system")
+def system(request: Request):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        if not _is_admin(request, conn):
+            return _redirect_login()
+        info = {
+            "version": __version__,
+            "tenants": len(list_tenants(conn)),
+            "queue": queue_stats(conn),
+            "migrations": applied_migrations(conn),
+            "seams": {
+                "vision": settings.vision_backend,
+                "album": settings.album_backend,
+                "content": settings.content_backend,
+                "product": settings.product_backend,
+                "storage": settings.storage_backend,
+                "payments": settings.payments_backend,
+                "subscription": settings.subscription_backend,
+                "email": settings.email_backend,
+            },
+            "log_format": settings.log_format,
+            "signup_enabled": settings.signup_enabled,
+            "insecure_secrets": settings.insecure_secrets,
+        }
+    return render(request, "admin/system.html", auth=None, info=info)
 
 
 @router.get("/onboarding")

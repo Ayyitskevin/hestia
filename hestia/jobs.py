@@ -135,6 +135,14 @@ def list_jobs(conn, tenant_id: str, *, limit: int = 50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def queue_stats(conn) -> dict:
+    """Job counts by status (for the operator/system view)."""
+    stats = {"queued": 0, "running": 0, "done": 0, "error": 0}
+    for r in conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status"):
+        stats[r["status"]] = r["n"]
+    return stats
+
+
 def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_sleep: float = 0.5) -> None:
     """Background loop: reclaim orphans once, then drain the queue until stopped."""
     reclaim_stale(db_path)
