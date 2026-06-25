@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
+from ..campaigns import discount_bundle, get_active_campaign
 from ..galleries import get_gallery_by_slug, get_image, list_images
 from ..proofing import (
     add_comment,
@@ -59,8 +60,16 @@ def public_offer(request: Request, slug: str, token: str):
         fav_thumbs = [{"url": storage.public_path(i["storage_key"]), "filename": i["filename"]}
                       for i in favs]
         fav_pkg = favorites_package(len(favs))
+        # Live: a running sale discounts the prices and adds urgency.
+        campaign = get_active_campaign(conn, offer["gallery_id"])
+        pct = campaign["discount_pct"] if campaign else 0
+        if pct:
+            offer["bundles"] = [discount_bundle(b, pct) for b in offer["bundles"]]
+            offer["total_cents"] = sum(b["price_cents"] for b in offer["bundles"])
+            if fav_pkg:
+                fav_pkg = discount_bundle(fav_pkg, pct)
     return render(request, "offer.html", auth=None, offer=offer, tenant=tenant, heroes=heroes,
-                  fav_thumbs=fav_thumbs, fav_pkg=fav_pkg)
+                  fav_thumbs=fav_thumbs, fav_pkg=fav_pkg, campaign=campaign)
 
 
 @router.get("/g/{slug}/{gallery_slug}")
