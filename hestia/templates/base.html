@@ -20,6 +20,7 @@
       <nav class="nav">
         {% if auth and auth.is_admin %}
           <a href="/admin/tenants">Studios</a>
+          <a href="/admin/system">System</a>
           <a href="/admin/logout">Sign out</a>
         {% elif auth and auth.tenant %}
           <a href="/dashboard">Dashboard</a>

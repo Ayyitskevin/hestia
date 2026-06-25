@@ -64,6 +64,14 @@ def discover_migrations() -> list[tuple[str, str, Path]]:
     return [(ver, name, path) for _, ver, name, path in found]
 
 
+def applied_migrations(conn: sqlite3.Connection) -> list[dict]:
+    """The migration ledger, oldest-first (for the operator/system view)."""
+    rows = conn.execute(
+        "SELECT version, name, applied_at FROM schema_migrations ORDER BY version"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def init_db(db_path: str | Path) -> None:
     """Create/upgrade the database by applying any un-applied migrations.
 

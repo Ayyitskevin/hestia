@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}System — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>System</h1>
+    <span class="muted">Hestia v{{ info.version }} · {{ info.tenants }} studios ·
+      {{ info.migrations|length }} migrations applied</span>
+  </div>
+</div>
+
+{% if info.insecure_secrets %}
+<div class="alert error">Insecure default secrets in use:
+  {{ info.insecure_secrets|join(', ') }} — set real values before any deploy.</div>
+{% endif %}
+
+<div class="grid cols-2">
+  <div class="card stack">
+    <h3>Job queue</h3>
+    <div class="health-strip">
+      {% for k, v in info.queue.items() %}
+      <div class="health-item"><span class="svc">{{ k }}</span><span class="url">{{ v }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card stack">
+    <h3>Backends</h3>
+    <div class="health-strip">
+      {% for k, v in info.seams.items() %}
+      <div class="health-item"><span class="svc">{{ k }}</span>
+        <span class="url"><span class="pill {{ 'on' if v != 'mock' and v != 'local' else '' }}">{{ v }}</span></span></div>
+      {% endfor %}
+    </div>
+    <p class="hint">logs: {{ info.log_format }} · signup: {{ 'on' if info.signup_enabled else 'off' }}</p>
+  </div>
+</div>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>Migrations</h3>
+  <table>
+    <thead><tr><th>Version</th><th>Name</th><th>Applied</th></tr></thead>
+    <tbody>
+      {% for m in info.migrations %}
+      <tr><td class="mono">{{ m.version }}</td><td>{{ m.name }}</td>
+        <td class="muted">{{ m.applied_at }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

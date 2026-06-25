@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 from .. import __version__
 from ..db import connect
@@ -33,3 +34,24 @@ def healthz(request: Request) -> dict:
         "storage": settings.storage_backend if storage_ok else "error",
         "vision_backend": settings.vision_backend,
     }
+
+
+@router.get("/readyz")
+def readyz(request: Request):
+    """Readiness: can we actually serve? DB queryable, schema migrated, storage present."""
+    settings = settings_of(request)
+    checks = {"db": False, "migrations": False, "storage": False}
+    try:
+        conn = connect(settings.db_path)
+        conn.execute("SELECT 1")
+        checks["migrations"] = conn.execute(
+            "SELECT COUNT(*) AS n FROM schema_migrations"
+        ).fetchone()["n"] > 0
+        conn.close()
+        checks["db"] = True
+    except Exception:
+        pass
+    checks["storage"] = settings.media_dir.exists() or settings.storage_backend != "local"
+    ready = all(checks.values())
+    return JSONResponse({"ready": ready, "checks": checks},
+                        status_code=200 if ready else 503)
