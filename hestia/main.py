@@ -36,6 +36,7 @@ from .routes import (
     content,
     contracts,
     crm,
+    forms,
     galleries,
     health,
     invoices,
@@ -45,6 +46,7 @@ from .routes import (
     pipeline_ui,
     portal,
     products,
+    questionnaires,
     sign,
     studio,
     web,
@@ -151,6 +153,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(invoices.router, dependencies=csrf)
     app.include_router(payment_plans.router, dependencies=csrf)
     app.include_router(contracts.router, dependencies=csrf)
+    app.include_router(questionnaires.router, dependencies=csrf)
     app.include_router(content.router, dependencies=csrf)
     app.include_router(studio.router, dependencies=csrf)
     app.include_router(billing.router, dependencies=csrf)
@@ -160,6 +163,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(pay.router)
     app.include_router(sign.router)
     app.include_router(portal.router)
+    app.include_router(forms.router)
     app.include_router(webhooks.router)
     app.include_router(media.router)
 

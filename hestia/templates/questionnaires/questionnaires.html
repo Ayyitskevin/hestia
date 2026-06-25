@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Questionnaires — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Questionnaires</h1>
+  <a class="btn" href="/questionnaires/new">+ New questionnaire</a>
+</div>
+{% if questionnaires %}
+<div class="card">
+  <table>
+    <thead><tr><th>Questionnaire</th><th>Client</th><th>Questions</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for q in questionnaires %}
+      <tr>
+        <td><a href="/questionnaires/{{ q.id }}">{{ q.title }}</a></td>
+        <td class="muted">{{ q.client_name or q.project_name or "—" }}</td>
+        <td class="muted">{{ q.item_count }}</td>
+        <td><span class="pill {{ 'on' if q.status == 'completed' else 'off' }}">{{ q.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card stack">
+  <p class="muted">No questionnaires yet — collect event details, timelines, and a couple's
+    vision before the shoot, in their own words.</p>
+  <a class="btn" href="/questionnaires/new">Draft your first questionnaire</a>
+</div>
+{% endif %}
+{% endblock %}

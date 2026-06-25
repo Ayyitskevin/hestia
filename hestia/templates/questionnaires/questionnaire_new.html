@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}New questionnaire — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>New questionnaire</h1>
+  <form method="post" action="/questionnaires">
+    {% include "_csrf.html" %}
+    <label for="title">Title</label>
+    <input type="text" id="title" name="title" placeholder="Wedding intake" required autofocus>
+
+    <label for="prompts">Questions <span class="muted">(one per line)</span></label>
+    <textarea id="prompts" name="prompts" rows="10"
+      placeholder="What's the date and venue?&#10;Who are the key people we should photograph?&#10;Describe the vibe you're going for.&#10;What's your rough timeline for the day?"></textarea>
+
+    <label for="client_id">Client <span class="muted">(optional)</span></label>
+    <select id="client_id" name="client_id">
+      <option value="">— none —</option>
+      {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if preselect_client == c.id else '' }}>{{ c.name }}</option>{% endfor %}
+    </select>
+
+    <label for="project_id">Project <span class="muted">(optional)</span></label>
+    <select id="project_id" name="project_id">
+      <option value="">— none —</option>
+      {% for p in projects %}<option value="{{ p.id }}" {{ 'selected' if preselect_project == p.id else '' }}>{{ p.name }}</option>{% endfor %}
+    </select>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Create questionnaire</button>
+      <a class="btn ghost" href="/questionnaires">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

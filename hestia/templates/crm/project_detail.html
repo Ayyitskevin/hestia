@@ -12,6 +12,7 @@
   </div>
   <div style="display:flex; gap:10px">
     <a class="btn ghost" href="/contracts/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Contract</a>
+    <a class="btn ghost" href="/questionnaires/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Form</a>
     <a class="btn ghost" href="/payment-plans/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Plan</a>
     <a class="btn secondary" href="/invoices/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Invoice</a>
     <a class="btn" href="/galleries/new?project_id={{ project.id }}">+ Gallery</a>
@@ -68,6 +69,26 @@
     {% else %}
       <p class="muted">No contracts for this project yet.</p>
       <a class="btn" href="/contracts/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Draft a contract</a>
+    {% endif %}
+  </div>
+
+  <div class="card stack">
+    <h3>Questionnaires</h3>
+    {% if questionnaires %}
+      <table>
+        <thead><tr><th>Form</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for q in questionnaires %}
+          <tr>
+            <td><a href="/questionnaires/{{ q.id }}">{{ q.title }}</a></td>
+            <td><span class="pill {{ 'on' if q.status == 'completed' else 'off' }}">{{ q.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No questionnaires for this project yet.</p>
+      <a class="btn" href="/questionnaires/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Draft a questionnaire</a>
     {% endif %}
   </div>
 

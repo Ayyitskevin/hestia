@@ -20,6 +20,7 @@ from .crm import galleries_for_client, get_client, list_projects
 from .crypto import new_session_token
 from .invoices import invoice_public_url, list_invoices
 from .payment_plans import get_payment_plan, list_payment_plans
+from .questionnaires import list_questionnaires
 from .tenants import get_tenant
 
 
@@ -91,6 +92,11 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
     for g in galleries:
         g["view_url"] = f"{settings.public_url.rstrip('/')}/g/{slug}/{g['slug']}"
 
+    questionnaires = [q for q in list_questionnaires(conn, tenant_id, client_id=client["id"])
+                      if q["status"] in ("sent", "completed")]
+    for q in questionnaires:
+        q["fill_url"] = f"{settings.public_url.rstrip('/')}/q/{q['token']}"
+
     return {
         "tenant": tenant,
         "projects": list_projects(conn, tenant_id, client_id=client["id"]),
@@ -98,4 +104,5 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
         "plans": plans,
         "invoices": invoices,
         "galleries": galleries,
+        "questionnaires": questionnaires,
     }

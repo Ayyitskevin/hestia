@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ q.title }} — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>{{ q.title }}</h1>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="padding-top:32px">
+      {% if q.status == 'completed' %}
+        <div class="card stack">
+          <div class="alert ok">✓ Thank you — your answers have been sent.</div>
+          {% for item in q['items'] %}
+          <div class="qa-item">
+            <p class="qa-prompt">{{ item.prompt }}</p>
+            <p class="qa-answer">{{ item.answer or "—" }}</p>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="card stack">
+          <p class="muted">A few details for your photographer — answer what you can.</p>
+          <form method="post" action="/q/{{ q.token }}">
+            {% for item in q['items'] %}
+            <label for="item_{{ item.id }}">{{ item.sequence }}. {{ item.prompt }}</label>
+            <textarea id="item_{{ item.id }}" name="item_{{ item.id }}" rows="3"></textarea>
+            {% endfor %}
+            <div class="form-actions">
+              <button class="btn" type="submit">Submit answers</button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">Sent with 🔥 by {{ tenant.name }} on Hestia</div></footer>
+</body>
+</html>

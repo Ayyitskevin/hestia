@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ q.title }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ q.title }}</h1>
+    <span class="muted">
+      {% if q.client_name %}<a href="/clients/{{ q.client_id }}">{{ q.client_name }}</a>{% endif %}
+      {% if q.project_id %} · <a href="/projects/{{ q.project_id }}">{{ q.project_name }}</a>{% endif %}
+      · <span class="pill {{ 'on' if q.status == 'completed' else 'off' }}">{{ q.status }}</span>
+    </span>
+  </div>
+  <div style="display:flex; gap:10px">
+    {% if q.status in ('draft', 'sent') %}
+      <form method="post" action="/questionnaires/{{ q.id }}/send">{% include "_csrf.html" %}<button class="btn" type="submit">{{ 'Re-send' if q.status == 'sent' else 'Send' }}</button></form>
+    {% endif %}
+    {% if q.status != 'completed' and q.status != 'void' %}
+      <form method="post" action="/questionnaires/{{ q.id }}/void">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Void</button></form>
+    {% endif %}
+  </div>
+</div>
+
+{% if q.status in ('sent', 'completed') %}
+<div class="card stack">
+  <h3>Client fill link</h3>
+  <a class="offer-url" href="{{ fill_url }}" target="_blank">{{ fill_url }}</a>
+  <p class="muted">{% if q.status == 'completed' %}Completed — answers are below.{% else %}Share this so your client can fill it out. Answers are recorded once.{% endif %}</p>
+</div>
+{% endif %}
+
+<div class="card stack">
+  <h3>{{ 'Answers' if q.status == 'completed' else 'Questions' }}</h3>
+  {% if q['items'] %}
+    {% for item in q['items'] %}
+    <div class="qa-item">
+      <p class="qa-prompt">{{ item.sequence }}. {{ item.prompt }}</p>
+      {% if q.status == 'completed' %}
+        <p class="qa-answer">{{ item.answer or "—" }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="muted">No questions on this questionnaire.</p>
+  {% endif %}
+</div>
+{% endblock %}
