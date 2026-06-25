@@ -57,13 +57,20 @@ six services in a trench coat.
 |--------|------|
 | `studio` | public studio site + inquiry → CRM lead |
 | `crm` | clients + projects — the studio backbone |
+| `scheduler` | client self-booking + automated confirm/reminder emails |
+| `contracts` | client agreements + typed **e-signature** (idempotent signing) |
+| `questionnaires` | client intake forms, answers captured |
 | `galleries` · `storage` | native gallery + image hosting (`local`/`s3` seam) |
+| `proofing` | client **favorites** + comments on delivered galleries |
 | `vision` | cull / keyword / hero scoring (`mock`/`xai`) |
-| `sales` | print/album/product **idempotent** offer engine |
+| `sales` · `campaigns` | **idempotent** offer engine + time-limited, AI-curated sales |
+| `orders` · `fulfillment` | purchasable offers → paid order → print lab (`mock`/`lab` seam) |
 | `albums` | drafted album spreads — model proposes, **code validates** |
 | `content` | shot lists, captions, campaign copy (`mock`/`xai`) |
 | `products` | marketplace-spec packshot variants (`mock`/`xai`) |
-| `invoices` · `payments` | invoicing + checkout (`mock`/`stripe`) |
+| `invoices` · `payments` | invoicing + payment plans/deposits + checkout (`mock`/`stripe`) |
+| `portal` | one branded client hub — contracts, payments, galleries, forms, sessions |
+| `automations` | event-triggered workflow engine + delayed **retention** rules |
 | `subscriptions` · `billing` | studio plans + billing (`mock`/`stripe`) |
 | `pipeline` · `jobs` | gallery automation on a durable job queue |
 
@@ -90,7 +97,8 @@ bash scripts/start-hestia.sh    # → http://127.0.0.1:8500
 ```
 
 - `/` landing · `/admin` (master `HESTIA_API_TOKEN`) onboards a studio
-- `/login` → dashboard → clients · projects · galleries · invoices · site · billing
+- `/login` → dashboard → clients · projects · schedule · galleries · contracts · forms ·
+  invoices · plans · automations · site · billing
 - `/studio/{slug}` the studio's public page · `/healthz` liveness · `/readyz` readiness
 
 ## Mock-first provider seams
@@ -105,6 +113,7 @@ flips to a real provider independently — add a backend, don't fork the caller:
 | Payments | `HESTIA_PAYMENTS_BACKEND` | `mock` | `stripe` |
 | Subscriptions | `HESTIA_SUBSCRIPTION_BACKEND` | `mock` | `stripe` |
 | Email | `HESTIA_EMAIL_BACKEND` | `mock` (outbox) | `smtp` |
+| Print fulfillment | `HESTIA_FULFILLMENT_BACKEND` | `mock` | `lab` (WHCC/Bay Photo class) |
 
 A real backend that errors **degrades to the safe path** — it never 500s a request.
 Boot logs warn loudly if a real backend is selected without its keys.
@@ -135,23 +144,33 @@ operation with no keys.
 Sequenced from a verified competitive analysis — full landscape, wedge, pricing, and
 the phased build list in **[`docs/COMPETITIVE-STRATEGY.md`](docs/COMPETITIVE-STRATEGY.md)**.
 
-- **Now:** the full delivery→paid loop works end to end (inquiry → paid), mock-first.
-- **Phase 1 — contract-to-cash credibility:** contracts + e-signature, payment plans,
-  client portal, questionnaires (the booking-side table stakes).
-- **Phase 2 — scheduling + automations:** self-booking calendar, event-triggered workflows.
-- **Phase 3 — defend the after-the-shoot loop:** gallery proofing/favorites, AI-curated
-  sales-automation campaigns, print-store fulfillment.
-- **Phase 4 — AI compounding + retention:** vision parity + studio AI profiles, upsell
-  automations, mobile surfaces.
+The whole studio lifecycle is now built end to end — **visitor → inquiry → booking →
+contract → deposit → questionnaire → shoot → gallery → proofing → AI-curated offer →
+sale → fulfillment → retention** — one app, one portal, AI compounding at each step.
+
+- **Phase 1 — contract-to-cash credibility** ✅ contracts + e-signature · payment
+  plans/deposits · client portal · questionnaires.
+- **Phase 2 — kill the busywork** ✅ event-triggered workflow engine · scheduler
+  with client self-booking.
+- **Phase 3 — defend the after-the-shoot loop** ✅ gallery proofing/favorites ·
+  favorites+vision-curated offers · time-limited sales campaigns · purchasable offers
+  that settle to a print-fulfillment order.
+- **Phase 4 — AI compounding + retention** ✅ delayed retention automations
+  (re-book/review/welcome) · mobile-responsive surfaces. *Next:* deepen `vision`
+  (cull/dup/blink parity + custom AI style profiles) against the live xAI backend.
 
 ## Status
 
 | Item | State |
 |------|-------|
 | Core loop | public site · CRM · galleries · vision · offers · albums · marketing · products · invoicing · subscriptions |
+| Booking side | scheduler (client self-booking) · contracts + e-signature · questionnaires · payment plans/deposits |
+| After-shoot | gallery proofing/favorites · favorites+vision-curated offers · sales campaigns · purchasable orders → print fulfillment |
+| Client experience | one branded **portal** (contracts · payments · galleries · forms · sessions) · mobile-responsive |
+| Automation | event-triggered workflow engine + delayed retention rules on the job queue |
 | AI seams | `mock` (default) or xAI Grok |
 | Payments / Subscriptions | `mock` (default) or Stripe (+ webhook) |
-| Storage | local filesystem (`local`/`s3` seam) |
+| Storage / Fulfillment | local filesystem (`local`/`s3`) · print lab (`mock`/`lab`) |
 | Platform | durable job queue · migrations · structured logging · readiness/ops surfaces |
 | Signup | gated (`HESTIA_SIGNUP_ENABLED=false`) — admin onboarding by default |
 

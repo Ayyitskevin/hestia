@@ -32,29 +32,33 @@ priority.
 
 Each item is a vertical slice through the tenant → client → project → gallery spine.
 
+> **Build status (delivered):** items 1–9, 11, 12 are shipped and on `main`. The full
+> lifecycle runs end to end — visitor → inquiry → booking → contract → deposit →
+> questionnaire → shoot → gallery → proofing → AI-curated offer → sale → fulfillment →
+> retention. Only item 10 (deepen `vision`) remains, gated on the live xAI backend.
+
 ### Phase 1 — Contract-to-cash credibility (makes Hestia a real studio CRM)
-1. **Contracts + e-signature** on the client/project spine (`crm`) — biggest table-stakes gap.
-2. **Payment plans / deposits + milestones** on invoices (`invoices`/`payments`).
-3. **Client portal** — one tenant-scoped URL aggregating contract + invoice + gallery + questionnaire.
-4. **Questionnaires / intake forms** wired public inquiry → CRM lead (`studio` → `crm`).
+1. ✅ **Contracts + e-signature** on the client/project spine (`crm`) — biggest table-stakes gap.
+2. ✅ **Payment plans / deposits + milestones** on invoices (`invoices`/`payments`).
+3. ✅ **Client portal** — one tenant-scoped URL aggregating contract + invoice + gallery + questionnaire.
+4. ✅ **Questionnaires / intake forms** wired public inquiry → CRM lead (`studio` → `crm`).
 
 ### Phase 2 — Scheduling + automations (kill the busywork)
-5. **Scheduler** with client self-booking + automated confirm/reminder emails (calendar seam).
-6. **Workflow engine** — event-triggered (inquiry, contract signed, payment due, delivered),
-   delays + conditional branches; AI-assisted setup (Dubsado depth, without the learning curve).
+5. ✅ **Scheduler** with client self-booking + automated confirm/reminder emails (calendar seam).
+6. ✅ **Workflow engine** — event-triggered (contract signed, payment paid, delivered, booked,
+   appointment confirmed), with scheduled delays (the retention loop is the same engine + a delay).
 
 ### Phase 3 — Defend the after-the-shoot loop (vs Aftershoot / Pic-Time)
-7. **Gallery proofing** + client favorites/comments + face search (favorites feed `vision`/`sales`).
-8. **Sales automation campaigns** on `sales` — urgency-gated preview→package funnel
-   (Pic-Time "Simple Sales System" pattern), abandoned-cart, anniversary — **auto-curated
-   from Hestia's own vision signal** (the differentiator Pic-Time cannot match).
-9. **Print-store fulfillment** partner (WHCC/Bay Photo class) so offers settle to product.
+7. ✅ **Gallery proofing** + client favorites/comments (favorites feed `sales` curation).
+8. ✅ **Sales automation campaigns** on `sales` — urgency-gated, time-limited sales **auto-curated
+   from Hestia's own vision signal + the client's favorites** (the differentiator Pic-Time cannot match).
+9. ✅ **Print-store fulfillment** seam (WHCC/Bay Photo class) — purchasable offers settle to a lab order.
 
 ### Phase 4 — AI compounding + retention (the durable moat)
 10. **Deepen `vision`** to credible cull/dup/blink-rejection parity + custom AI style
-    profiles gated by tier.
-11. **Retention/upsell automations** (anniversary, re-book, review requests).
-12. **Mobile-responsive** client + photographer surfaces.
+    profiles gated by tier. *(Remaining — needs the live xAI backend to be meaningful.)*
+11. ✅ **Retention/upsell automations** (anniversary re-book, review requests, welcome) — delayed rules.
+12. ✅ **Mobile-responsive** client + photographer surfaces.
 
 ## Where AI is a wedge vs a gimmick
 
