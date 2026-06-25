@@ -15,6 +15,9 @@
       {% for key, label in triggers.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
     </select>
 
+    <label for="delay_days">Wait this many days before sending <span class="muted">(0 = right away; e.g. 3 for a review request, 365 for an anniversary)</span></label>
+    <input type="text" id="delay_days" name="delay_days" value="0" style="max-width:120px">
+
     <input type="hidden" name="action" value="email_client">
 
     <label for="subject">Email subject</label>
