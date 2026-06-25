@@ -123,3 +123,13 @@ def audit(
         "INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES (?, ?, ?, ?)",
         (tenant_id, actor, action, detail),
     )
+
+
+def list_audit(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 100) -> list[dict]:
+    """Most-recent-first audit entries for one tenant (the owner's activity feed)."""
+    rows = conn.execute(
+        "SELECT actor, action, detail, created_at FROM audit_log "
+        "WHERE tenant_id = ? ORDER BY id DESC LIMIT ?",
+        (tenant_id, limit),
+    ).fetchall()
+    return [dict(r) for r in rows]

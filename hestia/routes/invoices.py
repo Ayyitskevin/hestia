@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
 from ..crm import list_clients, list_projects
+from ..db import audit
 from ..email import notify
 from ..invoices import (
     create_invoice,
@@ -95,6 +96,9 @@ def invoice_send(request: Request, invoice_id: int):
             return RedirectResponse("/login", status_code=303)
         send_invoice(conn, auth.tenant["id"], invoice_id)
         invoice = get_invoice(conn, auth.tenant["id"], invoice_id)
+        if invoice:
+            audit(conn, actor="owner", action="invoice.sent", tenant_id=auth.tenant["id"],
+                  detail=f"{invoice['title']} · {invoice['amount_display']}")
         # Email the client their pay link (mock records it; smtp also delivers).
         if invoice and invoice.get("client_email"):
             pay_url = invoice_public_url(settings, invoice["token"])
@@ -117,5 +121,9 @@ def invoice_void(request: Request, invoice_id: int):
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
+        invoice = get_invoice(conn, auth.tenant["id"], invoice_id)
         void_invoice(conn, auth.tenant["id"], invoice_id)
+        if invoice:
+            audit(conn, actor="owner", action="invoice.void", tenant_id=auth.tenant["id"],
+                  detail=invoice["title"])
     return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)

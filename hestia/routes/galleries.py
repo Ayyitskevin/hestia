@@ -8,6 +8,7 @@ from fastapi.responses import RedirectResponse
 from ..albums import get_album_for_gallery
 from ..auth import context_from_session
 from ..crm import assign_gallery_to_project, get_project, list_projects
+from ..db import audit
 from ..galleries import (
     add_image,
     create_gallery,
@@ -128,7 +129,12 @@ def gallery_publish(request: Request, gallery_id: int):
         auth = _require_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
+        gallery = get_gallery(conn, auth.tenant["id"], gallery_id)
+        if not gallery:
+            return RedirectResponse("/galleries", status_code=303)
         publish_gallery(conn, auth.tenant["id"], gallery_id)
+        audit(conn, actor="owner", action="gallery.published",
+              tenant_id=auth.tenant["id"], detail=gallery["title"])
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
 
