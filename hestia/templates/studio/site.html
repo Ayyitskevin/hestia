@@ -25,6 +25,7 @@
         <div class="card stack">
           <h3>Inquire / book</h3>
           <form method="post" action="/studio/{{ tenant.slug }}/inquire">
+            {% include "_csrf.html" %}
             <label for="name">Your name</label>
             <input type="text" id="name" name="name" required>
             <label for="email">Email</label>

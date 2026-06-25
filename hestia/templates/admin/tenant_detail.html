@@ -25,6 +25,7 @@
     <p class="muted">Currently <strong>{{ shoot_type_labels.get(tenant.shoot_type, tenant.shoot_type) }}</strong> ·
       album offer {{ 'on' if flags.album_offer else 'off' }} · {{ flags.hero_count }} hero picks</p>
     <form method="post" action="/admin/tenants/{{ tenant.id }}/shoot-type" style="display:flex; gap:10px; align-items:center">
+      {% include "_csrf.html" %}
       <select name="shoot_type">
         {% for st in shoot_types %}
           <option value="{{ st }}" {{ 'selected' if st == tenant.shoot_type else '' }}>{{ shoot_type_labels.get(st, st) }}</option>
@@ -54,6 +55,7 @@
     <p class="muted">No API keys yet.</p>
   {% endif %}
   <form method="post" action="/admin/tenants/{{ tenant.id }}/api-key">
+    {% include "_csrf.html" %}
     <button class="btn secondary" type="submit">Mint new API key</button>
   </form>
 </div>

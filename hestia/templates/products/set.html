@@ -11,6 +11,7 @@
     </span>
   </div>
   <form method="post" action="/galleries/{{ pset.gallery_id }}/products">
+    {% include "_csrf.html" %}
     <button class="btn secondary" type="submit">↻ Regenerate</button>
   </form>
 </div>

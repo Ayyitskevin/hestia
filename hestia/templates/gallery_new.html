@@ -5,6 +5,7 @@
 <div class="card stack">
   <h1>New gallery</h1>
   <form method="post" action="/galleries">
+    {% include "_csrf.html" %}
     <label for="title">Gallery title</label>
     <input type="text" id="title" name="title" placeholder="Sarah &amp; Tom — Wedding" required autofocus>
     <label for="client_name">Client name <span class="muted">(optional)</span></label>

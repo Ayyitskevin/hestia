@@ -7,6 +7,7 @@
   <p class="muted">Studio name → shoot type → owner login. The shoot type tunes offer
     and album defaults.</p>
   <form method="post" action="/admin/onboarding">
+    {% include "_csrf.html" %}
     <label for="name">Studio name</label>
     <input type="text" id="name" name="name" placeholder="Kevin Lee Photography" required autofocus>
 

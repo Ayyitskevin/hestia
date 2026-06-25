@@ -13,10 +13,10 @@
   </div>
   <div style="display:flex; gap:10px">
     {% if invoice.status == 'draft' %}
-      <form method="post" action="/invoices/{{ invoice.id }}/send"><button class="btn" type="submit">Send</button></form>
+      <form method="post" action="/invoices/{{ invoice.id }}/send">{% include "_csrf.html" %}<button class="btn" type="submit">Send</button></form>
     {% endif %}
     {% if invoice.status != 'paid' and invoice.status != 'void' %}
-      <form method="post" action="/invoices/{{ invoice.id }}/void"><button class="btn secondary" type="submit">Void</button></form>
+      <form method="post" action="/invoices/{{ invoice.id }}/void">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Void</button></form>
     {% endif %}
   </div>
 </div>

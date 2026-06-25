@@ -5,6 +5,7 @@
 <div class="card stack">
   <h1>New project</h1>
   <form method="post" action="/projects">
+    {% include "_csrf.html" %}
     <label for="name">Project name</label>
     <input type="text" id="name" name="name" placeholder="Sarah &amp; Tom — Wedding" required autofocus>
 

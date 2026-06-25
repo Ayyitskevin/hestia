@@ -5,6 +5,7 @@
 <div class="card stack">
   <h1>New invoice</h1>
   <form method="post" action="/invoices">
+    {% include "_csrf.html" %}
     <label for="title">Description</label>
     <input type="text" id="title" name="title" placeholder="Wedding photography — balance" required autofocus>
 

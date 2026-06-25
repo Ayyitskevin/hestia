@@ -8,12 +8,38 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from hestia.auth import SESSION_COOKIE
 from hestia.config import Settings
+from hestia.csrf import issue_token
 from hestia.db import connect, init_db
 from hestia.main import create_app
 from hestia.storage import LocalStorage
 
 ADMIN_TOKEN = "test-admin-token"
+
+_UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+class CSRFClient(TestClient):
+    """A TestClient that carries the session's CSRF token on form POSTs.
+
+    This mirrors the browser: every authenticated form ships the hidden
+    ``csrf_token`` field, so tests shouldn't have to thread it through by hand.
+    Injection happens only when a session cookie is present (i.e. the request is
+    authenticated) and the body is form data — never for JSON/bearer API calls.
+    Tests that assert *rejection* use a plain ``TestClient`` to omit the token.
+    """
+
+    def request(self, method, url, *args, **kwargs):  # noqa: D102
+        if method.upper() in _UNSAFE and (session := self.cookies.get(SESSION_COOKIE)):
+            if kwargs.get("json") is None and kwargs.get("content") is None:
+                data = kwargs.get("data")
+                if data is None:
+                    data = {}
+                if isinstance(data, dict) and "csrf_token" not in data:
+                    secret = self.app.state.settings.session_secret
+                    kwargs["data"] = {**data, "csrf_token": issue_token(session, secret)}
+        return super().request(method, url, *args, **kwargs)
 
 
 @pytest.fixture
@@ -56,13 +82,13 @@ def app(settings: Settings):
 
 @pytest.fixture
 def client(app) -> TestClient:
-    return TestClient(app)
+    return CSRFClient(app)
 
 
 def onboard_studio(client: TestClient, *, name="Test Studio", shoot_type="wedding",
                    email="owner@example.com", password="pw12345") -> dict:
     """Admin-onboard a studio and return {email, password, slug}."""
-    admin = TestClient(client.app)
+    admin = CSRFClient(client.app)
     admin.post("/admin/login", data={"token": ADMIN_TOKEN})
     admin.post("/admin/onboarding", data={
         "name": name, "shoot_type": shoot_type,
