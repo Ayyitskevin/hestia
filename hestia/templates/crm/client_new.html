@@ -5,6 +5,7 @@
 <div class="card stack">
   <h1>New client</h1>
   <form method="post" action="/clients">
+    {% include "_csrf.html" %}
     <label for="name">Name</label>
     <input type="text" id="name" name="name" required autofocus>
     <label for="email">Email <span class="muted">(optional)</span></label>

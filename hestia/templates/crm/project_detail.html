@@ -20,6 +20,7 @@
   <div class="card stack">
     <h3>Status</h3>
     <form method="post" action="/projects/{{ project.id }}/status" style="display:flex; gap:10px; align-items:center">
+      {% include "_csrf.html" %}
       <select name="status">
         {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == project.status else '' }}>{{ s }}</option>{% endfor %}
       </select>
@@ -72,6 +73,7 @@
   <div class="card stack">
     <h3>Marketing content</h3>
     <form method="post" action="/projects/{{ project.id }}/content" style="display:flex; gap:10px; align-items:center">
+      {% include "_csrf.html" %}
       <select name="recipe">
         {% for r in recipes %}<option value="{{ r.slug }}">{{ r.label }}</option>{% endfor %}
       </select>

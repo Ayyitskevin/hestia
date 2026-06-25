@@ -12,7 +12,7 @@
     </span>
   </div>
   {% if pack.status != 'approved' %}
-  <form method="post" action="/content/{{ pack.id }}/approve"><button class="btn" type="submit">Approve</button></form>
+  <form method="post" action="/content/{{ pack.id }}/approve">{% include "_csrf.html" %}<button class="btn" type="submit">Approve</button></form>
   {% endif %}
 </div>
 

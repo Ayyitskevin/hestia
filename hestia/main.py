@@ -13,12 +13,13 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import __version__
 from .config import Settings, get_settings
+from .csrf import csrf_protect
 from .db import init_db
 from .features import SHOOT_TYPE_LABELS, SHOOT_TYPES
 from .ratelimit import RateLimiter
@@ -101,17 +102,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    # CSRF guards the session-cookie UI (its form POSTs are the exposed surface).
+    # Exempt: the bearer-auth JSON API, the public PIN/checkout/inquiry routes,
+    # the signature-verified Stripe webhook, and the read-only media/health routes.
+    csrf = [Depends(csrf_protect)]
+
     app.include_router(health.router)
-    app.include_router(web.router)
-    app.include_router(admin.router)
-    app.include_router(crm.router)
-    app.include_router(galleries.router)
-    app.include_router(albums.router)
-    app.include_router(products.router)
-    app.include_router(invoices.router)
-    app.include_router(content.router)
-    app.include_router(studio.router)
-    app.include_router(pipeline_ui.router)
+    app.include_router(web.router, dependencies=csrf)
+    app.include_router(admin.router, dependencies=csrf)
+    app.include_router(crm.router, dependencies=csrf)
+    app.include_router(galleries.router, dependencies=csrf)
+    app.include_router(albums.router, dependencies=csrf)
+    app.include_router(products.router, dependencies=csrf)
+    app.include_router(invoices.router, dependencies=csrf)
+    app.include_router(content.router, dependencies=csrf)
+    app.include_router(studio.router, dependencies=csrf)
+    app.include_router(pipeline_ui.router, dependencies=csrf)
     app.include_router(api.router)
     app.include_router(client.router)
     app.include_router(pay.router)

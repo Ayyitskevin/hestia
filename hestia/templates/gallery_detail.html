@@ -15,12 +15,14 @@
   <div style="display:flex; gap:10px">
     {% if images %}
       <form method="post" action="/galleries/{{ gallery.id }}/process">
+        {% include "_csrf.html" %}
         <button class="btn" type="submit">⚡ Process — vision → offer</button>
       </form>
       {% if album %}
         <a class="btn secondary" href="/albums/{{ album.id }}">📖 Album ({{ album.spreads|length }} spreads)</a>
       {% else %}
         <form method="post" action="/galleries/{{ gallery.id }}/album">
+          {% include "_csrf.html" %}
           <button class="btn secondary" type="submit">📖 Draft album</button>
         </form>
       {% endif %}
@@ -28,12 +30,14 @@
         <a class="btn secondary" href="/products/{{ product_set.id }}">🛍 Variants ({{ product_set.variant_count }})</a>
       {% else %}
         <form method="post" action="/galleries/{{ gallery.id }}/products">
+          {% include "_csrf.html" %}
           <button class="btn secondary" type="submit">🛍 Product variants</button>
         </form>
       {% endif %}
     {% endif %}
     {% if gallery.status != 'published' %}
       <form method="post" action="/galleries/{{ gallery.id }}/publish">
+        {% include "_csrf.html" %}
         <button class="btn secondary" type="submit">Publish</button>
       </form>
     {% endif %}
@@ -51,6 +55,7 @@
 <div class="card stack" style="margin-top:18px">
   <h3>Upload images</h3>
   <form method="post" action="/galleries/{{ gallery.id }}/images" enctype="multipart/form-data">
+    {% include "_csrf.html" %}
     <input type="file" name="files" multiple accept="image/*" required>
     <div class="form-actions">
       <button class="btn" type="submit">Upload</button>

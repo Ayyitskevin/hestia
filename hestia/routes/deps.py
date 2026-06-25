@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..auth import AuthContext, resolve_context
 from ..config import Settings
+from ..csrf import csrf_token_for
 from ..db import get_db
 from ..storage import Storage
 
@@ -36,6 +37,7 @@ def render(request: Request, template: str, *, status_code: int = 200, **context
     base = {
         "settings": settings_of(request),
         "auth": context.pop("auth", None),
+        "csrf_token": csrf_token_for(request),
     }
     base.update(context)
     return templates_of(request).TemplateResponse(

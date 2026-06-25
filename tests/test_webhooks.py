@@ -4,7 +4,7 @@ import dataclasses
 import json
 import time
 
-from conftest import login_owner, onboard_studio
+from conftest import CSRFClient, login_owner, onboard_studio
 from fastapi.testclient import TestClient
 
 from hestia.main import create_app
@@ -77,7 +77,7 @@ def test_webhook_marks_invoice_paid(settings):
     app = _app_with_webhook(settings)
     studio = TestClient(app)
     creds = onboard_studio(studio, email="wh@example.com")
-    owner = login_owner(TestClient(app), creds)
+    owner = login_owner(CSRFClient(app), creds)
     iid = owner.post("/invoices", data={"title": "Balance", "amount": "1000"}).url.path.split("/")[-1]
     token = _invoice_token(owner, iid)
 
