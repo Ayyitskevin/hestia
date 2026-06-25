@@ -24,6 +24,13 @@
           <button class="btn secondary" type="submit">📖 Draft album</button>
         </form>
       {% endif %}
+      {% if product_set %}
+        <a class="btn secondary" href="/products/{{ product_set.id }}">🛍 Variants ({{ product_set.variant_count }})</a>
+      {% else %}
+        <form method="post" action="/galleries/{{ gallery.id }}/products">
+          <button class="btn secondary" type="submit">🛍 Product variants</button>
+        </form>
+      {% endif %}
     {% endif %}
     {% if gallery.status != 'published' %}
       <form method="post" action="/galleries/{{ gallery.id }}/publish">

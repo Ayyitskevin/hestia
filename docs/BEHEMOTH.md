@@ -15,9 +15,9 @@ bill, one database, modules composing around the studio's real workflow.
 | CRM: clients + projects | **mise** back-office | ✅ shipped |
 | Invoicing + payments (mock/stripe) | **mise** invoices + **plutus** checkout | ✅ shipped |
 | Album designer (model proposes, code validates) | **mnemosyne** | ✅ shipped |
-| **Marketing content (shot lists, captions, campaigns)** | **dionysus** | ✅ shipped |
-| Product photography (packshots, variants) | **aphrodite** | ▢ next |
-| Public studio site / booking | **mise** site | ▢ |
+| Marketing content (shot lists, captions, campaigns) | **dionysus** | ✅ shipped |
+| **Product photography (packshots, variants)** | **aphrodite** | ✅ shipped |
+| Public studio site / booking | **mise** site | ▢ next |
 
 ## Why this order
 
