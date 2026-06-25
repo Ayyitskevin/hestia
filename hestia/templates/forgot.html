@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Reset password — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>Reset your password</h1>
+  {% if sent %}
+    <div class="alert ok">If an account exists for that email, a reset link is on its way (it expires in an hour).</div>
+    <p class="hint"><a href="/login">Back to sign in</a></p>
+  {% else %}
+    <p class="muted">Enter your email and we'll send a link to set a new password.</p>
+    <form method="post" action="/forgot">
+      {% include "_csrf.html" %}
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required autofocus>
+      <div class="form-actions">
+        <button class="btn" type="submit">Send reset link</button>
+        <a class="btn ghost" href="/login">Back</a>
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

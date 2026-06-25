@@ -16,11 +16,13 @@ from ..auth import (
 )
 from ..billing import plan_status
 from ..crm import list_clients, list_projects
+from ..email import notify
 from ..galleries import list_galleries
 from ..pipeline import list_runs
 from ..ratelimit import enforce
+from ..resets import consume_reset, create_reset, find_reset
 from ..studio import get_profile
-from ..tenants import get_tenant, tenant_flags
+from ..tenants import get_tenant, get_user_by_email, set_user_password, tenant_flags
 from .deps import db_conn, render, settings_of
 
 router = APIRouter()
@@ -52,6 +54,56 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
     resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax",
                     secure=cookie_is_secure(settings), max_age=int(SESSION_TTL.total_seconds()))
     return resp
+
+
+@router.get("/forgot")
+def forgot_form(request: Request):
+    return render(request, "forgot.html", auth=None, sent=False)
+
+
+@router.post("/forgot")
+def forgot_submit(request: Request, email: str = Form(...)):
+    enforce(request, "password_reset")
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        user = get_user_by_email(conn, email)
+        if user and user["tenant_id"]:
+            token = create_reset(conn, settings, user_id=user["id"])
+            link = f"{settings.public_url.rstrip('/')}/reset/{token}"
+            notify(conn, settings, to=user["email"], tenant_id=user["tenant_id"],
+                   subject="Reset your Hestia password",
+                   body=(f"A password reset was requested for your account.\n\n"
+                         f"Reset it here (the link expires in 1 hour):\n{link}\n\n"
+                         f"If this wasn't you, you can safely ignore this email."))
+    # Identical response whether or not the email matched — no account enumeration.
+    return render(request, "forgot.html", auth=None, sent=True)
+
+
+@router.get("/reset/{token}")
+def reset_form(request: Request, token: str):
+    with db_conn(request) as conn:
+        valid = find_reset(conn, settings_of(request), token) is not None
+    return render(request, "reset.html", auth=None, token=token, valid=valid, error=None)
+
+
+@router.post("/reset/{token}")
+def reset_submit(request: Request, token: str, password: str = Form(...),
+                 confirm: str = Form("")):
+    enforce(request, "password_reset")
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        if find_reset(conn, settings, token) is None:
+            return render(request, "reset.html", auth=None, token=token, valid=False, error=None)
+        if len(password) < 8 or password != confirm:
+            return render(request, "reset.html", auth=None, token=token, valid=True,
+                          error="Passwords must match and be at least 8 characters.")
+        user_id = consume_reset(conn, settings, token)
+        if user_id is None:  # raced/expired between the check and the burn
+            return render(request, "reset.html", auth=None, token=token, valid=False, error=None)
+        set_user_password(conn, user_id, password)
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))  # log out everywhere
+    return render(request, "login.html", auth=None, error=None,
+                  notice="Password updated — sign in with your new password.")
 
 
 @router.get("/logout")
