@@ -1,8 +1,8 @@
 """CRM module — clients and projects (the studio-OS backbone, essence of Mise).
 
-This is the connective tissue of the behemoth: galleries (and, later, invoices,
-albums, and campaigns) hang off a project, and projects belong to a client. Pure
-data access, tenant-scoped throughout.
+This is the connective tissue of the studio OS: galleries (and invoices, albums,
+and campaigns) hang off a project, and projects belong to a client. Pure data
+access, tenant-scoped throughout.
 
     client → project (shoot_type, status, event_date) → gallery → offer
 """

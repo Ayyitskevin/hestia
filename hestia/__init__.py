@@ -1,8 +1,9 @@
-"""Hestia — the hearth of the photography studio.
+"""Hestia — the AI-native studio operating system for photographers.
 
-Unified SaaS shell that orchestrates the Kevin Lee photography suite
-(Argus vision, Plutus print/album upsell, Mnemosyne album drafts,
-Dionysus campaign copy, Mise studio OS) behind one login and one pipeline.
+An independent, multi-tenant SaaS modular monolith that owns the studio revenue
+loop end to end: inquiry → client → project → gallery → AI culling → offer →
+album/marketing → invoice → paid. One app, one database, one tenant model. The
+older photography repos are design DNA, not dependencies — see docs/HESTIA-DOCTRINE.md.
 """
 
 __version__ = "0.1.0"

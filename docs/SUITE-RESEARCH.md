@@ -1,5 +1,15 @@
 # Suite research — architecture & product memo
 
+> **Historical research note.** This document records prior repo analysis and
+> tradeoffs from when Hestia's direction was still open. Hestia has since chosen to
+> become a **standalone modular-monolith SaaS product** (see
+> [`HESTIA-DOCTRINE.md`](HESTIA-DOCTRINE.md)). The old services — Mise, Argus, Plutus,
+> Mnemosyne, Dionysus, Aphrodite — are **design references, not runtime
+> dependencies.** Where this memo recommends "orchestrate … over HTTP" or a "hybrid
+> shell," that path was **not taken**: Hestia rebuilt the essence in-process. Read
+> the findings below for the lessons (especially the duplication and the Plutus
+> idempotency bug); ignore the orchestration recommendation.
+
 **Date:** 2026-06-25
 **Method:** Cloned and read the actual code of all six photography repos
 (`mise`, `argus`, `plutus`, `mnemosyne`, `dionysus`, `aphrodite`) — ~81k LOC

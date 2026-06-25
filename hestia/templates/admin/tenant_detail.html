@@ -38,7 +38,8 @@
   <div class="card stack">
     <h3>Plan</h3>
     <p class="muted"><span class="pill">{{ plan.name }} · {{ plan.price }}</span> — {{ plan.blurb }}</p>
-    <p class="hint">Live Stripe billing is a Phase 1 deliverable.</p>
+    <p class="hint">The studio manages its own plan at <span class="mono">/settings/billing</span>
+      (mock by default; Stripe subscriptions when <span class="mono">HESTIA_SUBSCRIPTION_BACKEND=stripe</span>).</p>
   </div>
 </div>
 

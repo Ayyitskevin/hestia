@@ -1,6 +1,6 @@
 """Public studio site + inquiry intake (essence of Mise's marketing site).
 
-The closer of the behemoth: a public per-studio page with a booking/inquiry form
+The front door of the studio OS: a public per-studio page with a booking/inquiry form
 that drops straight into the CRM as a lead. A stranger on the internet becomes
 ``client → project (lead)`` in the same app that will later deliver their gallery,
 sell them prints, and invoice them. Public → pipeline, end to end.
