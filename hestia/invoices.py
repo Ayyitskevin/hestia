@@ -45,7 +45,7 @@ def create_invoice(
 def get_invoice(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> dict | None:
     row = conn.execute(
         """
-        SELECT i.*, c.name AS client_name, p.name AS project_name
+        SELECT i.*, c.name AS client_name, c.email AS client_email, p.name AS project_name
           FROM invoices i
           LEFT JOIN clients c ON c.id = i.client_id
           LEFT JOIN projects p ON p.id = i.project_id
