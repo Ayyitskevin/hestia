@@ -32,7 +32,8 @@ def products_generate(request: Request, gallery_id: int):
             return RedirectResponse("/galleries", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
         try:
-            pset = generate_product_set(conn, settings_of(request), tenant=tenant, gallery=gallery)
+            pset = generate_product_set(conn, settings_of(request), tenant=tenant,
+                                        gallery=gallery, storage=storage_of(request))
         except ValueError:
             return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
     return RedirectResponse(f"/products/{pset['id']}", status_code=303)
