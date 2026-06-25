@@ -37,6 +37,7 @@ from .routes import (
     products,
     studio,
     web,
+    webhooks,
 )
 from .storage import build_storage
 
@@ -104,6 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(api.router)
     app.include_router(client.router)
     app.include_router(pay.router)
+    app.include_router(webhooks.router)
     app.include_router(media.router)
 
     return app
