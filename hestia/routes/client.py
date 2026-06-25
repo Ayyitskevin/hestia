@@ -10,10 +10,11 @@ from ..proofing import (
     add_comment,
     comments_by_image,
     favorite_image_ids,
+    list_favorites,
     toggle_favorite,
 )
 from ..ratelimit import enforce
-from ..sales import get_offer_by_token
+from ..sales import favorites_package, get_offer_by_token
 from ..storage import Storage
 from ..tenants import get_tenant_by_slug
 from .deps import db_conn, render, storage_of
@@ -44,13 +45,22 @@ def _hero_urls(conn, storage: Storage, tenant_id: str, image_ids: list[int]) -> 
 @router.get("/s/{slug}/{token}")
 def public_offer(request: Request, slug: str, token: str):
     """Public, shareable client offer — what the photographer sends the client."""
+    fav_thumbs: list[dict] = []
+    fav_pkg = None
     with db_conn(request) as conn:
         offer = get_offer_by_token(conn, token)
         tenant = get_tenant_by_slug(conn, slug)
         if not offer or not tenant or offer["tenant_id"] != tenant["id"]:
             return render(request, "offer_missing.html", auth=None, status_code=404)
-        heroes = _hero_urls(conn, storage_of(request), tenant["id"], offer["hero_images"])
-    return render(request, "offer.html", auth=None, offer=offer, tenant=tenant, heroes=heroes)
+        storage = storage_of(request)
+        heroes = _hero_urls(conn, storage, tenant["id"], offer["hero_images"])
+        # Live: auto-curate a package from the photos the client hearted.
+        favs = list_favorites(conn, tenant["id"], offer["gallery_id"])
+        fav_thumbs = [{"url": storage.public_path(i["storage_key"]), "filename": i["filename"]}
+                      for i in favs]
+        fav_pkg = favorites_package(len(favs))
+    return render(request, "offer.html", auth=None, offer=offer, tenant=tenant, heroes=heroes,
+                  fav_thumbs=fav_thumbs, fav_pkg=fav_pkg)
 
 
 @router.get("/g/{slug}/{gallery_slug}")
