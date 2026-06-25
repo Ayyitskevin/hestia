@@ -66,6 +66,12 @@ class Settings:
     stripe_webhook_secret: str = ""
     currency: str = "usd"
 
+    # Studio subscriptions (billing the studios). mock = activate the plan instantly
+    # (no charge, testable). stripe = Checkout Session in subscription mode + webhook.
+    subscription_backend: str = "mock"  # mock | stripe
+    stripe_price_studio: str = ""
+    stripe_price_studio_pro: str = ""
+
     # Email (transactional). mock = record to the outbox, send nothing (testable
     # default). smtp = deliver over SMTP and still record. See hestia/email.py.
     email_backend: str = "mock"  # mock | smtp
@@ -111,7 +117,14 @@ class Settings:
             smtp_user=os.getenv("HESTIA_SMTP_USER", ""),
             smtp_password=os.getenv("HESTIA_SMTP_PASSWORD", ""),
             smtp_from=os.getenv("HESTIA_SMTP_FROM", ""),
+            subscription_backend=os.getenv("HESTIA_SUBSCRIPTION_BACKEND", "mock"),
+            stripe_price_studio=os.getenv("HESTIA_STRIPE_PRICE_STUDIO", ""),
+            stripe_price_studio_pro=os.getenv("HESTIA_STRIPE_PRICE_STUDIO_PRO", ""),
         )
+
+    def stripe_price_id(self, plan: str) -> str:
+        return {"studio": self.stripe_price_studio,
+                "studio_pro": self.stripe_price_studio_pro}.get(plan, "")
 
     @property
     def db_path(self) -> Path:

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Billing — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Billing</h1>
+    <span class="muted">Current plan:
+      <span class="pill on">{{ plan.name }} · {{ plan.price }}</span>
+      via <span class="pill">{{ backend }}</span></span>
+  </div>
+</div>
+
+{% if backend == 'mock' %}
+<div class="alert warn">Test mode — switching plans activates instantly with no charge.
+  Set <span class="mono">HESTIA_SUBSCRIPTION_BACKEND=stripe</span> (with price IDs) for real billing.</div>
+{% endif %}
+
+<div class="grid cols-2">
+  {% for key, p in plans.items() %}
+  <div class="card stack">
+    <h3>{{ p.name }}{% if key == plan.plan %} <span class="pill on">current</span>{% endif %}</h3>
+    <div style="font-weight:600; font-size:1.2rem">{{ p.price }}</div>
+    <p class="muted">{{ p.blurb }}</p>
+    <p class="hint">{{ 'Unlimited galleries' if p.galleries is none else (p.galleries|string) + ' galleries' }}</p>
+    {% if key == plan.plan %}
+      <button class="btn secondary" type="button" disabled>Your plan</button>
+    {% else %}
+      <form method="post" action="/settings/billing/subscribe">
+        {% include "_csrf.html" %}
+        <input type="hidden" name="plan" value="{{ key }}">
+        <button class="btn" type="submit">Switch to {{ p.name }}</button>
+      </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% if plan.plan != 'beta' %}
+<div class="card" style="margin-top:18px">
+  <form method="post" action="/settings/billing/cancel">
+    {% include "_csrf.html" %}
+    <button class="btn secondary" type="submit">Cancel — downgrade to Beta</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
