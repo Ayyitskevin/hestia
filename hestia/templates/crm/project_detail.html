@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ project.name }}</h1>
+    <span class="muted">
+      {% if project.client_id %}<a href="/clients/{{ project.client_id }}">{{ project.client_name }}</a> · {% endif %}
+      {{ shoot_type_labels.get(project.shoot_type, project.shoot_type) }}
+      {% if project.event_date %} · {{ project.event_date }}{% endif %}
+    </span>
+  </div>
+  <a class="btn" href="/galleries/new?project_id={{ project.id }}">+ New gallery</a>
+</div>
+
+<div class="grid cols-2">
+  <div class="card stack">
+    <h3>Status</h3>
+    <form method="post" action="/projects/{{ project.id }}/status" style="display:flex; gap:10px; align-items:center">
+      <select name="status">
+        {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == project.status else '' }}>{{ s }}</option>{% endfor %}
+      </select>
+      <button class="btn secondary" type="submit">Update</button>
+    </form>
+    {% if project.notes %}<p class="muted">{{ project.notes }}</p>{% endif %}
+  </div>
+
+  <div class="card stack">
+    <h3>Galleries</h3>
+    {% if galleries %}
+      <table>
+        <thead><tr><th>Gallery</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for g in galleries %}
+          <tr>
+            <td><a href="/galleries/{{ g.id }}">{{ g.title }}</a></td>
+            <td><span class="pill {{ 'on' if g.status == 'published' else 'off' }}">{{ g.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No galleries in this project yet.</p>
+      <a class="btn" href="/galleries/new?project_id={{ project.id }}">Add a gallery</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

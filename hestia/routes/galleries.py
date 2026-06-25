@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
+from ..crm import assign_gallery_to_project, get_project, list_projects
 from ..galleries import (
     add_image,
     create_gallery,
@@ -45,12 +46,14 @@ def gallery_list(request: Request):
 
 
 @router.get("/new")
-def gallery_new(request: Request):
+def gallery_new(request: Request, project_id: int | None = None):
     with db_conn(request) as conn:
         auth = _require_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
-    return render(request, "gallery_new.html", auth=auth)
+        projects = list_projects(conn, auth.tenant["id"])
+    return render(request, "gallery_new.html", auth=auth, projects=projects,
+                  preselect_project=project_id)
 
 
 @router.post("")
@@ -59,6 +62,7 @@ def gallery_create(
     title: str = Form(...),
     client_name: str = Form(""),
     pin: str = Form(""),
+    project_id: str = Form(""),
 ):
     with db_conn(request) as conn:
         auth = _require_user(request, conn)
@@ -66,6 +70,8 @@ def gallery_create(
             return RedirectResponse("/login", status_code=303)
         gallery = create_gallery(conn, tenant_id=auth.tenant["id"], title=title,
                                  client_name=client_name, pin=pin.strip() or None)
+        if project_id.strip().isdigit():
+            assign_gallery_to_project(conn, auth.tenant["id"], gallery["id"], int(project_id))
     return RedirectResponse(f"/galleries/{gallery['id']}", status_code=303)
 
 
@@ -85,10 +91,11 @@ def gallery_detail(request: Request, gallery_id: int):
             (auth.tenant["id"], str(gallery_id)),
         ).fetchone()
         flags = tenant_flags(get_tenant(conn, auth.tenant["id"]))
+        project = get_project(conn, auth.tenant["id"], gallery["project_id"]) if gallery.get("project_id") else None
     offer_url = offer_public_url(settings_of(request), auth.tenant["slug"], offer["token"]) if offer else None
     return render(request, "gallery_detail.html", auth=auth, gallery=gallery, images=images,
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
-                  storage=storage_of(request), flags=flags)
+                  storage=storage_of(request), flags=flags, project=project)
 
 
 @router.post("/{gallery_id}/images")

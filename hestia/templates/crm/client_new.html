@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}New client — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>New client</h1>
+  <form method="post" action="/clients">
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" required autofocus>
+    <label for="email">Email <span class="muted">(optional)</span></label>
+    <input type="email" id="email" name="email">
+    <label for="phone">Phone <span class="muted">(optional)</span></label>
+    <input type="text" id="phone" name="phone">
+    <label for="notes">Notes <span class="muted">(optional)</span></label>
+    <input type="text" id="notes" name="notes" placeholder="Referred by…">
+    <div class="form-actions">
+      <button class="btn" type="submit">Create client</button>
+      <a class="btn ghost" href="/clients">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

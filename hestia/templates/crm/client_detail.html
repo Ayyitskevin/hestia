@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ client.name }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ client.name }}</h1>
+    <span class="muted">
+      {{ client.email or "no email" }}{% if client.phone %} · {{ client.phone }}{% endif %}
+    </span>
+  </div>
+  <a class="btn" href="/projects/new?client_id={{ client.id }}">+ New project</a>
+</div>
+
+{% if client.notes %}<div class="card" style="margin-bottom:18px"><p class="muted">{{ client.notes }}</p></div>{% endif %}
+
+<div class="card stack">
+  <h3>Projects</h3>
+  {% if projects %}
+  <table>
+    <thead><tr><th>Project</th><th>Shoot type</th><th>Status</th><th>Galleries</th></tr></thead>
+    <tbody>
+      {% for p in projects %}
+      <tr>
+        <td><a href="/projects/{{ p.id }}">{{ p.name }}</a></td>
+        <td>{{ shoot_type_labels.get(p.shoot_type, p.shoot_type) }}</td>
+        <td><span class="pill">{{ p.status }}</span></td>
+        <td>{{ p.gallery_count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No projects for this client yet.</p>
+  <a class="btn" href="/projects/new?client_id={{ client.id }}">Create a project</a>
+  {% endif %}
+</div>
+{% endblock %}
