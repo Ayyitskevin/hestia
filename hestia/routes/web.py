@@ -72,10 +72,15 @@ def dashboard(request: Request):
         galleries = list_galleries(conn, tenant["id"])[:6]
         runs = list_runs(conn, tenant["id"], limit=6)
         plan = plan_status(tenant)
+        unpaid = conn.execute(
+            "SELECT COUNT(*) AS n FROM invoices WHERE tenant_id = ? AND status IN ('draft','sent')",
+            (tenant["id"],),
+        ).fetchone()["n"]
         counts = {
             "clients": len(list_clients(conn, tenant["id"])),
             "projects": len(list_projects(conn, tenant["id"])),
             "galleries": len(list_galleries(conn, tenant["id"])),
+            "unpaid": unpaid,
         }
     return render(request, "dashboard.html", auth=auth, tenant=tenant, flags=flags,
                   galleries=galleries, runs=runs, plan=plan, counts=counts)

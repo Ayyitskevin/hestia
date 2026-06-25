@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pay {{ invoice.amount_display }} — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>{{ invoice.amount_display }}</h1>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="padding-top:32px">
+      <div class="card stack">
+        <h3>{{ invoice.title }}</h3>
+        {% if invoice.status == 'paid' %}
+          <div class="alert ok">✓ Paid — thank you! A receipt has been recorded.</div>
+        {% else %}
+          <p class="muted">Amount due: <strong>{{ invoice.amount_display }}</strong></p>
+          <form method="post" action="/pay/{{ invoice.token }}/checkout">
+            <button class="btn" type="submit">Pay {{ invoice.amount_display }}</button>
+          </form>
+          {% if settings.payments_backend == 'mock' %}
+            <p class="hint">Test mode — this is a simulated payment; no card is charged.</p>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">Billed with 🔥 by {{ tenant.name }} on Hestia</div></footer>
+</body>
+</html>

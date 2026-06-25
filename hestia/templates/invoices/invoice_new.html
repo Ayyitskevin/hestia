@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}New invoice — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>New invoice</h1>
+  <form method="post" action="/invoices">
+    <label for="title">Description</label>
+    <input type="text" id="title" name="title" placeholder="Wedding photography — balance" required autofocus>
+
+    <label for="amount">Amount ({{ settings.currency|upper }})</label>
+    <input type="text" id="amount" name="amount" placeholder="2500.00" required>
+
+    <label for="client_id">Client <span class="muted">(optional)</span></label>
+    <select id="client_id" name="client_id">
+      <option value="">— none —</option>
+      {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if preselect_client == c.id else '' }}>{{ c.name }}</option>{% endfor %}
+    </select>
+
+    <label for="project_id">Project <span class="muted">(optional)</span></label>
+    <select id="project_id" name="project_id">
+      <option value="">— none —</option>
+      {% for p in projects %}<option value="{{ p.id }}" {{ 'selected' if preselect_project == p.id else '' }}>{{ p.name }}</option>{% endfor %}
+    </select>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Create invoice</button>
+      <a class="btn ghost" href="/invoices">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

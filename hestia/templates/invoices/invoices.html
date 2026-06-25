@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Invoices — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Invoices</h1>
+  <a class="btn" href="/invoices/new">+ New invoice</a>
+</div>
+{% if invoices %}
+<div class="card">
+  <table>
+    <thead><tr><th>Invoice</th><th>Client</th><th>Amount</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for i in invoices %}
+      <tr>
+        <td><a href="/invoices/{{ i.id }}">{{ i.title }}</a></td>
+        <td class="muted">{{ i.client_name or i.project_name or "—" }}</td>
+        <td>{{ i.amount_display }}</td>
+        <td><span class="pill {{ 'on' if i.status == 'paid' else 'off' }}">{{ i.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card stack">
+  <p class="muted">No invoices yet — bill a client for a shoot, a deposit, or a print order.</p>
+  <a class="btn" href="/invoices/new">Create your first invoice</a>
+</div>
+{% endif %}
+{% endblock %}

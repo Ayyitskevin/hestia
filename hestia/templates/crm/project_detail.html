@@ -10,7 +10,10 @@
       {% if project.event_date %} · {{ project.event_date }}{% endif %}
     </span>
   </div>
-  <a class="btn" href="/galleries/new?project_id={{ project.id }}">+ New gallery</a>
+  <div style="display:flex; gap:10px">
+    <a class="btn secondary" href="/invoices/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Invoice</a>
+    <a class="btn" href="/galleries/new?project_id={{ project.id }}">+ Gallery</a>
+  </div>
 </div>
 
 <div class="grid cols-2">
@@ -42,6 +45,27 @@
     {% else %}
       <p class="muted">No galleries in this project yet.</p>
       <a class="btn" href="/galleries/new?project_id={{ project.id }}">Add a gallery</a>
+    {% endif %}
+  </div>
+
+  <div class="card stack">
+    <h3>Invoices</h3>
+    {% if invoices %}
+      <table>
+        <thead><tr><th>Invoice</th><th>Amount</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for i in invoices %}
+          <tr>
+            <td><a href="/invoices/{{ i.id }}">{{ i.title }}</a></td>
+            <td>{{ i.amount_display }}</td>
+            <td><span class="pill {{ 'on' if i.status == 'paid' else 'off' }}">{{ i.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No invoices for this project yet.</p>
+      <a class="btn" href="/invoices/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Create an invoice</a>
     {% endif %}
   </div>
 </div>

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ invoice.title }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ invoice.amount_display }}</h1>
+    <span class="muted">
+      {{ invoice.title }}
+      {% if invoice.client_name %} · {{ invoice.client_name }}{% endif %}
+      {% if invoice.project_id %} · <a href="/projects/{{ invoice.project_id }}">{{ invoice.project_name }}</a>{% endif %}
+      · <span class="pill {{ 'on' if invoice.status == 'paid' else 'off' }}">{{ invoice.status }}</span>
+    </span>
+  </div>
+  <div style="display:flex; gap:10px">
+    {% if invoice.status == 'draft' %}
+      <form method="post" action="/invoices/{{ invoice.id }}/send"><button class="btn" type="submit">Send</button></form>
+    {% endif %}
+    {% if invoice.status != 'paid' and invoice.status != 'void' %}
+      <form method="post" action="/invoices/{{ invoice.id }}/void"><button class="btn secondary" type="submit">Void</button></form>
+    {% endif %}
+  </div>
+</div>
+
+{% if invoice.status == 'paid' %}
+<div class="alert ok">Paid {{ invoice.paid_at }} via {{ invoice.provider }}.</div>
+{% endif %}
+
+<div class="card stack">
+  <h3>Client pay link</h3>
+  <a class="offer-url" href="{{ pay_url }}" target="_blank">{{ pay_url }}</a>
+  <p class="muted">Share this with your client to collect payment. Payments backend:
+    <span class="pill">{{ settings.payments_backend }}</span>
+    {% if settings.payments_backend == 'mock' %}(test mode — no real charge){% endif %}
+  </p>
+</div>
+{% endblock %}
