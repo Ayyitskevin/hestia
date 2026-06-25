@@ -43,7 +43,10 @@
           </div>
           <div style="text-align:right; white-space:nowrap">
             {% if fav_pkg.orig_price %}<s class="muted">{{ fav_pkg.orig_price }}</s> {% endif %}<span class="price">{{ fav_pkg.price }}</span>
-            <button class="btn" disabled title="Secure checkout arrives in the next release">Reserve</button>
+            <form method="post" action="/s/{{ tenant.slug }}/{{ offer.token }}/order" style="display:inline; margin:0">
+              <input type="hidden" name="sku" value="favorites">
+              <button class="btn" type="submit">Reserve</button>
+            </form>
           </div>
         </div>
       </section>
@@ -58,14 +61,17 @@
           <p class="bundle-note">{{ b.note }}</p>
           <div class="bundle-foot">
             <span class="price">{% if b.orig_price %}<s class="muted" style="font-size:.9rem; font-weight:400">{{ b.orig_price }}</s> {% endif %}{{ b.price }}</span>
-            <button class="btn" disabled title="Secure checkout arrives in the next release">Reserve</button>
+            <form method="post" action="/s/{{ tenant.slug }}/{{ offer.token }}/order" style="margin:0">
+              <input type="hidden" name="sku" value="{{ b.sku }}">
+              <button class="btn" type="submit">Reserve</button>
+            </form>
           </div>
         </article>
         {% endfor %}
       </section>
 
       <p class="muted" style="text-align:center; margin-top:24px">
-        Secure Stripe checkout is arriving soon — for now, reply to your photographer to order.
+        Reserve takes you to secure checkout. Questions? Just reply to your photographer.
       </p>
     </div>
   </main>

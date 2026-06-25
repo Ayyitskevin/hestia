@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
 from ..invoices import get_invoice_by_token, mark_paid
+from ..orders import fulfill_for_invoice_token
 from ..payments import PaymentError, build_payments
 from ..ratelimit import enforce
 from ..tenants import get_tenant
@@ -42,4 +43,6 @@ def pay_checkout(request: Request, token: str):
             return RedirectResponse(f"/pay/{token}", status_code=303)
         if result.paid_now:
             mark_paid(conn, token=token, provider=provider.backend, ref=result.ref)
+            # If this invoice backs a print order, settle it to the fulfillment lab.
+            fulfill_for_invoice_token(conn, token)
     return RedirectResponse(result.url, status_code=303)

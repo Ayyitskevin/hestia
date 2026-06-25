@@ -75,6 +75,33 @@
 </div>
 {% endif %}
 
+{% if orders %}
+<div class="card stack" style="margin-top:18px">
+  <h3>Orders · {{ orders|length }}</h3>
+  <table>
+    <thead><tr><th>Item</th><th>Amount</th><th>Order</th><th>Fulfillment</th></tr></thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <td>{{ o.name }}</td>
+        <td>{{ o.amount_display }}</td>
+        <td><span class="pill {{ 'on' if o.status == 'paid' else 'off' }}">{{ o.status }}</span></td>
+        <td>
+          {% set f = fulfillments.get(o.id) %}
+          {% if f %}<span class="pill {{ 'on' if f.status in ('submitted','produced','shipped') else 'off' }}">{{ f.status }}</span>
+            <span class="muted mono">{{ f.backend }}{% if f.provider_ref %} · {{ f.provider_ref }}{% endif %}</span>
+          {% elif o.status == 'paid' %}<span class="muted">queued…</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">Paid orders are submitted to the print lab automatically · fulfillment backend
+    <span class="pill">{{ settings.fulfillment_backend }}</span></p>
+</div>
+{% endif %}
+
 {% if favorites or comments %}
 <div class="card stack" style="margin-top:18px">
   <h3>Client proofing · {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }}</h3>

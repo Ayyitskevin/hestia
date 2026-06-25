@@ -12,6 +12,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from ..invoices import mark_paid
+from ..orders import fulfill_for_invoice_token
 from ..payments import checkout_token_from_event, verify_stripe_signature
 from ..subscriptions import apply_plan, canceled_tenant_from_event, subscription_from_event
 from .deps import db_conn, settings_of
@@ -37,6 +38,8 @@ async def stripe_webhook(request: Request):
     with db_conn(request) as conn:
         if token:
             result["paid"] = mark_paid(conn, token=token, provider="stripe", ref="stripe_checkout")
+            if result["paid"]:
+                fulfill_for_invoice_token(conn, token)
         if sub:
             tenant_id, plan, ref = sub
             apply_plan(conn, tenant_id, plan=plan, provider="stripe", provider_ref=ref)

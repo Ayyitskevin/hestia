@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 
 from ..campaigns import discount_bundle, get_active_campaign
 from ..galleries import get_gallery_by_slug, get_image, list_images
+from ..orders import create_order
 from ..proofing import (
     add_comment,
     comments_by_image,
@@ -18,7 +19,7 @@ from ..ratelimit import enforce
 from ..sales import favorites_package, get_offer_by_token
 from ..storage import Storage
 from ..tenants import get_tenant_by_slug
-from .deps import db_conn, render, storage_of
+from .deps import db_conn, render, settings_of, storage_of
 
 router = APIRouter()
 
@@ -70,6 +71,23 @@ def public_offer(request: Request, slug: str, token: str):
                 fav_pkg = discount_bundle(fav_pkg, pct)
     return render(request, "offer.html", auth=None, offer=offer, tenant=tenant, heroes=heroes,
                   fav_thumbs=fav_thumbs, fav_pkg=fav_pkg, campaign=campaign)
+
+
+@router.post("/s/{slug}/{token}/order")
+def offer_order(request: Request, slug: str, token: str, sku: str = Form(...)):
+    """Reserve a bundle → create an order + invoice → send the client to checkout."""
+    enforce(request, "checkout")
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        offer = get_offer_by_token(conn, token)
+        tenant = get_tenant_by_slug(conn, slug)
+        if not offer or not tenant or offer["tenant_id"] != tenant["id"]:
+            return render(request, "offer_missing.html", auth=None, status_code=404)
+        result = create_order(conn, settings, tenant=dict(tenant), offer=offer, sku=sku)
+        if not result:
+            return RedirectResponse(f"/s/{slug}/{token}", status_code=303)
+        invoice_token = result["invoice"]["token"]
+    return RedirectResponse(f"/pay/{invoice_token}", status_code=303)
 
 
 @router.get("/g/{slug}/{gallery_slug}")
