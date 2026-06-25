@@ -12,6 +12,7 @@ Env:   HESTIA_API_TOKEN must match the running server's admin token.
 from __future__ import annotations
 
 import os
+import re
 import sys
 import time
 from urllib.parse import urlparse
@@ -22,6 +23,18 @@ BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8590"
 ADMIN_TOKEN = os.environ.get("HESTIA_API_TOKEN", "dogfood-admin")
 EMAIL, PASSWORD = "dogfood@studio.test", "dogfood-pw"
 
+_CSRF_RE = re.compile(r'name="csrf_token" value="([^"]*)"')
+
+
+def csrf(client: httpx.Client, form_path: str) -> str:
+    """Scrape the session's CSRF token from a rendered form page, like a browser.
+
+    The token is stable for the session (HMAC of the session cookie), so grab it
+    once from any authenticated form page and reuse it for that client's POSTs.
+    """
+    m = _CSRF_RE.search(client.get(form_path).text)
+    return m.group(1) if m else ""
+
 
 def main() -> int:
     t0 = time.time()
@@ -31,26 +44,29 @@ def main() -> int:
     r = admin.post("/admin/onboarding", data={
         "name": "Dogfood Studio", "shoot_type": "wedding",
         "owner_email": EMAIL, "owner_password": PASSWORD,
+        "csrf_token": csrf(admin, "/admin/onboarding"),
     })
     assert "hestia_tk_" in r.text, "onboarding did not mint an API key"
     print("✓ studio onboarded")
 
-    # Owner logs in and creates a gallery.
+    # Owner logs in and creates a gallery. One CSRF token for the whole session.
     owner = httpx.Client(base_url=BASE, follow_redirects=True, timeout=30)
     owner.post("/login", data={"email": EMAIL, "password": PASSWORD})
-    r = owner.post("/galleries", data={"title": "Dogfood Wedding", "client_name": "Pat & Sam"})
+    tok = csrf(owner, "/galleries/new")
+    r = owner.post("/galleries", data={"title": "Dogfood Wedding",
+                                       "client_name": "Pat & Sam", "csrf_token": tok})
     gid = str(r.url).rstrip("/").split("/")[-1]
     print(f"✓ gallery {gid} created")
 
     # Upload sample frames (bytes are fine — mock vision keys on filename).
     files = [("files", (f"frame-{i:02d}.jpg", bytes([i % 256]) * 256, "image/jpeg"))
              for i in range(8)]
-    owner.post(f"/galleries/{gid}/images", files=files)
+    owner.post(f"/galleries/{gid}/images", files=files, data={"csrf_token": tok})
     print("✓ 8 frames uploaded")
 
     # Process → vision → offer.
     proc_t = time.time()
-    r = owner.post(f"/galleries/{gid}/process")
+    r = owner.post(f"/galleries/{gid}/process", data={"csrf_token": tok})
     run_id = str(r.url).rstrip("/").split("/")[-1]
 
     offer_url, status = None, None
@@ -72,7 +88,7 @@ def main() -> int:
     assert page.status_code == 200 and "bundle" in page.text.lower(), "offer page did not render"
 
     # Idempotency: re-process, assert the same link.
-    r2 = owner.post(f"/galleries/{gid}/process")
+    r2 = owner.post(f"/galleries/{gid}/process", data={"csrf_token": tok})
     run2 = str(r2.url).rstrip("/").split("/")[-1]
     for _ in range(60):
         d2 = owner.get(f"/api/pipeline/runs/{run2}").json()
