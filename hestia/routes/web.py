@@ -22,7 +22,16 @@ from ..pipeline import list_runs
 from ..ratelimit import enforce
 from ..resets import consume_reset, create_reset, find_reset
 from ..studio import get_profile
-from ..tenants import get_tenant, get_user_by_email, set_user_password, tenant_flags
+from ..tenants import (
+    create_tenant,
+    create_user,
+    get_tenant,
+    get_user_by_email,
+    mark_user_verified,
+    set_user_password,
+    tenant_flags,
+)
+from ..verifications import consume_verification, create_verification
 from .deps import db_conn, render, settings_of
 
 router = APIRouter()
@@ -48,12 +57,64 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
         user = authenticate_user(conn, email, password)
         if not user or not user["tenant_id"]:
             return render(request, "login.html", auth=None, error="Invalid email or password.")
+        if not user["verified"]:
+            return render(request, "login.html", auth=None,
+                          error="Please verify your email — we sent you a link when you signed up.")
         token = create_session(conn, role=user["role"], user_id=user["id"],
                                tenant_id=user["tenant_id"])
     resp = RedirectResponse("/dashboard", status_code=303)
     resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax",
                     secure=cookie_is_secure(settings), max_age=int(SESSION_TTL.total_seconds()))
     return resp
+
+
+@router.get("/signup")
+def signup_form(request: Request):
+    if not settings_of(request).signup_enabled:
+        return RedirectResponse("/login", status_code=303)
+    return render(request, "signup.html", auth=None, sent=False, error=None)
+
+
+@router.post("/signup")
+def signup_submit(request: Request, name: str = Form(...), email: str = Form(...),
+                  password: str = Form(...), shoot_type: str = Form("other")):
+    settings = settings_of(request)
+    if not settings.signup_enabled:
+        return RedirectResponse("/login", status_code=303)
+    enforce(request, "signup")
+
+    def _again(error: str):
+        return render(request, "signup.html", auth=None, sent=False, error=error)
+
+    with db_conn(request) as conn:
+        email_norm = email.strip().lower()
+        if len(password) < 8:
+            return _again("Choose a password of at least 8 characters.")
+        if get_user_by_email(conn, email_norm):
+            return _again("That email is already registered — try signing in instead.")
+        tenant = create_tenant(conn, name=name, shoot_type=shoot_type)
+        user = create_user(conn, tenant_id=tenant["id"], email=email_norm,
+                           password=password, role="owner", verified=0)
+        token = create_verification(conn, settings, user_id=user["id"])
+        link = f"{settings.public_url.rstrip('/')}/verify/{token}"
+        notify(conn, settings, to=email_norm, tenant_id=tenant["id"],
+               subject="Verify your email to activate your Hestia studio",
+               body=(f"Welcome to Hestia!\n\nConfirm your email to activate "
+                     f"{tenant['name']}:\n{link}\n\nThis link expires in 2 days. "
+                     f"If you didn't sign up, you can ignore this email."))
+    return render(request, "signup.html", auth=None, sent=True, error=None)
+
+
+@router.get("/verify/{token}")
+def verify_email(request: Request, token: str):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        user_id = consume_verification(conn, settings, token)
+        if user_id is None:
+            return render(request, "verify_failed.html", auth=None)
+        mark_user_verified(conn, user_id)
+    return render(request, "login.html", auth=None, error=None,
+                  notice="Email verified — sign in to your new studio.")
 
 
 @router.get("/forgot")
