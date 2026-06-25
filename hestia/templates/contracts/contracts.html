@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Contracts — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Contracts</h1>
+  <a class="btn" href="/contracts/new">+ New contract</a>
+</div>
+{% if contracts %}
+<div class="card">
+  <table>
+    <thead><tr><th>Contract</th><th>Client</th><th>Status</th><th>Signed</th></tr></thead>
+    <tbody>
+      {% for ct in contracts %}
+      <tr>
+        <td><a href="/contracts/{{ ct.id }}">{{ ct.title }}</a></td>
+        <td class="muted">{{ ct.client_name or ct.signer_name or ct.project_name or "—" }}</td>
+        <td><span class="pill {{ 'on' if ct.status == 'signed' else 'off' }}">{{ ct.status }}</span></td>
+        <td class="muted">{{ ct.signed_at or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card stack">
+  <p class="muted">No contracts yet — send a booking agreement, model release, or print-license
+    for a client to sign online.</p>
+  <a class="btn" href="/contracts/new">Draft your first contract</a>
+</div>
+{% endif %}
+{% endblock %}

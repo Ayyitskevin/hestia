@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ contract.title }} — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>{{ contract.title }}</h1>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="padding-top:32px">
+      <div class="card stack">
+        <h3>Agreement</h3>
+        {% if contract.body %}<pre class="contract-body">{{ contract.body }}</pre>{% else %}<p class="muted">No terms provided.</p>{% endif %}
+      </div>
+
+      {% if contract.status == 'signed' %}
+        <div class="card stack">
+          <div class="alert ok">✓ Signed by <strong>{{ contract.signature_name }}</strong> on {{ contract.signed_at }}.</div>
+          <p class="muted">Thank you — a copy of this signed agreement has been recorded.
+            You can keep this page for your records.</p>
+        </div>
+      {% else %}
+        <div class="card stack">
+          <h3>Sign this agreement</h3>
+          {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+          <form method="post" action="/sign/{{ contract.token }}">
+            <label for="signature_name">Type your full name to sign</label>
+            <input type="text" id="signature_name" name="signature_name"
+                   value="{{ contract.signer_name }}" placeholder="Your full name" required autofocus>
+            <label class="check">
+              <input type="checkbox" name="agree" value="yes" required>
+              I have read and agree to the terms of this agreement, and I intend my typed
+              name above to be my legal electronic signature.
+            </label>
+            <div class="form-actions">
+              <button class="btn" type="submit">Sign agreement</button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">Sent with 🔥 by {{ tenant.name }} on Hestia</div></footer>
+</body>
+</html>

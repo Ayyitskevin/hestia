@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}New contract — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>New contract</h1>
+  <form method="post" action="/contracts">
+    {% include "_csrf.html" %}
+    <label for="title">Title</label>
+    <input type="text" id="title" name="title" placeholder="Wedding photography agreement" required autofocus>
+
+    <label for="body">Terms</label>
+    <textarea id="body" name="body" rows="12"
+      placeholder="The agreement your client will read and sign. Include the scope, deliverables, dates, fees, and cancellation terms."></textarea>
+
+    <label for="signer_name">Signer name <span class="muted">(optional)</span></label>
+    <input type="text" id="signer_name" name="signer_name" placeholder="Sarah & James">
+
+    <label for="signer_email">Signer email <span class="muted">(optional — used to email the sign link)</span></label>
+    <input type="email" id="signer_email" name="signer_email" placeholder="sarah@example.com">
+
+    <label for="client_id">Client <span class="muted">(optional)</span></label>
+    <select id="client_id" name="client_id">
+      <option value="">— none —</option>
+      {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if preselect_client == c.id else '' }}>{{ c.name }}</option>{% endfor %}
+    </select>
+
+    <label for="project_id">Project <span class="muted">(optional)</span></label>
+    <select id="project_id" name="project_id">
+      <option value="">— none —</option>
+      {% for p in projects %}<option value="{{ p.id }}" {{ 'selected' if preselect_project == p.id else '' }}>{{ p.name }}</option>{% endfor %}
+    </select>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Create contract</button>
+      <a class="btn ghost" href="/contracts">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
