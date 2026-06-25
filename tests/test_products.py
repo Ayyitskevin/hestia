@@ -97,6 +97,45 @@ def test_http_generate_and_view(client):
     assert page.status_code == 200 and "Catalog square" in page.text
 
 
+def test_http_view_shows_rendered_thumbnails(client, conn, storage):
+    # A mock set is "planned only"; once a variant is rendered (xai), the view
+    # should surface the rendered pixels as a viewable thumbnail.
+    creds = onboard_studio(client, shoot_type="commercial", email="shop2@example.com")
+    login_owner(client, creds)
+    gid = client.post("/galleries", data={"title": "Catalog"}).url.path.rstrip("/").split("/")[-1]
+    client.post(f"/galleries/{gid}/images",
+                files=[("files", ("p0.jpg", b"x" * 32, "image/jpeg"))])
+    set_id = int(str(client.post(f"/galleries/{gid}/products").url).rstrip("/").split("/")[-1])
+
+    # Simulate an xai render landing: flip the first variant to 'rendered'.
+    import json
+    row = conn.execute("SELECT variants_json FROM product_sets WHERE id = ?", (set_id,)).fetchone()
+    variants = json.loads(row["variants_json"])
+    variants[0] = {**variants[0], "status": "rendered", "output_ref": "rendered/hero.png"}
+    conn.execute("UPDATE product_sets SET variants_json = ? WHERE id = ?",
+                 (json.dumps(variants), set_id))
+    conn.commit()
+
+    page = client.get(f"/products/{set_id}")
+    assert page.status_code == 200
+    assert "1 rendered" in page.text
+    assert storage.public_path("rendered/hero.png") in page.text  # /media/rendered/hero.png
+
+
+def test_http_view_planned_has_no_thumbnail(client):
+    # A pure mock set must not fabricate rendered thumbnails — planned only.
+    creds = onboard_studio(client, shoot_type="commercial", email="shop3@example.com")
+    login_owner(client, creds)
+    gid = client.post("/galleries", data={"title": "Plan"}).url.path.rstrip("/").split("/")[-1]
+    client.post(f"/galleries/{gid}/images",
+                files=[("files", ("p0.jpg", b"x" * 32, "image/jpeg"))])
+    set_id = int(str(client.post(f"/galleries/{gid}/products").url).rstrip("/").split("/")[-1])
+    page = client.get(f"/products/{set_id}")
+    assert page.status_code == 200
+    assert "rendered" not in page.text  # no rendered-count badge
+    assert "thumb-grid" not in page.text  # no fabricated thumbnails
+
+
 _IMG = {"storage_key": "t/1/2.jpg", "filename": "p.jpg"}
 
 
