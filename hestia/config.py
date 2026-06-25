@@ -147,6 +147,29 @@ class Settings:
             bad.append("HESTIA_SESSION_SECRET")
         return bad
 
+    @property
+    def config_warnings(self) -> list[str]:
+        """Misconfigurations worth shouting about at boot — a real backend selected
+        without the credentials it needs would otherwise fail silently per-request."""
+        warn = [f"{s} is a default — set a real value" for s in self.insecure_secrets]
+        if self.payments_backend == "stripe" and not self.stripe_secret_key:
+            warn.append("payments_backend=stripe but HESTIA_STRIPE_SECRET_KEY is unset")
+        if self.subscription_backend == "stripe" and not (
+            self.stripe_secret_key and (self.stripe_price_studio or self.stripe_price_studio_pro)
+        ):
+            warn.append("subscription_backend=stripe but the Stripe key or price IDs are unset")
+        if {self.payments_backend, self.subscription_backend} & {"stripe"} and not self.stripe_webhook_secret:
+            warn.append("a stripe backend is active but HESTIA_STRIPE_WEBHOOK_SECRET is unset (webhooks 503)")
+        if self.storage_backend == "s3" and not self.s3_bucket:
+            warn.append("storage_backend=s3 but HESTIA_S3_BUCKET is unset")
+        if self.email_backend == "smtp" and not self.smtp_host:
+            warn.append("email_backend=smtp but HESTIA_SMTP_HOST is unset")
+        xai = [b for b in ("vision", "album", "content", "product")
+               if getattr(self, f"{b}_backend") == "xai"]
+        if xai and not self.xai_api_key:
+            warn.append(f"{'/'.join(xai)} backend=xai but HESTIA_XAI_API_KEY is unset")
+        return warn
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

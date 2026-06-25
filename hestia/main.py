@@ -78,9 +78,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         init_db(settings.db_path)
         settings.media_dir.mkdir(parents=True, exist_ok=True)
-        if settings.insecure_secrets:
-            log.warning("Insecure default secrets in use: %s — set real values before deploy.",
-                        ", ".join(settings.insecure_secrets))
+        for warning in settings.config_warnings:
+            log.warning("config: %s", warning)
         if settings.vision_backend == "mock":
             log.info("Vision backend = mock (deterministic; set HESTIA_VISION_BACKEND=xai for live).")
         # Durable background worker: drains the job queue (retries + crash recovery).
