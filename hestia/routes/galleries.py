@@ -7,8 +7,10 @@ from fastapi.responses import RedirectResponse
 
 from ..albums import get_album_for_gallery
 from ..auth import context_from_session
-from ..crm import assign_gallery_to_project, get_project, list_projects
+from ..campaigns import create_campaign, end_campaign, get_active_campaign
+from ..crm import assign_gallery_to_project, get_client, get_project, list_projects
 from ..db import audit
+from ..email import notify
 from ..galleries import (
     add_image,
     create_gallery,
@@ -102,11 +104,59 @@ def gallery_detail(request: Request, gallery_id: int):
         product_set = get_set_for_gallery(conn, auth.tenant["id"], gallery_id)
         favorites = favorite_image_ids(conn, gallery_id)
         comments = comments_for_gallery(conn, auth.tenant["id"], gallery_id)
+        campaign = get_active_campaign(conn, gallery_id)
     offer_url = offer_public_url(settings_of(request), auth.tenant["slug"], offer["token"]) if offer else None
     return render(request, "gallery_detail.html", auth=auth, gallery=gallery, images=images,
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
                   storage=storage_of(request), flags=flags, project=project, album=album,
-                  product_set=product_set, favorites=favorites, comments=comments)
+                  product_set=product_set, favorites=favorites, comments=comments, campaign=campaign)
+
+
+@router.post("/{gallery_id}/campaign")
+def gallery_campaign_launch(request: Request, gallery_id: int, headline: str = Form(""),
+                            discount_pct: str = Form("10"), days: str = Form("7")):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        gallery = get_gallery(conn, auth.tenant["id"], gallery_id)
+        if not gallery:
+            return RedirectResponse("/galleries", status_code=303)
+        try:
+            pct = int(discount_pct)
+        except (ValueError, TypeError):
+            pct = 0
+        try:
+            span = int(days)
+        except (ValueError, TypeError):
+            span = 7
+        create_campaign(conn, tenant_id=auth.tenant["id"], gallery_id=gallery_id,
+                        headline=headline, discount_pct=pct, days=span)
+        # Send the sale to the client (the campaign's automated "send").
+        offer = get_offer_for_gallery(conn, auth.tenant["id"], gallery_id)
+        project = get_project(conn, auth.tenant["id"], gallery["project_id"]) if gallery.get("project_id") else None
+        client = get_client(conn, auth.tenant["id"], project["client_id"]) if project and project.get("client_id") else None
+        if offer and client and client.get("email"):
+            url = offer_public_url(settings, auth.tenant["slug"], offer["token"])
+            studio = auth.tenant.get("name", "your photographer")
+            notify(conn, settings, to=client["email"], tenant_id=auth.tenant["id"],
+                   subject=f"{studio}: {max(0, pct)}% off your prints — limited time",
+                   body=(f"Hi {client['name']},\n\n{headline or 'A limited-time sale'} — "
+                         f"{max(0, pct)}% off your prints & albums.\n\nView your collection:\n{url}\n\n"
+                         f"Don't wait — the sale ends soon!"))
+        conn.commit()
+    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
+
+
+@router.post("/{gallery_id}/campaign/end")
+def gallery_campaign_end(request: Request, gallery_id: int):
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        end_campaign(conn, auth.tenant["id"], gallery_id)
+    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
 
 @router.post("/{gallery_id}/images")

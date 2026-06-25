@@ -50,6 +50,29 @@
   <a class="offer-url" href="{{ offer_url }}" target="_blank">{{ offer_url }}</a>
   <p class="muted">Idempotent — re-process this gallery as often as you like; this link never changes.</p>
 </div>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>Sale</h3>
+  {% if campaign %}
+    <p class="muted">Running: <strong>{{ campaign.headline or 'Sale' }}</strong> ·
+      <span class="pill on">{{ campaign.discount_pct }}% off</span> · ends {{ campaign.ends_at }}.
+      The offer shows discounted prices and urgency.</p>
+    <form method="post" action="/galleries/{{ gallery.id }}/campaign/end">
+      {% include "_csrf.html" %}
+      <button class="btn secondary" type="submit">End sale</button>
+    </form>
+  {% else %}
+    <p class="muted">Launch a limited-time sale — the offer page shows the deadline and discounted
+      prices, and (if the gallery has a client on file) Hestia emails them the offer.</p>
+    <form method="post" action="/galleries/{{ gallery.id }}/campaign" style="display:grid; gap:10px; grid-template-columns:1fr auto auto auto; align-items:end">
+      {% include "_csrf.html" %}
+      <div><label>Headline</label><input type="text" name="headline" placeholder="Holiday print sale"></div>
+      <div><label>% off</label><input type="text" name="discount_pct" value="15" style="width:70px"></div>
+      <div><label>Days</label><input type="text" name="days" value="7" style="width:70px"></div>
+      <button class="btn" type="submit">Launch sale</button>
+    </form>
+  {% endif %}
+</div>
 {% endif %}
 
 {% if favorites or comments %}

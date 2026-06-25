@@ -15,6 +15,13 @@
   </header>
   <main>
     <div class="wrap">
+      {% if campaign %}
+      <div class="sale-banner">
+        <strong>{{ campaign.headline or 'Limited-time sale' }}</strong>
+        <span>{{ campaign.discount_pct }}% off — ends {{ campaign.ends_at }}</span>
+      </div>
+      {% endif %}
+
       {% if heroes %}
       <section class="hero-strip">
         {% for h in heroes %}
@@ -35,7 +42,7 @@
             <p class="muted" style="margin:0">{{ fav_pkg.blurb }} <em>{{ fav_pkg.note }}</em></p>
           </div>
           <div style="text-align:right; white-space:nowrap">
-            <span class="price">{{ fav_pkg.price }}</span>
+            {% if fav_pkg.orig_price %}<s class="muted">{{ fav_pkg.orig_price }}</s> {% endif %}<span class="price">{{ fav_pkg.price }}</span>
             <button class="btn" disabled title="Secure checkout arrives in the next release">Reserve</button>
           </div>
         </div>
@@ -50,7 +57,7 @@
           <p class="muted">{{ b.blurb }}</p>
           <p class="bundle-note">{{ b.note }}</p>
           <div class="bundle-foot">
-            <span class="price">{{ b.price }}</span>
+            <span class="price">{% if b.orig_price %}<s class="muted" style="font-size:.9rem; font-weight:400">{{ b.orig_price }}</s> {% endif %}{{ b.price }}</span>
             <button class="btn" disabled title="Secure checkout arrives in the next release">Reserve</button>
           </div>
         </article>

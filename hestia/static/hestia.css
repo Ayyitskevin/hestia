@@ -219,6 +219,9 @@ body.client { background: var(--cream); }
 .client-header h1 { font-size: 2rem; margin: 6px 0 0; }
 .hero-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 28px 0; }
 .hero-strip img { width: 100%; height: 240px; object-fit: cover; border-radius: 12px; }
+.sale-banner { background: var(--ember); color: #fff; border-radius: 10px; padding: 12px 18px;
+  margin: 20px 0; display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+.sale-banner strong { font-size: 1.05rem; }
 .fav-offer { border-color: var(--ember); box-shadow: 0 0 0 2px var(--ember); margin: 24px 0; }
 .fav-strip { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); margin: 12px 0; }
 .fav-strip img { height: 110px; }
