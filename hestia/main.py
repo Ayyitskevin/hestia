@@ -35,6 +35,7 @@ from .routes import (
     pay,
     pipeline_ui,
     products,
+    studio,
     web,
 )
 from .storage import build_storage
@@ -98,6 +99,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(products.router)
     app.include_router(invoices.router)
     app.include_router(content.router)
+    app.include_router(studio.router)
     app.include_router(pipeline_ui.router)
     app.include_router(api.router)
     app.include_router(client.router)

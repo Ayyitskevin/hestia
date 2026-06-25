@@ -208,6 +208,15 @@ CREATE TABLE IF NOT EXISTS invoices (
     paid_at      TEXT
 );
 
+CREATE TABLE IF NOT EXISTS studio_profiles (
+    tenant_id     TEXT PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+    headline      TEXT NOT NULL DEFAULT '',
+    about         TEXT NOT NULL DEFAULT '',
+    contact_email TEXT NOT NULL DEFAULT '',
+    published     INTEGER NOT NULL DEFAULT 0,
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id  TEXT,

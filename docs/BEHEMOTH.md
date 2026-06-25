@@ -16,8 +16,13 @@ bill, one database, modules composing around the studio's real workflow.
 | Invoicing + payments (mock/stripe) | **mise** invoices + **plutus** checkout | ✅ shipped |
 | Album designer (model proposes, code validates) | **mnemosyne** | ✅ shipped |
 | Marketing content (shot lists, captions, campaigns) | **dionysus** | ✅ shipped |
-| **Product photography (packshots, variants)** | **aphrodite** | ✅ shipped |
-| Public studio site / booking | **mise** site | ▢ next |
+| Product photography (packshots, variants) | **aphrodite** | ✅ shipped |
+| **Public studio site / booking** | **mise** site | ✅ shipped |
+
+**All six modules shipped.** The loop is closed: a stranger on a studio's public
+site (`/studio/{slug}`) sends an inquiry → becomes a CRM `client → project (lead)`
+→ gallery → AI vision → print/album offer + album draft + marketing content →
+invoice → paid. Public to paid, in one app.
 
 ## Why this order
 

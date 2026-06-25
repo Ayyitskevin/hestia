@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ tenant.name }} — Photography</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ shoot_type_labels.get(tenant.shoot_type, tenant.shoot_type) }} photography</div>
+      <h1>{{ tenant.name }}</h1>
+      {% if profile.headline %}<p class="lead" style="margin-top:8px">{{ profile.headline }}</p>{% endif %}
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      <div class="grid cols-2" style="margin-top:24px">
+        <div class="card stack">
+          <h3>About</h3>
+          <p class="muted">{{ profile.about or "Hand-crafted photography, delivered with care." }}</p>
+          {% if profile.contact_email %}<p class="muted">📧 {{ profile.contact_email }}</p>{% endif %}
+        </div>
+        <div class="card stack">
+          <h3>Inquire / book</h3>
+          <form method="post" action="/studio/{{ tenant.slug }}/inquire">
+            <label for="name">Your name</label>
+            <input type="text" id="name" name="name" required>
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email">
+            <label for="shoot_type">What are you after?</label>
+            <select id="shoot_type" name="shoot_type">
+              {% for st in shoot_types %}<option value="{{ st }}" {{ 'selected' if st == tenant.shoot_type else '' }}>{{ shoot_type_labels.get(st, st) }}</option>{% endfor %}
+            </select>
+            <label for="event_date">Date <span class="muted">(optional)</span></label>
+            <input type="text" id="event_date" name="event_date" placeholder="2026-09-12">
+            <label for="message">Message</label>
+            <input type="text" id="message" name="message" placeholder="Tell us about your shoot…">
+            <div class="form-actions"><button class="btn" type="submit">Send inquiry</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">{{ tenant.name }} · powered by Hestia 🔥</div></footer>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Studio site — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Studio site</h1>
+  <a class="btn secondary" href="/studio/{{ tenant.slug }}" target="_blank">View public site ↗</a>
+</div>
+
+<div class="card stack">
+  <p class="muted">Your public page lives at
+    <span class="mono">{{ settings.public_url }}/studio/{{ tenant.slug }}</span>.
+    Inquiries land in your CRM as a new client + lead.</p>
+  <form method="post" action="/settings/site">
+    <label for="headline">Headline</label>
+    <input type="text" id="headline" name="headline" value="{{ profile.headline }}"
+           placeholder="Timeless wedding photography in the PNW">
+    <label for="about">About</label>
+    <input type="text" id="about" name="about" value="{{ profile.about }}"
+           placeholder="A sentence or two about your studio.">
+    <label for="contact_email">Contact email</label>
+    <input type="email" id="contact_email" name="contact_email" value="{{ profile.contact_email }}">
+    <label style="display:flex; align-items:center; gap:8px; margin-top:16px">
+      <input type="checkbox" name="published" value="1" {{ 'checked' if profile.published else '' }}
+             style="width:auto"> Publish my site (make it publicly visible)
+    </label>
+    <div class="form-actions"><button class="btn" type="submit">Save</button></div>
+  </form>
+</div>
+{% endblock %}
