@@ -1,9 +1,9 @@
-"""Billing scaffold (Phase 1 wires live Stripe).
+"""Plan catalog + per-tenant plan status.
 
-Honest placeholder: one plan per tenant today, and the seam where a Stripe
-Customer-per-tenant subscription and offer checkout will attach. Nothing here
-charges money yet — it exists so the data model and UI have a real place to grow
-into, not to pretend billing is done.
+The plans a studio can be on (Beta / Studio / Studio Pro) and how to read a
+tenant's current plan. The subscription *engine* — activating, canceling, and the
+mock|stripe seam + webhook — lives in :mod:`hestia.subscriptions`; this module is
+just the catalog those flows price against.
 """
 
 from __future__ import annotations

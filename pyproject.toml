@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hestia"
 version = "0.1.0"
-description = "Hestia — the hearth of the photography studio. Unified SaaS shell orchestrating the Kevin Lee photography suite (Argus, Plutus, Mnemosyne, Dionysus, Mise)."
+description = "Hestia — the AI-native studio operating system for photographers. An independent multi-tenant SaaS that owns the studio revenue loop: inquiry → client → gallery → AI culling → offer → invoice → paid."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Proprietary" }

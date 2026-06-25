@@ -1,13 +1,22 @@
-# Hestia — the behemoth blueprint
+# Hestia — module map
 
-One multi-tenant SaaS that absorbs the **best of all six** photography projects as
-in-process modules. Not six services behind a shell — one app, one identity, one
-bill, one database, modules composing around the studio's real workflow.
+> The canonical product definition lives in
+> [`HESTIA-DOCTRINE.md`](HESTIA-DOCTRINE.md); this file is just the module → workflow
+> map. Hestia is **one product** with modules on a shared
+> tenant → client → project → gallery spine — **not** six services absorbed into a
+> shell. The prior repos are **design DNA**: their lessons are distilled into Hestia
+> modules, never ported or wrapped.
 
-## The six → modules
+Hestia's modules compose around the studio's real revenue workflow — one app, one
+identity, one bill, one database.
 
-| Module | Best-of (source) | Status |
-|--------|------------------|--------|
+## Modules and their design lineage
+
+The "lineage" column names the prior repo a module's *lessons* came from — design
+reference, not a dependency.
+
+| Module | Design lineage | Status |
+|--------|----------------|--------|
 | Studios · auth · API keys | (control plane) | ✅ shipped |
 | Galleries · object storage | **mise** delivery | ✅ shipped |
 | Vision (cull · keyword · hero) | **argus** | ✅ shipped (`mock`/`xai`) |
@@ -57,4 +66,4 @@ tenant (studio)
 ```
 
 Everything added later (invoice, album, campaign, packshot) attaches to a
-**project** or **client** — so the behemoth grows without re-plumbing identity.
+**project** or **client** — so the studio OS grows without re-plumbing identity.

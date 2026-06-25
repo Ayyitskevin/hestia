@@ -1,44 +1,27 @@
 # Hestia
 
-**The AI-native studio OS for photographers — run your whole studio from one place.**
-
-A public studio site, clients and projects, gallery delivery, AI culling and
-keywording, album drafts, print sales, marketing copy, product-photo variants,
-and invoicing — one multi-tenant app, one login, one bill.
-
-> **For AI agents:** read [`AGENTS.md`](AGENTS.md) first, then
-> [`docs/BEHEMOTH.md`](docs/BEHEMOTH.md) (the module roadmap) and
-> [`docs/PHASE-0.md`](docs/PHASE-0.md). The product is a single multi-tenant app —
-> modules, not microservices. Why we consolidated instead of orchestrating six
-> separate services is documented, with evidence, in
-> [`docs/SUITE-RESEARCH.md`](docs/SUITE-RESEARCH.md).
+**The AI-native studio OS for photographers.** Book, deliver, sell, invoice, and
+retain — from one warm, intelligent studio command center.
 
 ---
 
-## What this is
+## The pitch
 
-Hestia distills the best of a six-project photography suite (a studio OS, a vision
-API, a print/album sales layer, an album designer, and two adjacent bets) into
-**one coherent product**. Instead of six services each reimplementing identity,
-billing, and storage and talking over HTTP, Hestia is a single FastAPI + HTMX +
-SQLite app with every capability as an in-process module.
+Photographers run their business across a booking tool, a gallery host, a separate
+invoicing app, a spreadsheet CRM, and hours of manual culling. Hestia replaces that
+stack with **one multi-tenant SaaS** that owns the whole studio revenue loop — public
+inquiry to paid client — and embeds AI exactly where it saves time or makes money.
+One login, one database, one bill. Not an AI photo toy; the **client-to-cash
+operating system** for a studio.
 
-The studio's real workflow, end to end — public visitor to paid:
-
-```text
-public site → inquiry → client → project (lead)
-   → gallery → AI vision (cull · keyword · heroes)
-   → print & album offer + album draft + marketing pack + product variants
-   → invoice → paid
-```
-
----
+> Canonical product definition: **[`docs/HESTIA-DOCTRINE.md`](docs/HESTIA-DOCTRINE.md)**.
+> Building on Hestia (human or agent)? Read **[`AGENTS.md`](AGENTS.md)** first.
 
 ## The magic moment
 
-A photographer uploads a gallery and within seconds has a **client-ready offer
-URL** — print and album bundles curated from the gallery's own vision signal,
-behind one shareable link that never duplicates on re-run.
+A photographer uploads a gallery and within seconds has a **client-ready offer URL** —
+print and album bundles curated from the gallery's own AI vision signal, behind one
+shareable link that **never duplicates on re-run**.
 
 ```text
 $ bash scripts/dogfood-hestia.sh
@@ -48,29 +31,54 @@ $ bash scripts/dogfood-hestia.sh
    idempotent: re-process produced the same link ✓
 ```
 
----
+## Who it's for
 
-## Modules (one app, not microservices)
+A working **solo or small-studio photographer** — weddings, portraits, events,
+commercial/product — who wants to stop stitching tools together and run the studio
+from one place. The buyer and the daily user are the same person, so it's personal
+and warm, not enterprise. Roles and oversight scale it to a **small team/agency**.
 
-| Module | What it does | Best-of |
-|--------|--------------|---------|
-| `tenants.py` · `auth.py` | multi-tenant studios, users, API keys | (control plane) |
-| `studio.py` | public studio site + inquiry → CRM lead | Mise site |
-| `crm.py` | clients + projects — the studio backbone | Mise back-office |
-| `galleries.py` · `storage.py` | native gallery + image hosting (`local`/`s3` seam) | Mise delivery |
-| `vision.py` | cull / keyword / hero scoring (`mock`/`xai`) | Argus |
-| `sales.py` | print/album bundles + **idempotent** client offers | Plutus |
-| `albums.py` | drafted album spreads — model proposes, **code validates** | Mnemosyne |
-| `content.py` | shot lists, captions, campaign copy (`mock`/`xai`) | Dionysus |
-| `products.py` | marketplace-spec packshot variants (`mock`/`xai`) | Aphrodite |
-| `invoices.py` · `payments.py` | invoicing + checkout (`mock`/`stripe`) | Mise + Plutus |
-| `pipeline.py` | gallery → vision → offer (persisted, live stepper) | the dogfood loop |
+## Core workflow
 
-**All six behemoth modules shipped** ([`docs/BEHEMOTH.md`](docs/BEHEMOTH.md)):
-✅ CRM · ✅ Invoicing & payments · ✅ Album designer · ✅ Marketing content ·
-✅ Product photography · ✅ Public studio site.
+Every feature hangs off one spine — public to paid to repeat:
 
----
+```text
+visitor → inquiry → client → project → gallery
+  → AI culling / metadata → offer → album draft → marketing pack
+  → invoice → payment → retention / upsell
+```
+
+## Modules
+
+One product, several modules sharing one tenant/client/project/gallery spine — **not**
+six services in a trench coat.
+
+| Module | Owns |
+|--------|------|
+| `studio` | public studio site + inquiry → CRM lead |
+| `crm` | clients + projects — the studio backbone |
+| `galleries` · `storage` | native gallery + image hosting (`local`/`s3` seam) |
+| `vision` | cull / keyword / hero scoring (`mock`/`xai`) |
+| `sales` | print/album/product **idempotent** offer engine |
+| `albums` | drafted album spreads — model proposes, **code validates** |
+| `content` | shot lists, captions, campaign copy (`mock`/`xai`) |
+| `products` | marketplace-spec packshot variants (`mock`/`xai`) |
+| `invoices` · `payments` | invoicing + checkout (`mock`/`stripe`) |
+| `subscriptions` · `billing` | studio plans + billing (`mock`/`stripe`) |
+| `pipeline` · `jobs` | gallery automation on a durable job queue |
+
+## Why Hestia wins
+
+- **It owns the workflow, not just a tool.** Whoever owns book→deliver→sell→retain
+  owns the customer; point tools get swapped out.
+- **AI where it compounds.** Culling, hero picks, offer curation, album drafts, and
+  marketing copy at the exact revenue/admin friction points — model proposes, code
+  validates.
+- **Idempotent money paths.** One offer link per gallery, reused forever; no
+  duplicate client links, no double-settled invoices.
+- **SaaS-native from the foundation.** Every row is tenant-scoped; every studio has
+  users, roles, plan/billing, a public profile, and a storage namespace.
+- **Warm, photographer-native UX** — a studio hearth, not generic purple SaaS.
 
 ## Quickstart
 
@@ -82,44 +90,34 @@ bash scripts/start-hestia.sh    # → http://127.0.0.1:8500
 ```
 
 - `/` landing · `/admin` (master `HESTIA_API_TOKEN`) onboards a studio
-- `/login` → dashboard → clients · projects · galleries · invoices · site
-- `/studio/{slug}` the studio's public page · `/healthz` liveness + self checks
+- `/login` → dashboard → clients · projects · galleries · invoices · site · billing
+- `/studio/{slug}` the studio's public page · `/healthz` liveness · `/readyz` readiness
 
-Everything runs with **no external keys** by default — vision, album, content, and
-product backends are `mock` (deterministic), and payments are `mock` (simulated
-checkout). Flip any seam to live independently: `HESTIA_VISION_BACKEND`,
-`HESTIA_ALBUM_BACKEND`, `HESTIA_CONTENT_BACKEND`, `HESTIA_PRODUCT_BACKEND` → `xai`
-(+ `HESTIA_XAI_API_KEY`), and `HESTIA_PAYMENTS_BACKEND=stripe`
-(+ `HESTIA_STRIPE_SECRET_KEY`).
+## Mock-first provider seams
 
----
+Everything runs with **no external keys** by default. Each integration is a seam that
+flips to a real provider independently — add a backend, don't fork the caller:
 
-## Why one app and not an orchestrator?
+| Seam | Env | Default | Real |
+|------|-----|---------|------|
+| Vision / Album / Content / Product | `HESTIA_*_BACKEND` | `mock` | `xai` (+ `HESTIA_XAI_API_KEY`) |
+| Storage | `HESTIA_STORAGE_BACKEND` | `local` | `s3` (S3/R2/MinIO) |
+| Payments | `HESTIA_PAYMENTS_BACKEND` | `mock` | `stripe` |
+| Subscriptions | `HESTIA_SUBSCRIPTION_BACKEND` | `mock` | `stripe` |
+| Email | `HESTIA_EMAIL_BACKEND` | `mock` (outbox) | `smtp` |
 
-This repo began as a shell to orchestrate six existing services over HTTP. Reading
-the actual code of all six changed the plan: they are mature and deployed, but they
-reimplement identity, billing, and storage six times over, and the gallery→offer
-loop already worked *without* a shell. The duplication — not the orchestration — was
-the real problem. So Hestia **consolidates** the essence into one product and keeps
-the differentiated engines (vision, sales, albums) as modules. Full evidence,
-including the real (and corrected) service contracts, is in
-[`docs/SUITE-RESEARCH.md`](docs/SUITE-RESEARCH.md). One example: the real Plutus
-mints a *new* client link on every call (no idempotency) — Hestia fixes that by
-design (one offer/token per gallery, reused on every re-run).
+A real backend that errors **degrades to the safe path** — it never 500s a request.
+Boot logs warn loudly if a real backend is selected without its keys.
 
----
+## SaaS architecture
 
-## Shoot-type presets
-
-Same product for every studio; shoot type tunes offer/album defaults
-([`hestia/features.py`](hestia/features.py)).
-
-| `shoot_type` | Album bundle | Hero picks |
-|--------------|--------------|-----------|
-| wedding · event · portrait | yes | 8 / 6 / 5 |
-| commercial · food · other | no | 5 |
-
----
+A **modular monolith**: FastAPI + Jinja2 + HTMX + SQLite (WAL). One tenant model, one
+auth/session/API-key system, one billing model, one audit trail, one storage
+abstraction, many modules. A durable SQLite-backed **job queue** (retries, crash
+reclaim) runs the pipeline off the request thread. Schema is forward-only numbered
+migrations applied via a ledger. Structured JSON logging with per-request ids.
+Operator surfaces: `/readyz`, `/admin/system` (queue depth, seam modes, migrations).
+Details: [`docs/architecture.md`](docs/architecture.md).
 
 ## Tests, CI, dogfood
 
@@ -129,20 +127,26 @@ bash scripts/dogfood-hestia.sh  # boot the app, drive the magic moment, assert a
 ```
 
 CI runs both on every push ([`.github/workflows/test.yml`](.github/workflows/test.yml)).
+Tested invariants include tenant isolation, offer idempotency, and safe mock-provider
+operation with no keys.
 
----
+## Roadmap
+
+- **Now:** the full loop works end to end (inquiry → paid), mock-first, single-region.
+- **Next:** plan enforcement (quotas/feature gates), conversion analytics, richer
+  client portal, team roles, AI cost ledger, white-label client portal.
+- **Later:** live provider hardening + metering, deeper retention/upsell automation.
 
 ## Status
 
 | Item | State |
 |------|-------|
-| Shipped | public site · CRM · galleries · vision · offers · albums · marketing · product variants · invoicing |
-| AI seams (vision · album · content · product) | `mock` (default) or xAI Grok |
-| Payments | `mock` (default) or Stripe |
+| Core loop | public site · CRM · galleries · vision · offers · albums · marketing · products · invoicing · subscriptions |
+| AI seams | `mock` (default) or xAI Grok |
+| Payments / Subscriptions | `mock` (default) or Stripe (+ webhook) |
 | Storage | local filesystem (`local`/`s3` seam) |
-| Signup | invite-only (`HESTIA_SIGNUP_ENABLED=false`) |
-
----
+| Platform | durable job queue · migrations · structured logging · readiness/ops surfaces |
+| Signup | gated (`HESTIA_SIGNUP_ENABLED=false`) — admin onboarding by default |
 
 ## License
 
