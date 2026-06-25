@@ -69,7 +69,7 @@ def get_invoice_by_token(conn: sqlite3.Connection, token: str) -> dict | None:
 
 def list_invoices(
     conn: sqlite3.Connection, tenant_id: str, *,
-    project_id: int | None = None, standalone_only: bool = False
+    project_id: int | None = None, client_id: int | None = None, standalone_only: bool = False
 ) -> list[dict]:
     sql = (
         "SELECT i.*, c.name AS client_name, p.name AS project_name "
@@ -80,6 +80,9 @@ def list_invoices(
     if project_id is not None:
         sql += " AND i.project_id = ?"
         params.append(project_id)
+    if client_id is not None:
+        sql += " AND i.client_id = ?"
+        params.append(client_id)
     if standalone_only:
         # Plan installments surface under their payment plan, not the flat list.
         sql += " AND i.plan_id IS NULL"

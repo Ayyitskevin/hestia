@@ -13,6 +13,27 @@
 
 {% if client.notes %}<div class="card" style="margin-bottom:18px"><p class="muted">{{ client.notes }}</p></div>{% endif %}
 
+<div class="card stack" style="margin-bottom:18px">
+  <h3>Client portal</h3>
+  {% if portal_link %}
+    <p class="muted">One branded link where {{ client.name }} sees their projects, contracts,
+      payment schedule, and galleries.</p>
+    <a class="offer-url" href="{{ portal_link }}" target="_blank">{{ portal_link }}</a>
+    <form method="post" action="/clients/{{ client.id }}/portal/regenerate" style="margin-top:6px"
+          onsubmit="return confirm('Regenerate the portal link? The current link will stop working.')">
+      {% include "_csrf.html" %}
+      <button class="btn ghost" type="submit">Regenerate link</button>
+    </form>
+  {% else %}
+    <p class="muted">Give {{ client.name }} a single private link to everything — contracts to sign,
+      payments to make, galleries to view.</p>
+    <form method="post" action="/clients/{{ client.id }}/portal">
+      {% include "_csrf.html" %}
+      <button class="btn" type="submit">Enable client portal</button>
+    </form>
+  {% endif %}
+</div>
+
 <div class="card stack">
   <h3>Projects</h3>
   {% if projects %}
