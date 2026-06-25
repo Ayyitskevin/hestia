@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from .automations import emit_event
 from .crypto import new_session_token
 from .db import audit
 
@@ -147,7 +148,8 @@ def submit_questionnaire(conn: sqlite3.Connection, *, token: str, answers: dict)
     if cur.rowcount == 0:
         return False
     q = conn.execute(
-        "SELECT id, tenant_id, title FROM questionnaires WHERE token = ?", (token,)
+        "SELECT id, tenant_id, title, client_id, project_id FROM questionnaires WHERE token = ?",
+        (token,),
     ).fetchone()
     for item in _items(conn, q["tenant_id"], q["id"]):
         ans = (answers.get(str(item["id"])) or "").strip()
@@ -158,4 +160,7 @@ def submit_questionnaire(conn: sqlite3.Connection, *, token: str, answers: dict)
         )
     audit(conn, actor="client", action="questionnaire.completed", tenant_id=q["tenant_id"],
           detail=q["title"])
+    emit_event(conn, tenant_id=q["tenant_id"], event="questionnaire.completed",
+               context={"client_id": q["client_id"], "project_id": q["project_id"],
+                        "title": q["title"]})
     return True

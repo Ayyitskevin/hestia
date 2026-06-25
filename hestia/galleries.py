@@ -12,6 +12,7 @@ import re
 import sqlite3
 from typing import BinaryIO
 
+from .automations import emit_event
 from .storage import Storage, image_key
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -79,6 +80,13 @@ def publish_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -
         "WHERE id = ? AND tenant_id = ?",
         (gallery_id, tenant_id),
     )
+    g = conn.execute(
+        "SELECT title, project_id FROM galleries WHERE id = ? AND tenant_id = ?",
+        (gallery_id, tenant_id),
+    ).fetchone()
+    if g:
+        emit_event(conn, tenant_id=tenant_id, event="gallery.published",
+                   context={"project_id": g["project_id"], "title": g["title"]})
 
 
 # ── Images ──────────────────────────────────────────────────────────────────

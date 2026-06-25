@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from .automations import emit_event
 from .features import normalize_shoot_type
 
 PROJECT_STATUSES = ("lead", "booked", "shooting", "delivered", "archived")
@@ -119,6 +120,9 @@ def set_project_status(conn: sqlite3.Connection, tenant_id: str, project_id: int
         "UPDATE projects SET status = ? WHERE id = ? AND tenant_id = ?",
         (status, project_id, tenant_id),
     )
+    if status == "booked":
+        emit_event(conn, tenant_id=tenant_id, event="project.booked",
+                   context={"project_id": project_id})
 
 
 # ── Gallery ↔ project linkage ───────────────────────────────────────────────
