@@ -10,6 +10,7 @@ from ..auth import context_from_session
 from ..campaigns import create_campaign, end_campaign, get_active_campaign
 from ..crm import assign_gallery_to_project, get_client, get_project, list_projects
 from ..db import audit
+from ..delivery import delivery_url, enable_delivery, regenerate_delivery_token
 from ..email import notify
 from ..fulfillment import list_fulfillments
 from ..galleries import (
@@ -112,12 +113,40 @@ def gallery_detail(request: Request, gallery_id: int):
         fulfillments = list_fulfillments(conn, auth.tenant["id"],
                                          order_ids=[o["id"] for o in orders])
         cull = cull_summary(conn, auth.tenant["id"], gallery_id)
-    offer_url = offer_public_url(settings_of(request), auth.tenant["slug"], offer["token"]) if offer else None
+    settings = settings_of(request)
+    offer_url = offer_public_url(settings, auth.tenant["slug"], offer["token"]) if offer else None
+    delivery_link = delivery_url(settings, gallery["delivery_token"]) if gallery.get("delivery_token") else None
     return render(request, "gallery_detail.html", auth=auth, gallery=gallery, images=images,
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
                   storage=storage_of(request), flags=flags, project=project, album=album,
                   product_set=product_set, favorites=favorites, comments=comments, campaign=campaign,
-                  orders=orders, fulfillments=fulfillments, cull=cull)
+                  orders=orders, fulfillments=fulfillments, cull=cull, delivery_link=delivery_link)
+
+
+@router.post("/{gallery_id}/delivery")
+def gallery_delivery_enable(request: Request, gallery_id: int):
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        token = enable_delivery(conn, auth.tenant["id"], gallery_id)
+        if token:
+            audit(conn, actor="owner", action="gallery.delivery_enabled",
+                  tenant_id=auth.tenant["id"], detail=f"gallery #{gallery_id}")
+    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
+
+
+@router.post("/{gallery_id}/delivery/regenerate")
+def gallery_delivery_regenerate(request: Request, gallery_id: int):
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        token = regenerate_delivery_token(conn, auth.tenant["id"], gallery_id)
+        if token:
+            audit(conn, actor="owner", action="gallery.delivery_rotated",
+                  tenant_id=auth.tenant["id"], detail=f"gallery #{gallery_id}")
+    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
 
 @router.post("/{gallery_id}/campaign")

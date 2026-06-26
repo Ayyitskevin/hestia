@@ -75,6 +75,27 @@
 </div>
 {% endif %}
 
+<div class="card stack" style="margin-top:18px">
+  <h3>Digital delivery</h3>
+  {% if delivery_link %}
+    <p class="muted">Your client's private download link — every high-res original,
+      individually or as one zip. Share it however you like.</p>
+    <a class="offer-url" href="{{ delivery_link }}" target="_blank">{{ delivery_link }}</a>
+    <form method="post" action="/galleries/{{ gallery.id }}/delivery/regenerate" style="margin-top:6px"
+          onsubmit="return confirm('Regenerate the download link? The current link will stop working.')">
+      {% include "_csrf.html" %}
+      <button class="btn ghost" type="submit">Regenerate link</button>
+    </form>
+  {% else %}
+    <p class="muted">Hand off the finished files: enable a private, unguessable download
+      link the client uses to grab the high-res originals — no account needed.</p>
+    <form method="post" action="/galleries/{{ gallery.id }}/delivery">
+      {% include "_csrf.html" %}
+      <button class="btn" type="submit">Enable digital delivery</button>
+    </form>
+  {% endif %}
+</div>
+
 {% if orders %}
 <div class="card stack" style="margin-top:18px">
   <h3>Orders · {{ orders|length }}</h3>

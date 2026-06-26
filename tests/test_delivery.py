@@ -1,0 +1,116 @@
+"""Digital delivery — per-gallery download link for the high-res originals."""
+
+import io
+import zipfile
+
+from conftest import login_owner, onboard_studio
+
+from hestia.delivery import (
+    enable_delivery,
+    get_gallery_by_delivery_token,
+    regenerate_delivery_token,
+    zip_gallery,
+)
+from hestia.galleries import add_image, create_gallery, list_images
+from hestia.tenants import create_tenant
+
+
+def _gallery(conn, *, title="Wedding Finals"):
+    t = create_tenant(conn, name="Deliver Studio", shoot_type="wedding")
+    g = create_gallery(conn, tenant_id=t["id"], title=title)
+    conn.commit()
+    return t, g
+
+
+def _img(conn, storage, t, g, name, data):
+    add_image(conn, storage, tenant_id=t["id"], gallery_id=g["id"],
+              filename=name, fileobj=io.BytesIO(data))
+
+
+# --- module logic -----------------------------------------------------------
+
+def test_enable_idempotent_and_regenerate(conn):
+    t, g = _gallery(conn)
+    tok = enable_delivery(conn, t["id"], g["id"])
+    assert tok and enable_delivery(conn, t["id"], g["id"]) == tok        # idempotent
+    assert get_gallery_by_delivery_token(conn, tok)["id"] == g["id"]
+    tok2 = regenerate_delivery_token(conn, t["id"], g["id"])
+    assert tok2 and tok2 != tok
+    assert get_gallery_by_delivery_token(conn, tok) is None              # old link revoked
+    assert get_gallery_by_delivery_token(conn, tok2)["id"] == g["id"]
+    assert enable_delivery(conn, t["id"], 999999) is None               # missing gallery
+    assert get_gallery_by_delivery_token(conn, "") is None
+
+
+def test_zip_gallery_bundles_originals(conn, storage):
+    t, g = _gallery(conn)
+    _img(conn, storage, t, g, "a.jpg", b"AAA-original")
+    _img(conn, storage, t, g, "b.jpg", b"BBB-original")
+    conn.commit()
+    data = zip_gallery(storage, list_images(conn, g["id"]))
+    zf = zipfile.ZipFile(io.BytesIO(data))
+    assert set(zf.namelist()) == {"a.jpg", "b.jpg"}
+    assert zf.read("a.jpg") == b"AAA-original" and zf.read("b.jpg") == b"BBB-original"
+
+
+def test_zip_disambiguates_duplicate_filenames(conn, storage):
+    t, g = _gallery(conn)
+    _img(conn, storage, t, g, "dup.jpg", b"FIRST")
+    _img(conn, storage, t, g, "dup.jpg", b"SECOND")
+    conn.commit()
+    zf = zipfile.ZipFile(io.BytesIO(zip_gallery(storage, list_images(conn, g["id"]))))
+    assert len(zf.namelist()) == 2 and len(set(zf.namelist())) == 2  # nothing clobbered
+
+
+# --- public download flow ---------------------------------------------------
+
+def test_public_download_individual_and_zip(client, conn, storage):
+    t, g = _gallery(conn)
+    _img(conn, storage, t, g, "a.jpg", b"AAA-original")
+    _img(conn, storage, t, g, "b.jpg", b"BBB-original")
+    token = enable_delivery(conn, t["id"], g["id"])
+    conn.commit()
+    imgs = list_images(conn, g["id"])
+
+    page = client.get(f"/d/{token}")
+    assert page.status_code == 200
+    assert "Wedding Finals" in page.text and "Download all" in page.text
+    assert "a.jpg" in page.text and "b.jpg" in page.text
+
+    one = client.get(f"/d/{token}/{imgs[0]['id']}")
+    assert one.status_code == 200
+    assert one.headers["content-disposition"] == 'attachment; filename="a.jpg"'
+    assert one.content == b"AAA-original"   # the real original bytes, as a download
+
+    z = client.get(f"/d/{token}/all.zip")
+    assert z.status_code == 200 and z.headers["content-type"] == "application/zip"
+    zf = zipfile.ZipFile(io.BytesIO(z.content))
+    assert set(zf.namelist()) == {"a.jpg", "b.jpg"}
+
+
+def test_token_cannot_reach_another_gallery(client, conn, storage):
+    t, g1 = _gallery(conn, title="G1")
+    g2 = create_gallery(conn, tenant_id=t["id"], title="G2")
+    conn.commit()
+    _img(conn, storage, t, g2, "secret.jpg", b"SECRET")
+    token1 = enable_delivery(conn, t["id"], g1["id"])
+    conn.commit()
+    secret = list_images(conn, g2["id"])[0]
+    # g1's delivery token must not serve g2's image
+    assert client.get(f"/d/{token1}/{secret['id']}").status_code == 404
+
+
+def test_bad_token_is_404(client):
+    assert client.get("/d/nope").status_code == 404
+    assert client.get("/d/nope/all.zip").status_code == 404
+    assert client.get("/d/nope/1").status_code == 404
+
+
+def test_owner_enables_and_sees_link(client):
+    creds = onboard_studio(client, email="deliver@example.com")
+    login_owner(client, creds)
+    created = client.post("/galleries", data={"title": "Finals"})
+    gid = created.url.path.rstrip("/").split("/")[-1]
+    client.post(f"/galleries/{gid}/delivery")
+    page = client.get(f"/galleries/{gid}")
+    assert "Digital delivery" in page.text and "/d/" in page.text

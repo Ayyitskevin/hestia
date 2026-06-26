@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download — {{ gallery.title }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">Your gallery is ready</div>
+      <h1>{{ gallery.title }}</h1>
+      <p class="lead" style="margin-top:8px">{{ images|length }} high-resolution
+        image{{ '' if images|length == 1 else 's' }}{% if total_bytes %} · {{ total_bytes | filesizeformat }}{% endif %}</p>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="margin-top:24px">
+      {% if images %}
+      <div class="card stack" style="text-align:center">
+        <h3>Download everything</h3>
+        <p class="muted">One zip with every original file. Or grab individual frames below.</p>
+        <div><a class="btn" href="/d/{{ token }}/all.zip">⬇ Download all (.zip)</a></div>
+      </div>
+
+      <div class="card stack" style="margin-top:18px">
+        <h3>Files</h3>
+        <table>
+          <tbody>
+            {% for img in images %}
+            <tr>
+              <td class="mono">{{ img.filename }}</td>
+              <td class="muted">{% if img.width and img.height %}{{ img.width }}×{{ img.height }}{% endif %}</td>
+              <td class="muted">{{ img.bytes | filesizeformat if img.bytes else '' }}</td>
+              <td style="text-align:right"><a class="btn secondary" href="/d/{{ token }}/{{ img.id }}">Download</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card stack" style="text-align:center">
+        <p class="muted">This gallery has no files yet — check back soon.</p>
+      </div>
+      {% endif %}
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">Delivered with Hestia 🔥</div></footer>
+</body>
+</html>
