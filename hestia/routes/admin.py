@@ -22,8 +22,8 @@ from ..auth import (
     destroy_session,
 )
 from ..billing import PLANS, plan_status
-from ..db import applied_migrations
-from ..jobs import queue_stats
+from ..db import applied_migrations, audit
+from ..jobs import failed_jobs, queue_stats, requeue_job, stale_jobs
 from ..ratelimit import enforce
 from ..tenants import (
     create_tenant,
@@ -42,6 +42,14 @@ router = APIRouter(prefix="/admin")
 def _is_admin(request: Request, conn) -> bool:
     auth = context_from_session(conn, request)
     return bool(auth and auth.is_admin)
+
+
+def _admin_ctx(request: Request, conn):
+    """The admin's AuthContext, or None. Passed to ``render`` so the operator nav
+    (Studios / System / Sign out) actually appears — admin pages used to render with
+    ``auth=None``, leaving the surface reachable only by typing URLs."""
+    auth = context_from_session(conn, request)
+    return auth if (auth and auth.is_admin) else None
 
 
 def _redirect_login() -> RedirectResponse:
@@ -83,22 +91,26 @@ def admin_logout(request: Request):
 @router.get("/tenants")
 def tenants_list(request: Request):
     with db_conn(request) as conn:
-        if not _is_admin(request, conn):
+        auth = _admin_ctx(request, conn)
+        if not auth:
             return _redirect_login()
         tenants = list_tenants(conn)
-    return render(request, "admin/tenants.html", auth=None, tenants=tenants)
+    return render(request, "admin/tenants.html", auth=auth, tenants=tenants)
 
 
 @router.get("/system")
 def system(request: Request):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        if not _is_admin(request, conn):
+        auth = _admin_ctx(request, conn)
+        if not auth:
             return _redirect_login()
         info = {
             "version": __version__,
             "tenants": len(list_tenants(conn)),
             "queue": queue_stats(conn),
+            "failed": failed_jobs(conn),
+            "stale": stale_jobs(conn),
             "migrations": applied_migrations(conn),
             "seams": {
                 "vision": settings.vision_backend,
@@ -109,20 +121,33 @@ def system(request: Request):
                 "payments": settings.payments_backend,
                 "subscription": settings.subscription_backend,
                 "email": settings.email_backend,
+                "fulfillment": settings.fulfillment_backend,
             },
             "log_format": settings.log_format,
             "signup_enabled": settings.signup_enabled,
-            "insecure_secrets": settings.insecure_secrets,
+            "warnings": settings.config_warnings,
         }
-    return render(request, "admin/system.html", auth=None, info=info)
+    return render(request, "admin/system.html", auth=auth, info=info)
+
+
+@router.post("/system/jobs/{job_id}/requeue")
+def requeue(request: Request, job_id: int):
+    with db_conn(request) as conn:
+        if not _is_admin(request, conn):
+            return _redirect_login()
+        moved = requeue_job(conn, job_id)
+        if moved:
+            audit(conn, actor="admin", action="job.requeued", detail=str(job_id))
+    return RedirectResponse("/admin/system", status_code=303)
 
 
 @router.get("/onboarding")
 def onboarding_form(request: Request):
     with db_conn(request) as conn:
-        if not _is_admin(request, conn):
+        auth = _admin_ctx(request, conn)
+        if not auth:
             return _redirect_login()
-    return render(request, "admin/onboarding.html", auth=None)
+    return render(request, "admin/onboarding.html", auth=auth)
 
 
 @router.post("/onboarding")
@@ -175,6 +200,7 @@ def mint_api_key(request: Request, tenant_id: str):
 def _render_tenant_detail(request: Request, tenant_id: str, *,
                           new_api_key: str | None = None, created: bool = False):
     with db_conn(request) as conn:
+        auth = _admin_ctx(request, conn)
         tenant = get_tenant(conn, tenant_id)
         if not tenant:
             return RedirectResponse("/admin/tenants", status_code=303)
@@ -184,6 +210,6 @@ def _render_tenant_detail(request: Request, tenant_id: str, *,
             "SELECT prefix, created_at FROM tenant_api_keys WHERE tenant_id = ? ORDER BY id DESC",
             (tenant_id,),
         ).fetchall()
-    return render(request, "admin/tenant_detail.html", auth=None, tenant=tenant, flags=flags,
+    return render(request, "admin/tenant_detail.html", auth=auth, tenant=tenant, flags=flags,
                   plan=plan, plans=PLANS, new_api_key=new_api_key, created=created,
                   api_keys=[dict(r) for r in api_keys])
