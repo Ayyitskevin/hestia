@@ -16,6 +16,16 @@
 </div>
 
 <div class="card stack">
+  <h3>Export for your accountant</h3>
+  <p class="muted">Download your numbers as CSV — income (paid invoices + orders) and expenses,
+    ready for the books or tax time.</p>
+  <div style="display:flex; gap:10px; flex-wrap:wrap">
+    <a class="btn secondary" href="/finances/export/income.csv">⬇ Income (.csv)</a>
+    <a class="btn secondary" href="/finances/export/expenses.csv">⬇ Expenses (.csv)</a>
+  </div>
+</div>
+
+<div class="card stack" style="margin-top:18px">
   <h3>Add an expense</h3>
   <form method="post" action="/finances/expenses" class="inline-grid-form">
     {% include "_csrf.html" %}

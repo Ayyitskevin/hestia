@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import csv
+import io
+
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from ..auth import context_from_session
 from ..crm import list_projects
@@ -11,6 +14,7 @@ from ..finances import (
     EXPENSE_CATEGORIES,
     create_expense,
     delete_expense,
+    income_rows,
     list_expenses,
     profit_summary,
     project_pnl,
@@ -18,6 +22,19 @@ from ..finances import (
 from .deps import db_conn, render
 
 router = APIRouter()
+
+
+def _csv_response(filename: str, header: list[str], rows: list[list]) -> Response:
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(header)
+    writer.writerows(rows)
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+def _dollars(cents: int) -> str:
+    return f"{cents / 100:.2f}"
 
 
 def _user(request: Request, conn):
@@ -69,3 +86,27 @@ def remove_expense(request: Request, expense_id: int):
             return RedirectResponse("/login", status_code=303)
         delete_expense(conn, auth.tenant["id"], expense_id)
     return RedirectResponse("/finances", status_code=303)
+
+
+@router.get("/finances/export/expenses.csv")
+def export_expenses(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        expenses = list_expenses(conn, auth.tenant["id"], limit=100000)
+    rows = [[e["incurred_on"] or e["created_at"], e["category"], e["description"],
+             e.get("project_name") or "", _dollars(e["amount_cents"])] for e in expenses]
+    return _csv_response("expenses.csv", ["date", "category", "description", "project", "amount"], rows)
+
+
+@router.get("/finances/export/income.csv")
+def export_income(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        income = income_rows(conn, auth.tenant["id"])
+    rows = [[r["date"], r["type"], r["description"], r["client"], _dollars(r["amount_cents"])]
+            for r in income]
+    return _csv_response("income.csv", ["date", "type", "description", "client", "amount"], rows)
