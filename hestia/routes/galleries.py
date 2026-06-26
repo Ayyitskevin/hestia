@@ -125,14 +125,30 @@ def gallery_detail(request: Request, gallery_id: int):
 
 @router.post("/{gallery_id}/delivery")
 def gallery_delivery_enable(request: Request, gallery_id: int):
+    settings = settings_of(request)
     with db_conn(request) as conn:
         auth = _require_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
+        gallery = get_gallery(conn, auth.tenant["id"], gallery_id)
+        if not gallery:
+            return RedirectResponse("/galleries", status_code=303)
+        was_new = not gallery.get("delivery_token")
         token = enable_delivery(conn, auth.tenant["id"], gallery_id)
         if token:
             audit(conn, actor="owner", action="gallery.delivery_enabled",
                   tenant_id=auth.tenant["id"], detail=f"gallery #{gallery_id}")
+            # On first enable, email the client their private download link (if on file).
+            if was_new:
+                project = get_project(conn, auth.tenant["id"], gallery["project_id"]) if gallery.get("project_id") else None
+                client = get_client(conn, auth.tenant["id"], project["client_id"]) if project and project.get("client_id") else None
+                if client and client.get("email"):
+                    studio = auth.tenant.get("name", "your photographer")
+                    notify(conn, settings, to=client["email"], tenant_id=auth.tenant["id"],
+                           subject=f"Your gallery from {studio} is ready to download",
+                           body=(f"Hi {client['name']},\n\nYour photos from {studio} are ready! "
+                                 f"Download the full-resolution files here:\n{delivery_url(settings, token)}\n\n"
+                                 f"The link is private to you — keep it handy.\n\nEnjoy!"))
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
 

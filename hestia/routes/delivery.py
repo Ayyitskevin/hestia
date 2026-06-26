@@ -72,3 +72,26 @@ def delivery_file(request: Request, token: str, image_id: int):
     name = _safe_filename(img.get("filename", ""), f"image-{image_id}")
     return Response(content=data, media_type=img["content_type"] or "application/octet-stream",
                     headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@router.get("/d/{token}/{image_id}/view")
+def delivery_view(request: Request, token: str, image_id: int):
+    """Same token-scoped image, served INLINE — used for the thumbnails on the
+    download page (no Content-Disposition, so the browser renders it in-place)."""
+    storage = storage_of(request)
+    with db_conn(request) as conn:
+        gallery = get_gallery_by_delivery_token(conn, token)
+        if not gallery:
+            return Response(status_code=404)
+        img = conn.execute(
+            "SELECT * FROM images WHERE id = ? AND gallery_id = ?",
+            (image_id, gallery["id"]),
+        ).fetchone()
+        if not img:
+            return Response(status_code=404)
+        img = dict(img)
+    try:
+        data = storage.open(img["storage_key"])
+    except FileNotFoundError:
+        return Response(status_code=404)
+    return Response(content=data, media_type=img["content_type"] or "application/octet-stream")

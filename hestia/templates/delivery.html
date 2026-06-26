@@ -24,20 +24,19 @@
         <div><a class="btn" href="/d/{{ token }}/all.zip">⬇ Download all (.zip)</a></div>
       </div>
 
-      <div class="card stack" style="margin-top:18px">
+      <div class="card" style="margin-top:18px">
         <h3>Files</h3>
-        <table>
-          <tbody>
-            {% for img in images %}
-            <tr>
-              <td class="mono">{{ img.filename }}</td>
-              <td class="muted">{% if img.width and img.height %}{{ img.width }}×{{ img.height }}{% endif %}</td>
-              <td class="muted">{{ img.bytes | filesizeformat if img.bytes else '' }}</td>
-              <td style="text-align:right"><a class="btn secondary" href="/d/{{ token }}/{{ img.id }}">Download</a></td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+        <p class="muted">Tap any photo to download the full-resolution original.</p>
+        <div class="thumb-grid">
+          {% for img in images %}
+          <figure class="thumb">
+            <a href="/d/{{ token }}/{{ img.id }}" title="Download {{ img.filename }}">
+              <img src="/d/{{ token }}/{{ img.id }}/view" alt="{{ img.filename }}" loading="lazy">
+            </a>
+            <figcaption>{{ img.filename }}{% if img.bytes %} · {{ img.bytes | filesizeformat }}{% endif %}</figcaption>
+          </figure>
+          {% endfor %}
+        </div>
       </div>
       {% else %}
       <div class="card stack" style="text-align:center">

@@ -5,12 +5,15 @@ import zipfile
 
 from conftest import login_owner, onboard_studio
 
+from hestia.crm import assign_gallery_to_project, create_client, create_project
+from hestia.db import connect
 from hestia.delivery import (
     enable_delivery,
     get_gallery_by_delivery_token,
     regenerate_delivery_token,
     zip_gallery,
 )
+from hestia.email import list_emails
 from hestia.galleries import add_image, create_gallery, list_images
 from hestia.tenants import create_tenant
 
@@ -114,3 +117,62 @@ def test_owner_enables_and_sees_link(client):
     client.post(f"/galleries/{gid}/delivery")
     page = client.get(f"/galleries/{gid}")
     assert "Digital delivery" in page.text and "/d/" in page.text
+
+
+# --- polish: inline thumbnails + auto-email on first enable ------------------
+
+def test_delivery_view_serves_inline(client, conn, storage):
+    t, g = _gallery(conn)
+    _img(conn, storage, t, g, "a.jpg", b"AAA-original")
+    token = enable_delivery(conn, t["id"], g["id"])
+    conn.commit()
+    img = list_images(conn, g["id"])[0]
+    r = client.get(f"/d/{token}/{img['id']}/view")
+    assert r.status_code == 200
+    assert "content-disposition" not in r.headers   # inline (a thumbnail), not a download
+    assert r.content == b"AAA-original"
+
+
+def test_delivery_view_is_gallery_scoped(client, conn, storage):
+    t, g1 = _gallery(conn, title="G1")
+    g2 = create_gallery(conn, tenant_id=t["id"], title="G2")
+    conn.commit()
+    _img(conn, storage, t, g2, "secret.jpg", b"SECRET")
+    token1 = enable_delivery(conn, t["id"], g1["id"])
+    conn.commit()
+    secret = list_images(conn, g2["id"])[0]
+    assert client.get(f"/d/{token1}/{secret['id']}/view").status_code == 404
+
+
+def test_enable_emails_client_once_on_first_enable(client, app):
+    creds = onboard_studio(client, email="owner@studio.test")
+    login_owner(client, creds)
+    db = app.state.settings.db_path
+    conn = connect(db)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Pat", email="pat@example.com")
+        p = create_project(conn, tenant_id=tid, name="Wedding", client_id=c["id"],
+                           shoot_type="wedding", status="booked")
+        g = create_gallery(conn, tenant_id=tid, title="Finals")
+        assign_gallery_to_project(conn, tid, g["id"], p["id"])
+        conn.commit()
+        gid = g["id"]
+    finally:
+        conn.close()
+
+    client.post(f"/galleries/{gid}/delivery")   # first enable → emails the client
+    conn = connect(db)
+    try:
+        sent = [e for e in list_emails(conn, tid) if e["to_addr"] == "pat@example.com"]
+    finally:
+        conn.close()
+    assert len(sent) == 1 and "/d/" in sent[0]["body"]
+
+    client.post(f"/galleries/{gid}/delivery")   # re-enable is idempotent → no second email
+    conn = connect(db)
+    try:
+        again = [e for e in list_emails(conn, tid) if e["to_addr"] == "pat@example.com"]
+    finally:
+        conn.close()
+    assert len(again) == 1
