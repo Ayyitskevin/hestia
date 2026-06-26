@@ -28,4 +28,21 @@
     <div class="form-actions"><button class="btn" type="submit">Save</button></div>
   </form>
 </div>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>AI style profile</h3>
+  {% if can_style %}
+    <p class="muted">Describe the look you cull and sell toward — your culling and hero picks
+      lean this way. Wired into the prompt on the live xAI backend.</p>
+    <form method="post" action="/settings/vision-style">
+      {% include "_csrf.html" %}
+      <textarea name="vision_style" rows="3"
+        placeholder="bright & airy, documentary candids over posed, skin tones true to life">{{ tenant.vision_style }}</textarea>
+      <div class="form-actions"><button class="btn" type="submit">Save style profile</button></div>
+    </form>
+  {% else %}
+    <p class="muted">Custom AI style profiles are a <strong>Studio Pro</strong> feature — teach
+      Hestia's culling your signature look. <a href="/settings/billing">Upgrade →</a></p>
+  {% endif %}
+</div>
 {% endblock %}

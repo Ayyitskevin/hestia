@@ -21,6 +21,19 @@ from .storage import Storage
 
 SHOT_TYPES = ["portrait", "candid", "detail", "wide", "group", "landscape", "still-life"]
 
+# A frame is flagged as a likely blink at/above this eyes-closed score, and a
+# duplicate cluster keeps only its highest-keeper pick (the rest are culls).
+BLINK_THRESHOLD = 0.85
+KEEPER_THRESHOLD = 0.7
+
+
+def content_dup_key(data: bytes) -> str:
+    """A content signature for duplicate detection — byte-identical frames (the
+    same file uploaded twice, a re-export) share a key. Computed from the image
+    content, so distinct shots never falsely group. (Perceptual near-dup of burst
+    frames is a vision-model enhancement; the mock floor is exact duplicates.)"""
+    return "d_" + hashlib.sha256(data).hexdigest()[:16]
+
 _KEYWORD_PALETTE = [
     "golden-hour", "candid", "portrait", "detail", "bokeh", "monochrome",
     "backlit", "wide-angle", "close-up", "ceremony", "reception", "natural-light",
@@ -35,6 +48,7 @@ class VisionResult:
     hero_potential: float = 0.0    # 0..1 — could this be a hero/cover shot?
     shot_type: str = "candid"
     alt_text: str = ""
+    eyes_closed: float = 0.0       # 0..1 — likelihood a subject blinked
 
     def as_dict(self) -> dict:
         return {
@@ -43,11 +57,43 @@ class VisionResult:
             "hero_potential": round(self.hero_potential, 3),
             "shot_type": self.shot_type,
             "alt_text": self.alt_text,
+            "eyes_closed": round(self.eyes_closed, 3),
         }
 
 
 class VisionError(RuntimeError):
     pass
+
+
+def _as_float(value, default: float = 0.0) -> float:
+    """Coerce a model-supplied field to float, defaulting on junk. A live LLM may
+    return a string ("high"), null, or omit the key — none of which should crash."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _score(value) -> float:
+    """A 0..1 model score: tolerant of junk and clamped to range."""
+    return min(1.0, max(0.0, _as_float(value, 0.0)))
+
+
+def _result_from_parsed(parsed: dict) -> VisionResult:
+    """Build a VisionResult from a model's parsed JSON, tolerating imperfect output
+    (a string/null where a number was asked for, a non-list ``keywords``). This is
+    the seam between an unpredictable LLM and the rest of the pipeline — it must
+    never raise on shape, or one frame's odd response strands the whole run in
+    'running'."""
+    raw_kw = parsed.get("keywords")
+    return VisionResult(
+        keywords=[str(k) for k in raw_kw][:6] if isinstance(raw_kw, list) else [],
+        keeper_score=_score(parsed.get("keeper_score")),
+        hero_potential=_score(parsed.get("hero_potential")),
+        shot_type=str(parsed.get("shot_type") or "candid"),
+        alt_text=str(parsed.get("alt_text") or ""),
+        eyes_closed=_score(parsed.get("eyes_closed")),
+    )
 
 
 # ── Providers ───────────────────────────────────────────────────────────────
@@ -58,7 +104,7 @@ class MockVisionProvider:
 
     backend = "mock"
 
-    def analyze(self, *, filename: str, data: bytes) -> VisionResult:
+    def analyze(self, *, filename: str, data: bytes, style: str = "") -> VisionResult:
         h = hashlib.sha256(filename.encode()).digest()
         kw = [_KEYWORD_PALETTE[h[i] % len(_KEYWORD_PALETTE)] for i in range(3)]
         # de-dup while preserving order
@@ -66,9 +112,15 @@ class MockVisionProvider:
         keeper = 0.55 + (h[3] / 255) * 0.45            # 0.55..1.0
         hero = (h[4] / 255)                            # 0..1
         shot = SHOT_TYPES[h[5] % len(SHOT_TYPES)]
+        eyes_closed = h[6] / 255                       # 0..1 — blink likelihood
+        # A studio style profile re-weights the hero ranking deterministically
+        # (the mock stand-in for "weight toward frames matching this look").
+        if style.strip():
+            sb = hashlib.sha256((style.strip() + "|" + filename).encode()).digest()[0] / 255
+            hero = max(0.0, min(1.0, 0.5 * hero + 0.5 * sb))
         alt = f"{shot} photograph featuring {', '.join(keywords)}"
-        return VisionResult(keywords=keywords, keeper_score=keeper,
-                            hero_potential=hero, shot_type=shot, alt_text=alt)
+        return VisionResult(keywords=keywords, keeper_score=keeper, hero_potential=hero,
+                            shot_type=shot, alt_text=alt, eyes_closed=eyes_closed)
 
 
 class XaiVisionProvider:
@@ -79,7 +131,7 @@ class XaiVisionProvider:
     def __init__(self, settings: Settings):
         self.settings = settings
 
-    def analyze(self, *, filename: str, data: bytes) -> VisionResult:
+    def analyze(self, *, filename: str, data: bytes, style: str = "") -> VisionResult:
         import base64
 
         import httpx
@@ -87,10 +139,14 @@ class XaiVisionProvider:
         if not self.settings.xai_api_key:
             raise VisionError("HESTIA_XAI_API_KEY not set for xai vision backend")
         b64 = base64.b64encode(data).decode()
+        style_line = (f" The studio's style preference is: {style.strip()}. Weight keeper_score "
+                      "and hero_potential toward frames that match it." if style.strip() else "")
         prompt = (
             "You are a photo-culling assistant. Return ONLY compact JSON with keys: "
             "keywords (array of 3-6 lowercase strings), keeper_score (0-1 float), "
-            "hero_potential (0-1 float), shot_type (one word), alt_text (one sentence)."
+            "hero_potential (0-1 float), shot_type (one word), alt_text (one sentence), "
+            "eyes_closed (0-1 float — likelihood a subject blinked or has closed eyes)."
+            + style_line
         )
         body = {
             "model": self.settings.xai_model,
@@ -113,13 +169,10 @@ class XaiVisionProvider:
             parsed = json.loads(_extract_json(content))
         except Exception as exc:  # noqa: BLE001 - degrade to a usable result
             raise VisionError(f"xai vision failed: {exc}") from exc
-        return VisionResult(
-            keywords=[str(k) for k in parsed.get("keywords", [])][:6],
-            keeper_score=float(parsed.get("keeper_score", 0.0)),
-            hero_potential=float(parsed.get("hero_potential", 0.0)),
-            shot_type=str(parsed.get("shot_type", "candid")),
-            alt_text=str(parsed.get("alt_text", "")),
-        )
+        # Coercion lives in _result_from_parsed so a junk field (string/null where a
+        # number was asked for) degrades to a default instead of raising past the
+        # pipeline's VisionError handler and stranding the run in 'running'.
+        return _result_from_parsed(parsed)
 
 
 def _extract_json(text: str) -> str:
@@ -154,31 +207,55 @@ def analyze_gallery(
     if not images:
         raise VisionError("gallery has no images to analyze")
 
+    # The studio's AI style profile (Studio Pro) biases the keeper/hero scoring.
+    srow = conn.execute("SELECT vision_style FROM tenants WHERE id = ?", (tenant_id,)).fetchone()
+    style = (srow["vision_style"] if srow else "") or ""
+
     analyzed = []
+    dup_keys: dict[int, str] = {}
     for img in images:
         data = storage.open(img["storage_key"])
-        result = provider.analyze(filename=img["filename"], data=data)
+        result = provider.analyze(filename=img["filename"], data=data, style=style)
+        img_dup_key = content_dup_key(data)
+        dup_keys[img["id"]] = img_dup_key
         conn.execute(
             """
             INSERT INTO image_analyses
                 (image_id, gallery_id, tenant_id, keywords_json, keeper_score,
-                 hero_potential, shot_type, alt_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 hero_potential, shot_type, alt_text, eyes_closed, dup_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (image_id) DO UPDATE SET
                 keywords_json=excluded.keywords_json, keeper_score=excluded.keeper_score,
                 hero_potential=excluded.hero_potential, shot_type=excluded.shot_type,
-                alt_text=excluded.alt_text
+                alt_text=excluded.alt_text, eyes_closed=excluded.eyes_closed,
+                dup_key=excluded.dup_key
             """,
             (img["id"], gallery_id, tenant_id, json.dumps(result.keywords),
-             result.keeper_score, result.hero_potential, result.shot_type, result.alt_text),
+             result.keeper_score, result.hero_potential, result.shot_type, result.alt_text,
+             result.eyes_closed, img_dup_key),
         )
         analyzed.append((img, result))
     conn.commit()
 
-    # Heroes = top by hero_potential; keyword cloud = most common keywords.
-    ranked = sorted(analyzed, key=lambda pair: pair[1].hero_potential, reverse=True)
+    # Cull: in each duplicate cluster keep only the best keeper; flag likely blinks.
+    # Heroes are then drawn only from the kept frames — never a dup or a blink.
+    clusters: dict[str, list] = {}
+    for img, r in analyzed:
+        clusters.setdefault(dup_keys[img["id"]], []).append((img, r))
+    duplicate_ids: set[int] = set()
+    for cluster in clusters.values():
+        if len(cluster) < 2:
+            continue
+        best = max(cluster, key=lambda pair: pair[1].keeper_score)
+        duplicate_ids.update(img["id"] for img, _ in cluster if img["id"] != best[0]["id"])
+    blink_ids = {img["id"] for img, r in analyzed if r.eyes_closed >= BLINK_THRESHOLD}
+    culled_ids = duplicate_ids | blink_ids
+
+    kept = [(img, r) for img, r in analyzed if img["id"] not in culled_ids]
+    ranked = sorted(kept, key=lambda pair: pair[1].hero_potential, reverse=True)
     hero_image_ids = [img["id"] for img, _ in ranked[:hero_count]]
-    keeper_count = sum(1 for _, r in analyzed if r.keeper_score >= 0.7)
+    keeper_count = sum(1 for img, r in analyzed
+                       if r.keeper_score >= KEEPER_THRESHOLD and img["id"] not in culled_ids)
     counts: dict[str, int] = {}
     for _, r in analyzed:
         for kw in r.keywords:
@@ -192,4 +269,36 @@ def analyze_gallery(
         "keeper_count": keeper_count,
         "hero_image_ids": hero_image_ids,
         "keywords": top_keywords,
+        "duplicate_count": len(duplicate_ids),
+        "blink_count": len(blink_ids),
+        "culled_count": len(culled_ids),
+        "culled_image_ids": sorted(culled_ids),
+        "style_applied": bool(style.strip()),
+    }
+
+
+def cull_summary(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> dict:
+    """Recompute the cull picture from persisted analyses, for the owner view —
+    which frames are near-duplicates, likely blinks, or otherwise culled."""
+    rows = conn.execute(
+        "SELECT image_id, keeper_score, eyes_closed, dup_key FROM image_analyses "
+        "WHERE tenant_id = ? AND gallery_id = ?",
+        (tenant_id, gallery_id),
+    ).fetchall()
+    clusters: dict[str, list] = {}
+    for r in rows:
+        if r["dup_key"]:
+            clusters.setdefault(r["dup_key"], []).append(r)
+    duplicate_ids: set[int] = set()
+    for cluster in clusters.values():
+        if len(cluster) < 2:
+            continue
+        best = max(cluster, key=lambda x: x["keeper_score"] or 0)
+        duplicate_ids.update(r["image_id"] for r in cluster if r["image_id"] != best["image_id"])
+    blink_ids = {r["image_id"] for r in rows if (r["eyes_closed"] or 0) >= BLINK_THRESHOLD}
+    return {
+        "analyzed": len(rows),
+        "duplicate_ids": duplicate_ids,
+        "blink_ids": blink_ids,
+        "culled_ids": duplicate_ids | blink_ids,
     }
