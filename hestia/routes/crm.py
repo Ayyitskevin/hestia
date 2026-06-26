@@ -24,6 +24,7 @@ from ..invoices import list_invoices
 from ..payment_plans import list_payment_plans
 from ..portal import enable_portal, portal_url, regenerate_portal_token
 from ..questionnaires import list_questionnaires
+from ..referrals import referral_code_for, referral_link
 from ..scheduler import list_appointments
 from .deps import db_conn, render, settings_of
 
@@ -81,10 +82,13 @@ def client_detail(request: Request, client_id: int):
         if not client:
             return RedirectResponse("/clients", status_code=303)
         projects = list_projects(conn, auth.tenant["id"], client_id=client_id)
-    portal_link = portal_url(settings_of(request), client["portal_token"]) \
+        ref_code = referral_code_for(conn, auth.tenant["id"], client_id)
+    settings = settings_of(request)
+    portal_link = portal_url(settings, client["portal_token"]) \
         if client.get("portal_token") else None
+    refer_link = referral_link(settings, auth.tenant["slug"], ref_code) if ref_code else None
     return render(request, "crm/client_detail.html", auth=auth, client=client,
-                  projects=projects, portal_link=portal_link)
+                  projects=projects, portal_link=portal_link, refer_link=refer_link)
 
 
 @router.post("/clients/{client_id}/portal")
@@ -171,10 +175,12 @@ def project_detail(request: Request, project_id: int):
         appointments = list_appointments(conn, auth.tenant["id"], project_id=project_id)
         packs = list_packs(conn, auth.tenant["id"], project_id=project_id)
         recipes = recipes_for(project["shoot_type"])
+        referred_by = get_client(conn, auth.tenant["id"], project["referred_by_client_id"]) \
+            if project.get("referred_by_client_id") else None
     return render(request, "crm/project_detail.html", auth=auth, project=project,
                   galleries=galleries, invoices=invoices, plans=plans, contracts=contracts,
                   questionnaires=questionnaires, appointments=appointments, packs=packs,
-                  recipes=recipes, statuses=PROJECT_STATUSES)
+                  recipes=recipes, statuses=PROJECT_STATUSES, referred_by=referred_by)
 
 
 @router.post("/projects/{project_id}/status")

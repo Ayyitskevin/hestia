@@ -9,6 +9,7 @@ from ..auth import context_from_session
 from ..db import list_audit
 from ..email import list_emails, notify
 from ..ratelimit import enforce
+from ..referrals import attribute_referral
 from ..studio import create_inquiry, get_profile, upsert_profile
 from ..tenants import (
     can_use_style_profile,
@@ -16,6 +17,7 @@ from ..tenants import (
     get_tenant_by_slug,
     set_vision_style,
 )
+from ..testimonials import featured_testimonials
 from .deps import db_conn, render, settings_of
 
 router = APIRouter()
@@ -43,21 +45,23 @@ def _studio_inbox(conn, tenant_id: str, profile: dict) -> str:
 
 
 @router.get("/studio/{slug}")
-def public_site(request: Request, slug: str):
+def public_site(request: Request, slug: str, ref: str = ""):
     with db_conn(request) as conn:
         tenant = get_tenant_by_slug(conn, slug)
         if not tenant:
             return render(request, "offer_missing.html", auth=None, status_code=404)
         profile = get_profile(conn, tenant["id"])
-    if not profile["published"]:
-        return render(request, "studio/coming_soon.html", auth=None, tenant=tenant)
-    return render(request, "studio/site.html", auth=None, tenant=tenant, profile=profile)
+        if not profile["published"]:
+            return render(request, "studio/coming_soon.html", auth=None, tenant=tenant)
+        testimonials = featured_testimonials(conn, tenant["id"])
+    return render(request, "studio/site.html", auth=None, tenant=tenant, profile=profile,
+                  testimonials=testimonials, ref=ref)
 
 
 @router.post("/studio/{slug}/inquire")
 def public_inquire(request: Request, slug: str, name: str = Form(...), email: str = Form(""),
                    message: str = Form(""), shoot_type: str = Form("other"),
-                   event_date: str = Form("")):
+                   event_date: str = Form(""), ref: str = Form("")):
     enforce(request, "inquiry")
     with db_conn(request) as conn:
         tenant = get_tenant_by_slug(conn, slug)
@@ -66,8 +70,9 @@ def public_inquire(request: Request, slug: str, name: str = Form(...), email: st
         profile = get_profile(conn, tenant["id"])
         if not profile["published"]:
             return render(request, "studio/coming_soon.html", auth=None, tenant=tenant)
-        create_inquiry(conn, tenant=tenant, name=name, email=email, message=message,
-                       shoot_type=shoot_type, event_date=event_date)
+        project = create_inquiry(conn, tenant=tenant, name=name, email=email, message=message,
+                                 shoot_type=shoot_type, event_date=event_date)
+        attribute_referral(conn, tenant["id"], project["id"], ref)
         # Alert the studio that a lead came in (mock records it; smtp also sends).
         inbox = _studio_inbox(conn, tenant["id"], profile)
         notify(conn, settings_of(request), to=inbox, tenant_id=tenant["id"],

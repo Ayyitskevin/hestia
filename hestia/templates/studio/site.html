@@ -26,6 +26,7 @@
           <h3>Inquire / book</h3>
           <form method="post" action="/studio/{{ tenant.slug }}/inquire">
             {% include "_csrf.html" %}
+            {% if ref %}<input type="hidden" name="ref" value="{{ ref }}">{% endif %}
             <label for="name">Your name</label>
             <input type="text" id="name" name="name" required>
             <label for="email">Email</label>
@@ -42,6 +43,21 @@
           </form>
         </div>
       </div>
+
+      {% if testimonials %}
+      <section style="margin-top:32px">
+        <h3 style="text-align:center">Kind words</h3>
+        <div class="testimonial-grid">
+          {% for t in testimonials %}
+          <figure class="testimonial-card">
+            <div class="stars" aria-label="{{ t.rating }} out of 5">{{ '★' * t.rating }}{{ '☆' * (5 - t.rating) }}</div>
+            <blockquote>{{ t.body }}</blockquote>
+            <figcaption>— {{ t.author_name or 'A happy client' }}</figcaption>
+          </figure>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
     </div>
   </main>
   <footer class="site-footer"><div class="wrap">{{ tenant.name }} · powered by Hestia 🔥</div></footer>
