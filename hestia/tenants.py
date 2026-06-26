@@ -64,6 +64,12 @@ def get_tenant_by_slug(conn: sqlite3.Connection, slug: str) -> dict | None:
     return dict(row) if row else None
 
 
+def set_tax_rate(conn: sqlite3.Connection, tenant_id: str, tax_rate_bps: int) -> None:
+    """Set a studio's sales-tax rate in basis points (850 = 8.50%), clamped 0–100%."""
+    bps = max(0, min(10000, int(tax_rate_bps)))
+    conn.execute("UPDATE tenants SET tax_rate_bps = ? WHERE id = ?", (bps, tenant_id))
+
+
 def list_tenants(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute("SELECT * FROM tenants ORDER BY created_at DESC").fetchall()
     return [dict(r) for r in rows]

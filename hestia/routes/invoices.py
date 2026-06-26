@@ -20,6 +20,7 @@ from ..invoices import (
     record_invoice_reminder,
     send_invoice,
     send_invoice_reminder,
+    tax_for,
     void_invoice,
 )
 from .deps import db_conn, render, settings_of
@@ -81,9 +82,12 @@ def invoice_create(request: Request, title: str = Form(...), amount: str = Form(
         cid = raw_c if raw_c and get_client(conn, tid, raw_c) else None
         raw_p = int(project_id) if project_id.strip().isdigit() else None
         pid = raw_p if raw_p and get_project(conn, tid, raw_p) else None
+        subtotal = _to_cents(amount)
+        # add the studio's sales tax (0 unless they've set a rate) on top of the subtotal
+        tax = tax_for(subtotal, auth.tenant.get("tax_rate_bps") or 0)
         invoice = create_invoice(
             conn, settings_of(request), tenant_id=tid, title=title,
-            amount_cents=_to_cents(amount), client_id=cid, project_id=pid,
+            amount_cents=subtotal, client_id=cid, project_id=pid, tax_cents=tax,
         )
     return RedirectResponse(f"/invoices/{invoice['id']}", status_code=303)
 

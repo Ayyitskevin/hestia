@@ -30,6 +30,20 @@
 </div>
 
 <div class="card stack" style="margin-top:18px">
+  <h3>Sales tax</h3>
+  <p class="muted">Add sales tax to new invoices. It's applied on top of the price and shown
+    separately — your revenue and profit still count the pre-tax amount, since collected tax is
+    owed to the state, not income. Leave at 0 for none.</p>
+  <form method="post" action="/settings/tax">
+    {% include "_csrf.html" %}
+    <label for="tax_rate">Tax rate (%)</label>
+    <input type="text" id="tax_rate" name="tax_rate" inputmode="decimal"
+           value="{{ (tenant.tax_rate_bps / 100) if tenant.tax_rate_bps else '' }}" placeholder="8.5">
+    <div class="form-actions"><button class="btn" type="submit">Save tax rate</button></div>
+  </form>
+</div>
+
+<div class="card stack" style="margin-top:18px">
   <h3>AI style profile</h3>
   {% if can_style %}
     <p class="muted">Describe the look you cull and sell toward — your culling and hero picks
