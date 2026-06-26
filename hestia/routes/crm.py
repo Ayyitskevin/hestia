@@ -20,10 +20,11 @@ from ..crm import (
     set_project_status,
 )
 from ..db import audit
-from ..invoices import list_invoices
+from ..invoices import list_invoices, money
 from ..payment_plans import list_payment_plans
 from ..portal import enable_portal, portal_url, regenerate_portal_token
 from ..questionnaires import list_questionnaires
+from ..referral_rewards import credit_balance, list_credits, redeem_credit
 from ..referrals import referral_code_for, referral_link
 from ..scheduler import list_appointments
 from .deps import db_conn, render, settings_of
@@ -83,12 +84,17 @@ def client_detail(request: Request, client_id: int):
             return RedirectResponse("/clients", status_code=303)
         projects = list_projects(conn, auth.tenant["id"], client_id=client_id)
         ref_code = referral_code_for(conn, auth.tenant["id"], client_id)
+        balance = credit_balance(conn, auth.tenant["id"], client_id)
+        credits = list_credits(conn, auth.tenant["id"], client_id)
     settings = settings_of(request)
     portal_link = portal_url(settings, client["portal_token"]) \
         if client.get("portal_token") else None
     refer_link = referral_link(settings, auth.tenant["slug"], ref_code) if ref_code else None
+    for c in credits:
+        c["amount_display"] = money(c["amount_cents"])
     return render(request, "crm/client_detail.html", auth=auth, client=client,
-                  projects=projects, portal_link=portal_link, refer_link=refer_link)
+                  projects=projects, portal_link=portal_link, refer_link=refer_link,
+                  credits=credits, credit_balance_display=money(balance), credit_balance=balance)
 
 
 @router.post("/clients/{client_id}/portal")
@@ -114,6 +120,18 @@ def client_portal_regenerate(request: Request, client_id: int):
         if token:
             audit(conn, actor="owner", action="client.portal_rotated",
                   tenant_id=auth.tenant["id"], detail=f"client #{client_id}")
+    return RedirectResponse(f"/clients/{client_id}", status_code=303)
+
+
+@router.post("/clients/{client_id}/credits/{credit_id}/redeem")
+def client_credit_redeem(request: Request, client_id: int, credit_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if redeem_credit(conn, auth.tenant["id"], credit_id):
+            audit(conn, actor="owner", action="referral.credit_redeemed",
+                  tenant_id=auth.tenant["id"], detail=f"credit #{credit_id}")
     return RedirectResponse(f"/clients/{client_id}", status_code=303)
 
 

@@ -41,6 +41,34 @@
   <a class="offer-url" href="{{ refer_link }}" target="_blank">{{ refer_link }}</a>
 </div>
 
+{% if credits %}
+<div class="card stack" style="margin-bottom:18px">
+  <h3>Referral credit
+    {% if credit_balance %}<span class="pill on">{{ credit_balance_display }} available</span>{% endif %}</h3>
+  <p class="muted">Earned when {{ client.name }}'s referrals book. Apply a credit to their next
+    order or invoice, then mark it redeemed here.</p>
+  <table>
+    <thead><tr><th>Reward</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for c in credits %}
+      <tr>
+        <td>{{ c.amount_display }}</td>
+        <td><span class="pill {{ 'on' if c.status == 'earned' else 'off' }}">{{ c.status }}</span></td>
+        <td style="text-align:right">
+          {% if c.status == 'earned' %}
+          <form method="post" action="/clients/{{ client.id }}/credits/{{ c.id }}/redeem" style="margin:0">
+            {% include "_csrf.html" %}
+            <button class="btn secondary" type="submit">Mark redeemed</button>
+          </form>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <div class="card stack">
   <h3>Projects</h3>
   {% if projects %}
