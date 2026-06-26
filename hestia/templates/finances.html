@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Finances — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Finances</h1>
+    <span class="muted">Collected revenue minus what you spend — your real profit, per shoot and overall.</span>
+  </div>
+</div>
+
+<div class="health-strip" style="margin-bottom:18px">
+  <div class="health-item"><span class="svc">{{ summary.revenue }}</span> <span class="url">revenue collected</span></div>
+  <div class="health-item"><span class="svc">{{ summary.expenses }}</span> <span class="url">expenses</span></div>
+  <div class="health-item"><span class="svc">{{ summary.profit }}</span>
+    <span class="url"><span class="pill {{ 'on' if summary.profit_cents >= 0 else 'off' }}">{{ summary.margin }}% margin</span></span></div>
+</div>
+
+<div class="card stack">
+  <h3>Add an expense</h3>
+  <form method="post" action="/finances/expenses" class="inline-grid-form">
+    {% include "_csrf.html" %}
+    <div><label>Amount</label><input type="text" name="amount" placeholder="150.00" required></div>
+    <div>
+      <label>Category</label>
+      <select name="category">
+        {% for c in categories %}<option value="{{ c }}">{{ c.replace('_', ' ') }}</option>{% endfor %}
+      </select>
+    </div>
+    <div><label>Description</label><input type="text" name="description" placeholder="Second shooter — Smith wedding"></div>
+    <div>
+      <label>Project <span class="muted">(optional)</span></label>
+      <select name="project_id">
+        <option value="">— none —</option>
+        {% for p in projects %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div><label>Date <span class="muted">(optional)</span></label><input type="text" name="incurred_on" placeholder="2026-06-20"></div>
+    <button class="btn" type="submit">Add</button>
+  </form>
+</div>
+
+{% if by_project %}
+<div class="card stack" style="margin-top:18px">
+  <h3>By project</h3>
+  <p class="muted">Invoiced revenue minus tagged expenses — a money-losing shoot sorts to the top.</p>
+  <table>
+    <thead><tr><th>Project</th><th>Revenue</th><th>Expenses</th><th>Profit</th></tr></thead>
+    <tbody>
+      {% for r in by_project %}
+      <tr>
+        <td><a href="/projects/{{ r.id }}">{{ r.name }}</a></td>
+        <td class="muted">{{ r.revenue }}</td>
+        <td class="muted">{{ r.expenses }}</td>
+        <td><span class="pill {{ 'on' if r.profit_cents >= 0 else 'off' }}">{{ r.profit }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card stack" style="margin-top:18px">
+  <h3>Expenses · {{ expenses|length }}</h3>
+  {% if expenses %}
+  <table>
+    <thead><tr><th>Amount</th><th>Category</th><th>Description</th><th>Project</th><th>Date</th><th></th></tr></thead>
+    <tbody>
+      {% for e in expenses %}
+      <tr>
+        <td>{{ e.amount_display }}</td>
+        <td class="muted">{{ e.category.replace('_', ' ') }}</td>
+        <td>{{ e.description }}</td>
+        <td class="muted">{% if e.project_name %}<a href="/projects/{{ e.project_id }}">{{ e.project_name }}</a>{% else %}—{% endif %}</td>
+        <td class="muted">{{ e.incurred_on or '—' }}</td>
+        <td style="text-align:right">
+          <form method="post" action="/finances/expenses/{{ e.id }}/delete" style="margin:0"
+                onsubmit="return confirm('Delete this expense?')">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No expenses logged yet. Add your first above to start tracking profit.</p>
+  {% endif %}
+</div>
+{% endblock %}
