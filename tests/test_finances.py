@@ -165,3 +165,43 @@ def test_csv_exports(client, app):
 def test_export_requires_login(client):
     assert client.get("/finances/export/expenses.csv", follow_redirects=False).status_code == 303
     assert client.get("/finances/export/income.csv", follow_redirects=False).status_code == 303
+
+
+# --- hardening (manual review of the new code) ------------------------------
+
+def test_csv_export_neutralizes_formula_injection(client, app):
+    creds = onboard_studio(client, email="inj@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        create_expense(conn, tenant_id=tid, amount_cents=100, category="gear", description="=2+5+cmd()")
+        conn.commit()
+    finally:
+        conn.close()
+    text = client.get("/finances/export/expenses.csv").text
+    assert "'=2+5+cmd()" in text          # quoted → spreadsheet treats it as text
+    assert ",=2+5" not in text            # never a bare leading-'=' formula cell
+
+
+def test_add_expense_ignores_a_foreign_project(client, app):
+    creds = onboard_studio(client, email="own@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        my_tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        other = create_tenant(conn, name="Other Studio", shoot_type="wedding")
+        foreign = create_project(conn, tenant_id=other["id"], name="Foreign",
+                                 client_id=None, shoot_type="wedding", status="lead")
+        conn.commit()
+        fpid = foreign["id"]
+    finally:
+        conn.close()
+    client.post("/finances/expenses", data={"amount": "10", "category": "gear",
+                                            "description": "x", "project_id": str(fpid)})
+    conn = connect(app.state.settings.db_path)
+    try:
+        row = conn.execute("SELECT project_id FROM expenses WHERE tenant_id = ?", (my_tid,)).fetchone()
+    finally:
+        conn.close()
+    assert row["project_id"] is None      # a project this studio doesn't own is dropped

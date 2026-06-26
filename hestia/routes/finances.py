@@ -9,7 +9,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
 from ..auth import context_from_session
-from ..crm import list_projects
+from ..crm import get_project, list_projects
 from ..finances import (
     EXPENSE_CATEGORIES,
     create_expense,
@@ -24,11 +24,20 @@ from .deps import db_conn, render
 router = APIRouter()
 
 
+def _csv_safe(value) -> str:
+    """Neutralize CSV formula injection: a cell starting with = + - @ (or a control
+    char) is treated as a formula by Excel/Sheets. Client names come from the public
+    inquiry form, so an attacker-controlled value can reach the owner's export —
+    prefix a quote so it stays literal text."""
+    s = str(value)
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
+
 def _csv_response(filename: str, header: list[str], rows: list[list]) -> Response:
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(header)
-    writer.writerows(rows)
+    writer.writerows([[_csv_safe(cell) for cell in row] for row in rows])
     return Response(content=buf.getvalue(), media_type="text/csv",
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
@@ -71,7 +80,9 @@ def add_expense(request: Request, amount: str = Form(""), category: str = Form("
         except (TypeError, ValueError):
             cents = 0
         if cents > 0:
-            pid = int(project_id) if project_id.strip().isdigit() else None
+            raw = int(project_id) if project_id.strip().isdigit() else None
+            # only tag a project this studio actually owns
+            pid = raw if raw and get_project(conn, auth.tenant["id"], raw) else None
             create_expense(conn, tenant_id=auth.tenant["id"], amount_cents=cents,
                            category=category, description=description, project_id=pid,
                            incurred_on=incurred_on)

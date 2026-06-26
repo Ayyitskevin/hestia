@@ -40,7 +40,10 @@ def get_expense(conn: sqlite3.Connection, tenant_id: str, expense_id: int) -> di
 def list_expenses(conn: sqlite3.Connection, tenant_id: str, *, project_id: int | None = None,
                   limit: int = 200) -> list[dict]:
     base = ("SELECT e.*, p.name AS project_name FROM expenses e "
-            "LEFT JOIN projects p ON p.id = e.project_id WHERE e.tenant_id = ? ")
+            # tenant-match the join too, so a stray project_id can't surface a
+            # different studio's project name
+            "LEFT JOIN projects p ON p.id = e.project_id AND p.tenant_id = e.tenant_id "
+            "WHERE e.tenant_id = ? ")
     params: list = [tenant_id]
     if project_id is not None:
         base += "AND e.project_id = ? "
@@ -101,7 +104,7 @@ def income_rows(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     rows: list[dict] = []
     for r in conn.execute(
         "SELECT i.created_at AS date, i.title AS description, i.amount_cents, c.name AS client_name "
-        "FROM invoices i LEFT JOIN clients c ON c.id = i.client_id "
+        "FROM invoices i LEFT JOIN clients c ON c.id = i.client_id AND c.tenant_id = i.tenant_id "
         "WHERE i.tenant_id = ? AND i.status = 'paid'", (tenant_id,)).fetchall():
         rows.append({"date": r["date"], "type": "invoice", "description": r["description"],
                      "client": r["client_name"] or "", "amount_cents": int(r["amount_cents"])})
