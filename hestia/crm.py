@@ -123,6 +123,10 @@ def set_project_status(conn: sqlite3.Connection, tenant_id: str, project_id: int
     if status == "booked":
         emit_event(conn, tenant_id=tenant_id, event="project.booked",
                    context={"project_id": project_id})
+        # A referred lead that books pays its referrer a credit (idempotent). Lazy
+        # import keeps crm ⇄ referral_rewards from forming an import cycle.
+        from .referral_rewards import award_referral_credit
+        award_referral_credit(conn, tenant_id, project_id)
 
 
 # ── Gallery ↔ project linkage ───────────────────────────────────────────────
