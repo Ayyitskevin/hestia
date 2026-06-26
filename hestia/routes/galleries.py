@@ -27,6 +27,7 @@ from ..products import get_set_for_gallery
 from ..proofing import comments_for_gallery, favorite_image_ids
 from ..sales import get_offer_for_gallery, offer_public_url
 from ..tenants import get_tenant, tenant_flags
+from ..vision import cull_summary
 from .deps import db_conn, render, settings_of, storage_of
 
 router = APIRouter(prefix="/galleries")
@@ -110,12 +111,13 @@ def gallery_detail(request: Request, gallery_id: int):
         orders = list_orders(conn, auth.tenant["id"], gallery_id=gallery_id)
         fulfillments = list_fulfillments(conn, auth.tenant["id"],
                                          order_ids=[o["id"] for o in orders])
+        cull = cull_summary(conn, auth.tenant["id"], gallery_id)
     offer_url = offer_public_url(settings_of(request), auth.tenant["slug"], offer["token"]) if offer else None
     return render(request, "gallery_detail.html", auth=auth, gallery=gallery, images=images,
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
                   storage=storage_of(request), flags=flags, project=project, album=album,
                   product_set=product_set, favorites=favorites, comments=comments, campaign=campaign,
-                  orders=orders, fulfillments=fulfillments)
+                  orders=orders, fulfillments=fulfillments, cull=cull)
 
 
 @router.post("/{gallery_id}/campaign")

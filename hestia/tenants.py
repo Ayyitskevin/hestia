@@ -80,6 +80,20 @@ def tenant_flags(tenant: dict):
     return flags_for(tenant.get("shoot_type"))
 
 
+# Studios on these plans can set a custom AI vision style profile (Studio Pro tier).
+STYLE_PROFILE_PLANS = ("beta", "studio_pro")
+
+
+def can_use_style_profile(tenant: dict) -> bool:
+    return tenant.get("plan") in STYLE_PROFILE_PLANS
+
+
+def set_vision_style(conn: sqlite3.Connection, tenant_id: str, style: str) -> None:
+    conn.execute(
+        "UPDATE tenants SET vision_style = ? WHERE id = ?", (style.strip()[:500], tenant_id)
+    )
+
+
 # ── Users ───────────────────────────────────────────────────────────────────
 
 

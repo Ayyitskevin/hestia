@@ -50,7 +50,7 @@ def test_vision_failure_marks_run_error_and_no_offer(conn, storage, settings, db
     class FailingProvider:
         backend = "fail"
 
-        def analyze(self, *, filename, data):
+        def analyze(self, *, filename, data, style=""):
             raise VisionError("vision provider down")
 
     tenant, gallery = _seed(conn, storage)
@@ -77,7 +77,7 @@ def test_resume_reuses_completed_vision(conn, storage, settings, db_path):
     class ExplodingProvider:
         backend = "boom"
 
-        def analyze(self, *, filename, data):  # must NOT be called on resume
+        def analyze(self, *, filename, data, style=""):  # must NOT be called on resume
             raise AssertionError("vision should not re-run when already done")
 
     result = execute_run(db_path, settings, run["id"], storage=storage,

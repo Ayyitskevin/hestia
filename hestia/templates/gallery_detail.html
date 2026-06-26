@@ -138,11 +138,18 @@
 {% if images %}
 <div class="card" style="margin-top:18px">
   <h3>Frames</h3>
+  {% if cull and cull.culled_ids %}
+  <p class="muted">🤖 AI culling flagged {{ cull.duplicate_ids|length }} duplicate{{ '' if cull.duplicate_ids|length == 1 else 's' }}
+    · {{ cull.blink_ids|length }} likely blink{{ '' if cull.blink_ids|length == 1 else 's' }} —
+    excluded from hero &amp; offer picks (your originals are kept).</p>
+  {% endif %}
   <div class="thumb-grid">
     {% for img in images %}
-      <figure class="thumb{{ ' is-fav' if img.id in favorites else '' }}">
+      <figure class="thumb{{ ' is-fav' if img.id in favorites else '' }}{{ ' is-culled' if cull and img.id in cull.culled_ids else '' }}">
         <img src="{{ storage.public_path(img.storage_key) }}" alt="{{ img.filename }}" loading="lazy">
         {% if img.id in favorites %}<span class="fav-badge" title="Client favorite">♥</span>{% endif %}
+        {% if cull and img.id in cull.blink_ids %}<span class="cull-badge" title="Likely blink">👁</span>
+        {% elif cull and img.id in cull.duplicate_ids %}<span class="cull-badge" title="Duplicate frame">⧉</span>{% endif %}
         <figcaption>{{ img.filename }}</figcaption>
       </figure>
     {% endfor %}

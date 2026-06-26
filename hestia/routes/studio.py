@@ -10,7 +10,12 @@ from ..db import list_audit
 from ..email import list_emails, notify
 from ..ratelimit import enforce
 from ..studio import create_inquiry, get_profile, upsert_profile
-from ..tenants import get_tenant, get_tenant_by_slug
+from ..tenants import (
+    can_use_style_profile,
+    get_tenant,
+    get_tenant_by_slug,
+    set_vision_style,
+)
 from .deps import db_conn, render, settings_of
 
 router = APIRouter()
@@ -86,7 +91,20 @@ def site_settings(request: Request):
             return RedirectResponse("/login", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
         profile = get_profile(conn, tenant["id"])
-    return render(request, "studio/settings.html", auth=auth, tenant=tenant, profile=profile)
+    return render(request, "studio/settings.html", auth=auth, tenant=tenant, profile=profile,
+                  can_style=can_use_style_profile(tenant))
+
+
+@router.post("/settings/vision-style")
+def vision_style_save(request: Request, vision_style: str = Form("")):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        tenant = get_tenant(conn, auth.tenant["id"])
+        if can_use_style_profile(tenant):  # tier gate enforced server-side
+            set_vision_style(conn, auth.tenant["id"], vision_style)
+    return RedirectResponse("/settings/site", status_code=303)
 
 
 @router.post("/settings/site")
