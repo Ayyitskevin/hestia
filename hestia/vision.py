@@ -65,6 +65,37 @@ class VisionError(RuntimeError):
     pass
 
 
+def _as_float(value, default: float = 0.0) -> float:
+    """Coerce a model-supplied field to float, defaulting on junk. A live LLM may
+    return a string ("high"), null, or omit the key — none of which should crash."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _score(value) -> float:
+    """A 0..1 model score: tolerant of junk and clamped to range."""
+    return min(1.0, max(0.0, _as_float(value, 0.0)))
+
+
+def _result_from_parsed(parsed: dict) -> VisionResult:
+    """Build a VisionResult from a model's parsed JSON, tolerating imperfect output
+    (a string/null where a number was asked for, a non-list ``keywords``). This is
+    the seam between an unpredictable LLM and the rest of the pipeline — it must
+    never raise on shape, or one frame's odd response strands the whole run in
+    'running'."""
+    raw_kw = parsed.get("keywords")
+    return VisionResult(
+        keywords=[str(k) for k in raw_kw][:6] if isinstance(raw_kw, list) else [],
+        keeper_score=_score(parsed.get("keeper_score")),
+        hero_potential=_score(parsed.get("hero_potential")),
+        shot_type=str(parsed.get("shot_type") or "candid"),
+        alt_text=str(parsed.get("alt_text") or ""),
+        eyes_closed=_score(parsed.get("eyes_closed")),
+    )
+
+
 # ── Providers ───────────────────────────────────────────────────────────────
 
 
@@ -138,14 +169,10 @@ class XaiVisionProvider:
             parsed = json.loads(_extract_json(content))
         except Exception as exc:  # noqa: BLE001 - degrade to a usable result
             raise VisionError(f"xai vision failed: {exc}") from exc
-        return VisionResult(
-            keywords=[str(k) for k in parsed.get("keywords", [])][:6],
-            keeper_score=float(parsed.get("keeper_score", 0.0)),
-            hero_potential=float(parsed.get("hero_potential", 0.0)),
-            shot_type=str(parsed.get("shot_type", "candid")),
-            alt_text=str(parsed.get("alt_text", "")),
-            eyes_closed=float(parsed.get("eyes_closed", 0.0)),
-        )
+        # Coercion lives in _result_from_parsed so a junk field (string/null where a
+        # number was asked for) degrades to a default instead of raising past the
+        # pipeline's VisionError handler and stranding the run in 'running'.
+        return _result_from_parsed(parsed)
 
 
 def _extract_json(text: str) -> str:

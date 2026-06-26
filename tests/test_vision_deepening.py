@@ -37,6 +37,22 @@ def test_content_dup_key():
     assert content_dup_key(b"a") != content_dup_key(b"b")
 
 
+def test_xai_result_tolerates_junk_model_output():
+    # A live LLM may return a string, null, or a non-list where a number/array was
+    # asked for. That must degrade to defaults, not raise past the pipeline's
+    # VisionError handler and strand the run in 'running'.
+    from hestia.vision import _result_from_parsed
+    r = _result_from_parsed({"keeper_score": "high", "hero_potential": None,
+                             "eyes_closed": 1.9, "keywords": None, "shot_type": None})
+    assert r.keeper_score == 0.0 and r.hero_potential == 0.0   # junk → safe default
+    assert r.eyes_closed == 1.0                                # out-of-range clamped to 0..1
+    assert r.keywords == [] and r.shot_type == "candid"        # non-list / null → no crash
+    # well-formed output still parses through unchanged
+    good = _result_from_parsed({"keeper_score": 0.8, "hero_potential": 0.6, "eyes_closed": 0.1,
+                                "keywords": ["a", "b"], "shot_type": "portrait"})
+    assert good.keeper_score == 0.8 and good.keywords == ["a", "b"] and good.shot_type == "portrait"
+
+
 def test_mock_has_blink_signal():
     r = MockVisionProvider().analyze(filename="x.jpg", data=b"bytes")
     assert 0.0 <= r.eyes_closed <= 1.0
