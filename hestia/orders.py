@@ -14,7 +14,7 @@ import sqlite3
 from .campaigns import apply_discount, get_active_campaign
 from .config import Settings
 from .db import audit
-from .invoices import create_invoice, get_invoice_by_token, money
+from .invoices import create_invoice, get_invoice_by_token, money, tax_for
 from .jobs import enqueue
 from .proofing import favorite_count
 from .sales import favorites_package
@@ -52,8 +52,11 @@ def create_order(conn: sqlite3.Connection, settings: Settings, *, tenant: dict, 
     if campaign and campaign["discount_pct"]:
         amount = apply_discount(amount, campaign["discount_pct"])
     client_id, project_id = _client_project_for_gallery(conn, tenant["id"], offer["gallery_id"])
+    # print sales are taxable goods — add the studio's sales tax on top of the price
+    tax = tax_for(amount, tenant.get("tax_rate_bps") or 0)
     invoice = create_invoice(conn, settings, tenant_id=tenant["id"], title=bundle["name"],
-                             amount_cents=amount, client_id=client_id, project_id=project_id)
+                             amount_cents=amount, client_id=client_id, project_id=project_id,
+                             tax_cents=tax)
     cur = conn.execute(
         "INSERT INTO orders (tenant_id, offer_id, gallery_id, invoice_id, sku, name, "
         "amount_cents, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

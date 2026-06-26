@@ -110,6 +110,19 @@ def monthly_pnl(conn: sqlite3.Connection, tenant_id: str, *, months: int = 6) ->
     return out
 
 
+def tax_collected(conn: sqlite3.Connection, tenant_id: str) -> dict:
+    """Total sales tax collected on paid invoices — the liability a studio sets aside
+    to remit. Tax rides on the invoice (an order's tax is on its backing invoice), so
+    summing paid invoices counts each taxed sale once."""
+    row = conn.execute(
+        "SELECT COALESCE(SUM(tax_cents), 0) AS total FROM invoices "
+        "WHERE tenant_id = ? AND status = 'paid'",
+        (tenant_id,),
+    ).fetchone()
+    cents = int(row["total"])
+    return {"cents": cents, "display": money(cents)}
+
+
 def expense_breakdown(conn: sqlite3.Connection, tenant_id: str) -> dict:
     """Expenses grouped by category, biggest first, each with its share of the total."""
     rows = conn.execute(

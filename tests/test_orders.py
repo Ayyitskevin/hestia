@@ -15,7 +15,7 @@ from hestia.jobs import drain
 from hestia.orders import create_order, fulfill_for_invoice_token, list_orders
 from hestia.proofing import toggle_favorite
 from hestia.sales import create_or_update_offer
-from hestia.tenants import create_tenant, tenant_flags
+from hestia.tenants import create_tenant, get_tenant, set_tax_rate, tenant_flags
 
 
 def _setup(conn, settings, *, name="Order Studio", with_client=True):
@@ -56,6 +56,17 @@ def test_create_order_from_bundle(conn, settings):
 def test_unknown_sku_returns_none(conn, settings):
     t, g, offer, _ = _setup(conn, settings)
     assert create_order(conn, settings, tenant=dict(t), offer=offer, sku="nope") is None
+
+
+def test_order_applies_studio_sales_tax(conn, settings):
+    """A print sale is taxable — the order's invoice carries the studio's tax on top,
+    while amount_cents stays the pre-tax subtotal (revenue)."""
+    t, g, offer, _ = _setup(conn, settings)
+    set_tax_rate(conn, t["id"], 850)                      # 8.5%
+    res = create_order(conn, settings, tenant=get_tenant(conn, t["id"]), offer=offer, sku="print_set")
+    inv = res["invoice"]
+    assert inv["tax_cents"] == round(inv["amount_cents"] * 850 / 10000) and inv["tax_cents"] > 0
+    assert inv["total_cents"] == inv["amount_cents"] + inv["tax_cents"]
 
 
 def test_order_applies_active_sale(conn, settings):

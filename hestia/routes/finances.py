@@ -20,7 +20,7 @@ from ..finances import (
     profit_summary,
     project_pnl,
 )
-from ..reports import ar_aging, expense_breakdown, monthly_pnl
+from ..reports import ar_aging, expense_breakdown, monthly_pnl, tax_collected
 from .deps import db_conn, render
 
 router = APIRouter()
@@ -80,8 +80,9 @@ def finances_reports(request: Request):
         aging = ar_aging(conn, tid)
         breakdown = expense_breakdown(conn, tid)
         trend = monthly_pnl(conn, tid)
+        tax = tax_collected(conn, tid)
     return render(request, "finances_reports.html", auth=auth, aging=aging,
-                  breakdown=breakdown, trend=trend)
+                  breakdown=breakdown, trend=trend, tax=tax)
 
 
 @router.post("/finances/expenses")
