@@ -8,6 +8,7 @@ from hestia.finances import (
     create_expense,
     delete_expense,
     expenses_total,
+    income_rows,
     list_expenses,
     profit_summary,
     project_pnl,
@@ -123,3 +124,44 @@ def test_finances_page_add_and_delete(client, app):
 
 def test_finances_requires_login(client):
     assert client.get("/finances", follow_redirects=False).status_code == 303
+
+
+# --- accountant export ------------------------------------------------------
+
+def test_income_rows_are_paid_only(conn, settings):
+    t = create_tenant(conn, name="Inc", shoot_type="wedding")
+    c = create_client(conn, tenant_id=t["id"], name="Cli")
+    _paid_invoice(conn, settings, tenant_id=t["id"], cents=200000, client_id=c["id"])
+    create_invoice(conn, settings, tenant_id=t["id"], title="Unpaid", amount_cents=99999, client_id=c["id"])
+    _paid_order(conn, t["id"], 50000)
+    conn.commit()
+    rows = income_rows(conn, t["id"])
+    assert sorted(r["type"] for r in rows) == ["invoice", "order"]      # both sources
+    assert sum(r["amount_cents"] for r in rows) == 250000              # unpaid invoice excluded
+
+
+def test_csv_exports(client, app):
+    creds = onboard_studio(client, email="csv@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        create_expense(conn, tenant_id=tid, amount_cents=15000, category="gear", description="Lens")
+        _paid_order(conn, tid, 50000)
+        conn.commit()
+    finally:
+        conn.close()
+
+    exp = client.get("/finances/export/expenses.csv")
+    assert exp.status_code == 200 and exp.headers["content-type"].startswith("text/csv")
+    assert "date,category,description,project,amount" in exp.text
+    assert "Lens" in exp.text and "150.00" in exp.text
+
+    inc = client.get("/finances/export/income.csv")
+    assert inc.status_code == 200 and inc.headers["content-type"].startswith("text/csv")
+    assert "Print" in inc.text and "500.00" in inc.text
+
+
+def test_export_requires_login(client):
+    assert client.get("/finances/export/expenses.csv", follow_redirects=False).status_code == 303
+    assert client.get("/finances/export/income.csv", follow_redirects=False).status_code == 303

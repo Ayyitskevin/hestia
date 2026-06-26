@@ -95,6 +95,25 @@ def profit_summary(conn: sqlite3.Connection, tenant_id: str, *, project_id: int 
     }
 
 
+def income_rows(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
+    """Collected income — paid invoices and paid orders — as flat rows, oldest first,
+    for an accountant-ready export."""
+    rows: list[dict] = []
+    for r in conn.execute(
+        "SELECT i.created_at AS date, i.title AS description, i.amount_cents, c.name AS client_name "
+        "FROM invoices i LEFT JOIN clients c ON c.id = i.client_id "
+        "WHERE i.tenant_id = ? AND i.status = 'paid'", (tenant_id,)).fetchall():
+        rows.append({"date": r["date"], "type": "invoice", "description": r["description"],
+                     "client": r["client_name"] or "", "amount_cents": int(r["amount_cents"])})
+    for r in conn.execute(
+        "SELECT created_at AS date, name AS description, amount_cents FROM orders "
+        "WHERE tenant_id = ? AND status = 'paid'", (tenant_id,)).fetchall():
+        rows.append({"date": r["date"], "type": "order", "description": r["description"],
+                     "client": "", "amount_cents": int(r["amount_cents"])})
+    rows.sort(key=lambda x: x["date"])
+    return rows
+
+
 def project_pnl(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 50) -> list[dict]:
     """Per-project P&L (invoiced revenue minus tagged expenses) for projects with any
     activity, lowest-profit first so a money-losing shoot surfaces at the top."""
