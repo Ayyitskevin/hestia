@@ -9,9 +9,16 @@
   </div>
 </div>
 
-{% if info.insecure_secrets %}
-<div class="alert error">Insecure default secrets in use:
-  {{ info.insecure_secrets|join(', ') }} — set real values before any deploy.</div>
+{% if info.warnings %}
+<div class="alert error">
+  <strong>{{ info.warnings|length }} configuration warning{{ '' if info.warnings|length == 1 else 's' }}</strong>
+  — resolve before any deploy:
+  <ul style="margin:8px 0 0; padding-left:20px">
+    {% for w in info.warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+</div>
+{% else %}
+<div class="alert ok">Configuration looks clean — secrets set, no active backend missing its credentials.</div>
 {% endif %}
 
 <div class="grid cols-2">
@@ -22,6 +29,8 @@
       <div class="health-item"><span class="svc">{{ k }}</span><span class="url">{{ v }}</span></div>
       {% endfor %}
     </div>
+    <p class="hint">At-least-once: failed jobs retry with backoff, then dead-letter below.
+      Orphaned 'running' jobs are reclaimed automatically after 15 min.</p>
   </div>
 
   <div class="card stack">
@@ -35,6 +44,65 @@
     <p class="hint">logs: {{ info.log_format }} · signup: {{ 'on' if info.signup_enabled else 'off' }}</p>
   </div>
 </div>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>Dead-letter queue · {{ info.failed|length }} failed</h3>
+  {% if info.failed %}
+    <p class="muted">Jobs that exhausted their retries. Fix the cause, then requeue — each
+      requeue grants one fresh run (it doesn't reset the retry budget, so a still-broken
+      job won't loop).</p>
+    <table>
+      <thead><tr><th>#</th><th>Kind</th><th>Studio</th><th>Tries</th><th>Last error</th><th>Failed at</th><th></th></tr></thead>
+      <tbody>
+        {% for j in info.failed %}
+        <tr>
+          <td class="mono muted">{{ j.id }}</td>
+          <td class="mono">{{ j.kind }}</td>
+          <td class="mono muted">{{ j.tenant_id or '—' }}</td>
+          <td class="muted">{{ j.attempts }}/{{ j.max_attempts }}</td>
+          <td class="muted">{{ (j.last_error or '')[:140] }}</td>
+          <td class="muted">{{ j.finished_at or '—' }}</td>
+          <td>
+            <form method="post" action="/admin/system/jobs/{{ j.id }}/requeue" style="margin:0">
+              {% include "_csrf.html" %}
+              <button class="btn secondary" type="submit">Requeue</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No failed jobs — the queue is clean.</p>
+  {% endif %}
+</div>
+
+{% if info.stale %}
+<div class="card stack" style="margin-top:18px">
+  <h3>Stale in-flight · {{ info.stale|length }}</h3>
+  <p class="muted">Stuck in 'running' past the 15-minute reclaim window — a worker likely
+    died mid-job. The worker reclaims these on its next loop; requeue to force it now.</p>
+  <table>
+    <thead><tr><th>#</th><th>Kind</th><th>Studio</th><th>Started</th><th></th></tr></thead>
+    <tbody>
+      {% for j in info.stale %}
+      <tr>
+        <td class="mono muted">{{ j.id }}</td>
+        <td class="mono">{{ j.kind }}</td>
+        <td class="mono muted">{{ j.tenant_id or '—' }}</td>
+        <td class="muted">{{ j.started_at or '—' }}</td>
+        <td>
+          <form method="post" action="/admin/system/jobs/{{ j.id }}/requeue" style="margin:0">
+            {% include "_csrf.html" %}
+            <button class="btn secondary" type="submit">Requeue</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 
 <div class="card stack" style="margin-top:18px">
   <h3>Migrations</h3>

@@ -153,6 +153,43 @@ def queue_stats(conn) -> dict:
     return stats
 
 
+def failed_jobs(conn, *, limit: int = 50) -> list[dict]:
+    """The dead-letter queue: jobs that exhausted their retries (status='error'),
+    most-recent first. These never run again on their own — an operator requeues
+    them once the underlying cause is fixed."""
+    rows = conn.execute(
+        "SELECT * FROM jobs WHERE status='error' ORDER BY id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def stale_jobs(conn, *, older_than_seconds: int = 900, limit: int = 50) -> list[dict]:
+    """Jobs stuck in 'running' past the reclaim window — a worker most likely died
+    mid-job. :func:`run_worker` reclaims these on its next loop; surfacing them lets
+    an operator see the lag (or force a requeue) instead of waiting."""
+    rows = conn.execute(
+        "SELECT * FROM jobs WHERE status='running' AND started_at < datetime('now', ?) "
+        "ORDER BY id DESC LIMIT ?",
+        (f"-{older_than_seconds} seconds", limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def requeue_job(conn, job_id: int) -> bool:
+    """Operator action: send a failed or stuck job back to the queue to run now.
+
+    Idempotent — only a job in 'error' or 'running' is moved (a 'queued'/'done' row
+    is left alone), so a double-click or a stale page is a no-op. It does *not* reset
+    the attempt budget, so a still-broken job gets one fresh run and then dead-letters
+    again rather than looping. Returns True iff a row changed."""
+    cur = conn.execute(
+        "UPDATE jobs SET status='queued', run_at=datetime('now'), finished_at=NULL, "
+        "updated_at=datetime('now') WHERE id = ? AND status IN ('error', 'running')",
+        (job_id,),
+    )
+    return cur.rowcount > 0
+
+
 def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_sleep: float = 0.5) -> None:
     """Background loop: reclaim orphans once, then drain the queue until stopped."""
     reclaim_stale(db_path)
