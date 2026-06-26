@@ -16,7 +16,7 @@ import sqlite3
 
 from .config import Settings
 from .db import audit
-from .invoices import create_invoice, money
+from .invoices import create_invoice, money, tax_for
 
 PLAN_STATUSES = ("active", "void")
 
@@ -54,12 +54,17 @@ def create_payment_plan(
         (tenant_id, client_id, project_id, title.strip(), total, settings.currency),
     )
     plan_id = cur.lastrowid
+    # apply the studio's sales tax to each installment (0 unless a rate is set), the
+    # same additive way standalone invoices and orders do
+    rate_row = conn.execute("SELECT tax_rate_bps FROM tenants WHERE id = ?", (tenant_id,)).fetchone()
+    rate_bps = int(rate_row["tax_rate_bps"]) if rate_row else 0
     for seq, inst in enumerate(clean, start=1):
         create_invoice(
             conn, settings, tenant_id=tenant_id,
             title=f"{title.strip()} — {inst['label']}", amount_cents=inst["amount_cents"],
             client_id=client_id, project_id=project_id,
             plan_id=plan_id, due_date=inst["due_date"], sequence=seq,
+            tax_cents=tax_for(inst["amount_cents"], rate_bps),
         )
     audit(conn, actor="owner", action="payment_plan.created", tenant_id=tenant_id,
           detail=f"{title.strip()} · {money(total, settings.currency)} · {len(clean)} installments")
@@ -74,7 +79,13 @@ def installments_for_plan(conn: sqlite3.Connection, tenant_id: str, plan_id: int
     out = []
     for r in rows:
         d = dict(r)
-        d["amount_display"] = money(d["amount_cents"], d.get("currency", "usd"))
+        cur = d.get("currency", "usd")
+        tax = int(d.get("tax_cents") or 0)
+        d["amount_display"] = money(d["amount_cents"], cur)       # pre-tax subtotal
+        d["tax_cents"] = tax
+        d["tax_display"] = money(tax, cur)
+        d["total_cents"] = int(d["amount_cents"]) + tax
+        d["total_display"] = money(d["total_cents"], cur)         # what the client pays
         out.append(d)
     return out
 

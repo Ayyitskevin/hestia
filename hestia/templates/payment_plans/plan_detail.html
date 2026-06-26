@@ -40,7 +40,8 @@
       <tr>
         <td class="muted">{{ i.sequence }}</td>
         <td><a href="/invoices/{{ i.id }}">{{ i.title }}</a></td>
-        <td>{{ i.amount_display }}</td>
+        <td>{{ i.total_display if i.tax_cents else i.amount_display }}{% if i.tax_cents %}<br>
+          <span class="muted" style="font-size:.8rem">incl. {{ i.tax_display }} tax</span>{% endif %}</td>
         <td class="muted">{{ i.due_date or "—" }}</td>
         <td><span class="pill {{ 'on' if i.status == 'paid' else 'off' }}">{{ i.status }}</span></td>
         <td>
