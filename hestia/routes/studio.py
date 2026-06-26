@@ -16,6 +16,7 @@ from ..tenants import (
     get_tenant_by_slug,
     set_vision_style,
 )
+from ..testimonials import featured_testimonials
 from .deps import db_conn, render, settings_of
 
 router = APIRouter()
@@ -49,9 +50,11 @@ def public_site(request: Request, slug: str):
         if not tenant:
             return render(request, "offer_missing.html", auth=None, status_code=404)
         profile = get_profile(conn, tenant["id"])
-    if not profile["published"]:
-        return render(request, "studio/coming_soon.html", auth=None, tenant=tenant)
-    return render(request, "studio/site.html", auth=None, tenant=tenant, profile=profile)
+        if not profile["published"]:
+            return render(request, "studio/coming_soon.html", auth=None, tenant=tenant)
+        testimonials = featured_testimonials(conn, tenant["id"])
+    return render(request, "studio/site.html", auth=None, tenant=tenant, profile=profile,
+                  testimonials=testimonials)
 
 
 @router.post("/studio/{slug}/inquire")

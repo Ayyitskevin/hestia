@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leave a review — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">A few words for</div>
+      <h1>{{ tenant.name }}</h1>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="margin-top:24px">
+      {% if done %}
+        <div class="card stack" style="text-align:center">
+          <div style="font-size:2.4rem">💛</div>
+          <h3>We already have your review</h3>
+          <p class="muted">Thank you — this link has been used. There's nothing more to do.</p>
+        </div>
+      {% else %}
+        <div class="card stack">
+          <h3>How was your experience?</h3>
+          <p class="muted">Your words help other clients find {{ tenant.name }}. It only takes a moment.</p>
+          <form method="post" action="/t/{{ t.token }}">
+            {% include "_csrf.html" %}
+            <label for="rating">Rating</label>
+            <select id="rating" name="rating">
+              {% for n in [5, 4, 3, 2, 1] %}
+              <option value="{{ n }}" {{ 'selected' if n == 5 else '' }}>{{ '★' * n }}{{ '☆' * (5 - n) }} — {{ n }}</option>
+              {% endfor %}
+            </select>
+            <label for="body">Your review</label>
+            <textarea id="body" name="body" rows="5" required
+              placeholder="What did you love about working with {{ tenant.name }}?"></textarea>
+            <label for="author_name">Your name</label>
+            <input type="text" id="author_name" name="author_name" value="{{ t.author_name }}"
+                   placeholder="How you'd like to be credited">
+            <div class="form-actions"><button class="btn" type="submit">Submit review</button></div>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">{{ tenant.name }} · powered by Hestia 🔥</div></footer>
+</body>
+</html>

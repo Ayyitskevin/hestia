@@ -284,4 +284,20 @@ body.client { background: var(--cream); }
   .client-header { padding: 24px 0; }
   .client-header h1 { font-size: 1.5rem; }
   .hero-strip img { height: 180px; }
+
+  /* Testimonial rows stack their actions under the text. */
+  .testimonial-row { flex-direction: column; }
 }
+
+/* Testimonials — owner management rows + public social-proof cards. */
+.stars { color: #e0a458; letter-spacing: 1px; }
+.testimonial-row { display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.testimonial-row:last-child { border-bottom: none; }
+.testimonial-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.testimonial-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px; margin-top: 16px; }
+.testimonial-card { margin: 0; padding: 18px; background: var(--paper);
+  border: 1px solid var(--line); border-radius: 12px; }
+.testimonial-card blockquote { margin: 8px 0 10px; font-style: italic; color: var(--ink); }
+.testimonial-card figcaption { color: var(--ink-soft); font-size: .9rem; }

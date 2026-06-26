@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Testimonials — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Testimonials</h1>
+    <span class="muted">Ask a client for a review, then feature the best on your
+      <a href="/settings/site">public site</a>.</span>
+  </div>
+</div>
+
+<div class="card stack">
+  <h3>Request a testimonial</h3>
+  <p class="muted">Pick a client to email a private review link — or generate a link to share
+    yourself. We pre-fill their name; they add the words.</p>
+  <form method="post" action="/settings/testimonials/request" class="inline-grid-form">
+    {% include "_csrf.html" %}
+    <div>
+      <label>Client</label>
+      <select name="client_id">
+        <option value="">— no client (just a link) —</option>
+        {% for c in clients %}<option value="{{ c.id }}">{{ c.name }}{% if c.email %} · {{ c.email }}{% endif %}</option>{% endfor %}
+      </select>
+    </div>
+    <div><label>Credit as <span class="muted">(optional)</span></label><input type="text" name="author_name" placeholder="e.g. Sarah & Tom"></div>
+    <button class="btn" type="submit">Request</button>
+  </form>
+</div>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>Your testimonials · {{ items|length }}</h3>
+  {% if items %}
+    {% for t in items %}
+    <div class="testimonial-row">
+      <div class="stack" style="gap:4px">
+        <div>
+          <span class="stars" title="{{ t.rating }} / 5">{{ '★' * t.rating }}{{ '☆' * (5 - t.rating) }}</span>
+          <strong>{{ t.author_name or 'Anonymous' }}</strong>
+          <span class="pill {{ 'on' if t.status == 'featured' else '' }}">{{ t.status }}</span>
+        </div>
+        {% if t.status == 'requested' %}
+          <p class="muted">Awaiting their reply · share link:
+            <span class="mono">{{ t.url }}</span></p>
+        {% else %}
+          <p class="muted">{{ t.body or '(no words left)' }}</p>
+        {% endif %}
+      </div>
+      {% if t.status != 'requested' %}
+      <div class="testimonial-actions">
+        {% if t.status != 'featured' %}
+        <form method="post" action="/testimonials/{{ t.id }}/feature" style="margin:0">
+          {% include "_csrf.html" %}
+          <button class="btn secondary" type="submit">Feature</button>
+        </form>
+        {% endif %}
+        {% if t.status != 'hidden' %}
+        <form method="post" action="/testimonials/{{ t.id }}/hide" style="margin:0">
+          {% include "_csrf.html" %}
+          <button class="btn ghost" type="submit">{{ 'Unfeature' if t.status == 'featured' else 'Hide' }}</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="muted">No testimonials yet — request one from a happy client above.</p>
+  {% endif %}
+</div>
+{% endblock %}
