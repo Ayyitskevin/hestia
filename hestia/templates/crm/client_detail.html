@@ -34,6 +34,13 @@
   {% endif %}
 </div>
 
+<div class="card stack" style="margin-bottom:18px">
+  <h3>Refer a friend</h3>
+  <p class="muted">{{ client.name }}'s personal link. Any inquiry that comes through it is
+    tagged back to them in your CRM — so you can see who sends you business.</p>
+  <a class="offer-url" href="{{ refer_link }}" target="_blank">{{ refer_link }}</a>
+</div>
+
 <div class="card stack">
   <h3>Projects</h3>
   {% if projects %}

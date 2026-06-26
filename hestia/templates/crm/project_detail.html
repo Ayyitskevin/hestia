@@ -8,6 +8,7 @@
       {% if project.client_id %}<a href="/clients/{{ project.client_id }}">{{ project.client_name }}</a> · {% endif %}
       {{ shoot_type_labels.get(project.shoot_type, project.shoot_type) }}
       {% if project.event_date %} · {{ project.event_date }}{% endif %}
+      {% if referred_by %} · 🔗 referred by <a href="/clients/{{ referred_by.id }}">{{ referred_by.name }}</a>{% endif %}
     </span>
   </div>
   <div style="display:flex; gap:10px">

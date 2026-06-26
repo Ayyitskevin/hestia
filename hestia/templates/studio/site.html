@@ -26,6 +26,7 @@
           <h3>Inquire / book</h3>
           <form method="post" action="/studio/{{ tenant.slug }}/inquire">
             {% include "_csrf.html" %}
+            {% if ref %}<input type="hidden" name="ref" value="{{ ref }}">{% endif %}
             <label for="name">Your name</label>
             <input type="text" id="name" name="name" required>
             <label for="email">Email</label>
