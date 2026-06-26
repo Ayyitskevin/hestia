@@ -10,6 +10,8 @@ from ..content import list_packs, recipes_for
 from ..contracts import list_contracts
 from ..crm import (
     PROJECT_STATUSES,
+    add_client_tag,
+    all_tags,
     client_timeline,
     create_client,
     create_project,
@@ -19,7 +21,9 @@ from ..crm import (
     list_clients,
     list_projects,
     project_pipeline,
+    remove_client_tag,
     set_project_status,
+    tags_for_client,
 )
 from ..db import audit
 from ..invoices import list_invoices, money
@@ -45,13 +49,14 @@ def _user(request: Request, conn):
 
 
 @router.get("/clients")
-def clients_list(request: Request):
+def clients_list(request: Request, tag: str = ""):
     with db_conn(request) as conn:
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
-        clients = list_clients(conn, auth.tenant["id"])
-    return render(request, "crm/clients.html", auth=auth, clients=clients)
+        clients = list_clients(conn, auth.tenant["id"], tag=tag or None)
+        tags = all_tags(conn, auth.tenant["id"])
+    return render(request, "crm/clients.html", auth=auth, clients=clients, tags=tags, active_tag=tag)
 
 
 @router.get("/clients/new")
@@ -86,6 +91,7 @@ def client_detail(request: Request, client_id: int):
             return RedirectResponse("/clients", status_code=303)
         projects = list_projects(conn, auth.tenant["id"], client_id=client_id)
         timeline = client_timeline(conn, auth.tenant["id"], client_id)
+        tags = tags_for_client(conn, auth.tenant["id"], client_id)
         ref_code = referral_code_for(conn, auth.tenant["id"], client_id)
         balance = credit_balance(conn, auth.tenant["id"], client_id)
         credits = list_credits(conn, auth.tenant["id"], client_id)
@@ -96,9 +102,29 @@ def client_detail(request: Request, client_id: int):
     for c in credits:
         c["amount_display"] = money(c["amount_cents"])
     return render(request, "crm/client_detail.html", auth=auth, client=client,
-                  projects=projects, timeline=timeline, portal_link=portal_link,
+                  projects=projects, timeline=timeline, tags=tags, portal_link=portal_link,
                   refer_link=refer_link, credits=credits,
                   credit_balance_display=money(balance), credit_balance=balance)
+
+
+@router.post("/clients/{client_id}/tags")
+def client_add_tag(request: Request, client_id: int, tag: str = Form("")):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        add_client_tag(conn, auth.tenant["id"], client_id, tag)
+    return RedirectResponse(f"/clients/{client_id}", status_code=303)
+
+
+@router.post("/clients/{client_id}/tags/delete")
+def client_remove_tag(request: Request, client_id: int, tag: str = Form("")):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        remove_client_tag(conn, auth.tenant["id"], client_id, tag)
+    return RedirectResponse(f"/clients/{client_id}", status_code=303)
 
 
 @router.post("/clients/{client_id}/portal")

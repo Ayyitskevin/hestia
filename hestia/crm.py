@@ -44,27 +44,67 @@ def get_client(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> dict
     return dict(row) if row else None
 
 
-def list_clients(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
-    rows = conn.execute(
-        """
-        SELECT c.*, COUNT(p.id) AS project_count,
-               COALESCE((SELECT SUM(i.amount_cents) FROM invoices i
-                         WHERE i.client_id = c.id AND i.tenant_id = c.tenant_id
-                           AND i.status = 'paid'), 0) AS lifetime_cents
-          FROM clients c
-          LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = c.tenant_id
-         WHERE c.tenant_id = ?
-         GROUP BY c.id
-         ORDER BY lifetime_cents DESC, c.created_at DESC
-        """,
-        (tenant_id,),
-    ).fetchall()
+def _norm_tag(tag: str) -> str:
+    """Normalize a tag: trimmed, lower-cased, single-spaced, capped — so 'VIP ' and
+    'vip' are the same tag."""
+    return " ".join((tag or "").strip().lower().split())[:40]
+
+
+def list_clients(conn: sqlite3.Connection, tenant_id: str, *, tag: str | None = None) -> list[dict]:
+    sql = (
+        "SELECT c.*, COUNT(DISTINCT p.id) AS project_count, "
+        "       COALESCE((SELECT SUM(i.amount_cents) FROM invoices i "
+        "                 WHERE i.client_id = c.id AND i.tenant_id = c.tenant_id "
+        "                   AND i.status = 'paid'), 0) AS lifetime_cents, "
+        "       (SELECT GROUP_CONCAT(ct.tag, ',') FROM client_tags ct "
+        "        WHERE ct.client_id = c.id AND ct.tenant_id = c.tenant_id) AS tags_csv "
+        "  FROM clients c "
+        "  LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = c.tenant_id "
+        " WHERE c.tenant_id = ? "
+    )
+    params: list = [tenant_id]
+    if tag:
+        sql += ("AND c.id IN (SELECT client_id FROM client_tags "
+                "WHERE tenant_id = c.tenant_id AND tag = ?) ")
+        params.append(_norm_tag(tag))
+    sql += "GROUP BY c.id ORDER BY lifetime_cents DESC, c.created_at DESC"
     out = []
-    for r in rows:
+    for r in conn.execute(sql, params).fetchall():
         d = dict(r)
         d["lifetime_display"] = money(int(d["lifetime_cents"]))     # collected revenue, this client
+        d["tags"] = [t for t in (d.get("tags_csv") or "").split(",") if t]
         out.append(d)
     return out
+
+
+def add_client_tag(conn: sqlite3.Connection, tenant_id: str, client_id: int, tag: str) -> str | None:
+    """Tag a client (idempotent). Only tags a client this studio owns; returns the
+    normalized tag, or None if the tag was empty or the client isn't theirs."""
+    t = _norm_tag(tag)
+    if not t or not get_client(conn, tenant_id, client_id):
+        return None
+    conn.execute("INSERT OR IGNORE INTO client_tags (tenant_id, client_id, tag) VALUES (?, ?, ?)",
+                 (tenant_id, client_id, t))
+    return t
+
+
+def remove_client_tag(conn: sqlite3.Connection, tenant_id: str, client_id: int, tag: str) -> bool:
+    cur = conn.execute("DELETE FROM client_tags WHERE tenant_id = ? AND client_id = ? AND tag = ?",
+                       (tenant_id, client_id, _norm_tag(tag)))
+    return cur.rowcount > 0
+
+
+def tags_for_client(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> list[str]:
+    return [r["tag"] for r in conn.execute(
+        "SELECT tag FROM client_tags WHERE tenant_id = ? AND client_id = ? ORDER BY tag",
+        (tenant_id, client_id)).fetchall()]
+
+
+def all_tags(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
+    """Every tag in use for this studio, with how many clients carry it."""
+    return [{"tag": r["tag"], "count": int(r["n"])} for r in conn.execute(
+        "SELECT tag, COUNT(*) AS n FROM client_tags WHERE tenant_id = ? "
+        "GROUP BY tag ORDER BY tag", (tenant_id,)).fetchall()]
 
 
 # ── Projects ────────────────────────────────────────────────────────────────
