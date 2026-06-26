@@ -17,6 +17,7 @@ All timestamps use SQLite's ``datetime('now')`` so comparisons stay consistent.
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -175,25 +176,43 @@ def stale_jobs(conn, *, older_than_seconds: int = 900, limit: int = 50) -> list[
     return [dict(r) for r in rows]
 
 
-def requeue_job(conn, job_id: int) -> bool:
-    """Operator action: send a failed or stuck job back to the queue to run now.
+def requeue_job(conn, job_id: int, *, stale_after_seconds: int = 900) -> bool:
+    """Operator action: send a failed or *orphaned* job back to the queue to run now.
 
-    Idempotent — only a job in 'error' or 'running' is moved (a 'queued'/'done' row
-    is left alone), so a double-click or a stale page is a no-op. It does *not* reset
-    the attempt budget, so a still-broken job gets one fresh run and then dead-letters
-    again rather than looping. Returns True iff a row changed."""
+    An 'error' job (dead-letter) requeues unconditionally. A 'running' job requeues
+    only if it's actually stale (``started_at`` past the reclaim window) — requeuing
+    a job that's genuinely still in flight would flip it to 'queued' and let another
+    worker claim and run it concurrently (e.g. a duplicate email/charge). A 'queued'
+    or 'done' row, or a fresh 'running' one, is left alone, so a double-click or a
+    stale page is a no-op. It does *not* reset the attempt budget. Returns True iff a
+    row changed."""
     cur = conn.execute(
         "UPDATE jobs SET status='queued', run_at=datetime('now'), finished_at=NULL, "
-        "updated_at=datetime('now') WHERE id = ? AND status IN ('error', 'running')",
-        (job_id,),
+        "updated_at=datetime('now') WHERE id = ? AND ("
+        "    status='error' "
+        "    OR (status='running' AND started_at < datetime('now', ?)))",
+        (job_id, f"-{stale_after_seconds} seconds"),
     )
     return cur.rowcount > 0
 
 
-def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_sleep: float = 0.5) -> None:
-    """Background loop: reclaim orphans once, then drain the queue until stopped."""
-    reclaim_stale(db_path)
+def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_sleep: float = 0.5,
+               reclaim_interval: float = 60.0) -> None:
+    """Background loop: drain the queue and periodically reclaim orphaned jobs.
+
+    Reclaiming must run *on a cadence*, not just at startup: a job orphaned by a
+    restart is younger than the stale window at that moment, so a single startup
+    sweep skips it and nothing would ever pick it up once it ages past the window.
+    We reclaim every ``reclaim_interval`` seconds so an orphan is recovered within
+    roughly ``stale_window + reclaim_interval``."""
+    last_reclaim = 0.0  # 0 → reclaim immediately on the first iteration
     while not stop_event.is_set():
+        if time.monotonic() - last_reclaim >= reclaim_interval:
+            try:
+                reclaim_stale(db_path)
+            except Exception:  # noqa: BLE001 - never let reclaim kill the worker
+                pass
+            last_reclaim = time.monotonic()
         try:
             kind = run_next(db_path, settings)
         except Exception:  # noqa: BLE001 - the worker must never die on a bad job

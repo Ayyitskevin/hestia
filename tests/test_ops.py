@@ -3,7 +3,16 @@
 from conftest import ADMIN_TOKEN, CSRFClient
 
 from hestia.db import applied_migrations, get_db
-from hestia.jobs import enqueue, failed_jobs, queue_stats, requeue_job, stale_jobs
+from hestia.jobs import (
+    HANDLERS,
+    enqueue,
+    failed_jobs,
+    queue_stats,
+    register,
+    requeue_job,
+    run_worker,
+    stale_jobs,
+)
 
 
 def _admin(app):
@@ -142,3 +151,52 @@ def test_admin_system_flags_config_warnings(settings):
     page = admin.get("/admin/system")
     assert "configuration warning" in page.text.lower()
     assert "HESTIA_STRIPE_SECRET_KEY" in page.text
+
+
+# --- hardening: requeue only orphaned 'running' jobs, reclaim on a cadence ----
+
+def test_requeue_running_only_when_stale(db_path):
+    with get_db(db_path) as conn:
+        fresh = conn.execute("INSERT INTO jobs (kind, status, started_at) "
+                             "VALUES ('live','running',datetime('now'))").lastrowid
+        orphan = conn.execute("INSERT INTO jobs (kind, status, started_at) "
+                             "VALUES ('orphan','running',datetime('now','-20 minutes'))").lastrowid
+    with get_db(db_path) as conn:
+        # a genuinely in-flight job must NOT be requeued (would double-run concurrently)
+        assert requeue_job(conn, fresh) is False
+        # a stale orphan is fair game
+        assert requeue_job(conn, orphan) is True
+    with get_db(db_path) as conn:
+        assert conn.execute("SELECT status FROM jobs WHERE id=?", (fresh,)).fetchone()["status"] == "running"
+        assert conn.execute("SELECT status FROM jobs WHERE id=?", (orphan,)).fetchone()["status"] == "queued"
+
+
+def test_worker_reclaims_orphaned_jobs_on_a_cadence(db_path, settings):
+    import threading
+
+    ran = threading.Event()
+    HANDLERS.pop("test.orphan", None)
+
+    @register("test.orphan")
+    def _handle(settings, payload):  # noqa: ARG001
+        ran.set()
+
+    try:
+        with get_db(db_path) as conn:
+            # an orphan stuck in 'running' past the stale window (worker died mid-job)
+            conn.execute("INSERT INTO jobs (kind, status, started_at, max_attempts) "
+                         "VALUES ('test.orphan','running',datetime('now','-20 minutes'),3)")
+        stop = threading.Event()
+        worker = threading.Thread(
+            target=run_worker, args=(db_path, settings, stop),
+            kwargs={"idle_sleep": 0.01, "reclaim_interval": 0.0}, daemon=True)
+        worker.start()
+        try:
+            # the job can only run once the loop reclaims it from 'running' → 'queued',
+            # so the handler firing proves the periodic reclaim works (not just startup)
+            assert ran.wait(timeout=3.0), "orphaned job was never reclaimed and re-run"
+        finally:
+            stop.set()
+            worker.join(timeout=2)
+    finally:
+        HANDLERS.pop("test.orphan", None)
