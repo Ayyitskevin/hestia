@@ -24,6 +24,49 @@
   <a class="health-item" href="/studio/{{ tenant.slug }}" target="_blank"><span class="svc">↗</span> <span class="url">public site</span></a>
 </div>
 
+<div class="card stack" style="margin-bottom:18px">
+  <h3>Needs attention{% if attention.total %} · {{ attention.total }}{% endif %}</h3>
+  {% if attention.total == 0 %}
+    <p class="muted">You're all caught up — no leads waiting, invoices outstanding, sessions
+      imminent, or galleries undelivered. 🎉</p>
+  {% else %}
+    <div class="grid cols-2">
+      {% if attention.leads %}
+      <div class="stack" style="gap:6px">
+        <div class="label">📥 New leads · {{ attention.leads|length }}</div>
+        {% for l in attention.leads %}
+        <div><a href="/projects/{{ l.id }}">{{ l.name }}</a>{% if l.client_name %} <span class="muted">· {{ l.client_name }}</span>{% endif %}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if attention.unpaid %}
+      <div class="stack" style="gap:6px">
+        <div class="label">💸 Unpaid invoices · {{ attention.unpaid|length }}</div>
+        {% for i in attention.unpaid %}
+        <div><a href="/invoices/{{ i.id }}">{{ i.title }}</a> <span class="muted">· {{ i.amount_display }} · {{ i.status }}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if attention.upcoming %}
+      <div class="stack" style="gap:6px">
+        <div class="label">📅 Upcoming sessions · {{ attention.upcoming|length }}</div>
+        {% for a in attention.upcoming %}
+        <div><a href="/schedule/{{ a.id }}">{{ a.title }}</a> <span class="muted">· {{ a.starts_at }}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if attention.to_deliver %}
+      <div class="stack" style="gap:6px">
+        <div class="label">📦 Ready to deliver · {{ attention.to_deliver|length }}</div>
+        {% for g in attention.to_deliver %}
+        <div><a href="/galleries/{{ g.id }}">{{ g.title }}</a> <span class="muted">· enable download</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
 <div class="grid cols-2">
   <div class="card stack">
     <h3>Recent galleries</h3>
