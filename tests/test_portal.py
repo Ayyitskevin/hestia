@@ -4,6 +4,8 @@ from conftest import login_owner, onboard_studio
 
 from hestia.contracts import create_contract, send_contract
 from hestia.crm import assign_gallery_to_project, create_client, create_project
+from hestia.db import connect
+from hestia.delivery import enable_delivery
 from hestia.galleries import create_gallery, publish_gallery
 from hestia.invoices import create_invoice
 from hestia.payment_plans import create_payment_plan, deposit_balance_installments
@@ -14,6 +16,7 @@ from hestia.portal import (
     regenerate_portal_token,
 )
 from hestia.tenants import create_tenant
+from hestia.testimonials import request_testimonial
 
 
 def _tenant(conn, name="Portal Studio"):
@@ -73,6 +76,60 @@ def test_assemble_aggregates_client_items(conn, settings):
     assert data["invoices"][0]["pay_url"]
     titles = [g["title"] for g in data["galleries"]]
     assert "Wedding Gallery" in titles and "Draft Gallery" not in titles
+
+
+def test_portal_surfaces_download_and_review(conn, settings):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Sarah")
+    p = create_project(conn, tenant_id=t["id"], name="Wedding", client_id=c["id"])
+    g = create_gallery(conn, tenant_id=t["id"], title="Finals")
+    assign_gallery_to_project(conn, t["id"], g["id"], p["id"])
+    publish_gallery(conn, t["id"], g["id"])
+    dtoken = enable_delivery(conn, t["id"], g["id"])                       # digital delivery on
+    tt = request_testimonial(conn, tenant_id=t["id"], client_id=c["id"])  # pending review
+    conn.commit()
+
+    client = get_client_by_portal_token(conn, enable_portal(conn, t["id"], c["id"]))
+    data = assemble_portal(conn, settings, client)
+    gallery = next(x for x in data["galleries"] if x["title"] == "Finals")
+    assert gallery["download_url"] and dtoken in gallery["download_url"]
+    assert data["review_url"] and tt["token"] in data["review_url"]
+
+
+def test_portal_omits_download_and_review_when_absent(conn, settings):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Plain")
+    p = create_project(conn, tenant_id=t["id"], name="Shoot", client_id=c["id"])
+    g = create_gallery(conn, tenant_id=t["id"], title="Plain")
+    assign_gallery_to_project(conn, t["id"], g["id"], p["id"])
+    publish_gallery(conn, t["id"], g["id"])
+    conn.commit()
+    client = get_client_by_portal_token(conn, enable_portal(conn, t["id"], c["id"]))
+    data = assemble_portal(conn, settings, client)
+    assert data["galleries"][0]["download_url"] is None                   # delivery not enabled
+    assert data["review_url"] is None                                     # no pending review
+
+
+def test_http_portal_shows_download_and_review(client, app):
+    creds = onboard_studio(client, email="hub@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Hub Client")
+        p = create_project(conn, tenant_id=tid, name="Wedding", client_id=c["id"])
+        g = create_gallery(conn, tenant_id=tid, title="Finals")
+        assign_gallery_to_project(conn, tid, g["id"], p["id"])
+        publish_gallery(conn, tid, g["id"])
+        enable_delivery(conn, tid, g["id"])
+        request_testimonial(conn, tenant_id=tid, client_id=c["id"])
+        portal_tok = enable_portal(conn, tid, c["id"])
+        conn.commit()
+    finally:
+        conn.close()
+    page = client.get(f"/portal/{portal_tok}")
+    assert page.status_code == 200
+    assert "Download" in page.text and "Leave a review" in page.text
 
 
 def test_isolation_token_resolves_only_its_client(conn):

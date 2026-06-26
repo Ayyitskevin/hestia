@@ -169,13 +169,25 @@
             {% for g in galleries %}
             <tr>
               <td>{{ g.title }}</td>
-              <td style="text-align:right"><a class="btn secondary" href="{{ g.view_url }}">View gallery</a></td>
+              <td style="text-align:right">
+                {% if g.download_url %}<a class="btn secondary" href="{{ g.download_url }}">⬇ Download</a>{% endif %}
+                <a class="btn secondary" href="{{ g.view_url }}">View gallery</a>
+              </td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
         {% else %}<p class="muted">Your galleries will appear here once they're published.</p>{% endif %}
       </div>
+
+      {% if review_url %}
+      <div class="card stack" style="border-color:#cfe2cb; background:var(--sage-soft)">
+        <h3>Share your experience</h3>
+        <p class="muted">Loved your photos? A few words mean the world to {{ tenant.name }} —
+          and help other clients find them.</p>
+        <div><a class="btn" href="{{ review_url }}">Leave a review</a></div>
+      </div>
+      {% endif %}
 
     </div>
   </main>

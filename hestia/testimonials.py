@@ -107,5 +107,18 @@ def list_testimonials(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def pending_testimonial(conn: sqlite3.Connection, tenant_id: str, client_id: int | None) -> dict | None:
+    """A client's outstanding review request (still 'requested'), if any — so the
+    client portal can surface a 'leave a review' prompt instead of a separate email."""
+    if not client_id:
+        return None
+    row = conn.execute(
+        "SELECT * FROM testimonials WHERE tenant_id = ? AND client_id = ? AND status = 'requested' "
+        "ORDER BY id DESC LIMIT 1",
+        (tenant_id, client_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def testimonial_public_url(settings: Settings, token: str) -> str:
     return f"{settings.public_url.rstrip('/')}/t/{token}"

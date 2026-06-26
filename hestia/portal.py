@@ -18,11 +18,13 @@ from .config import Settings
 from .contracts import contract_public_url, list_contracts
 from .crm import galleries_for_client, get_client, list_projects
 from .crypto import new_session_token
+from .delivery import delivery_url
 from .invoices import invoice_public_url, list_invoices
 from .payment_plans import get_payment_plan, list_payment_plans
 from .questionnaires import list_questionnaires
 from .scheduler import list_appointments
 from .tenants import get_tenant
+from .testimonials import pending_testimonial, testimonial_public_url
 
 
 def enable_portal(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> str | None:
@@ -92,6 +94,8 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
                  if g["status"] == "published"]
     for g in galleries:
         g["view_url"] = f"{settings.public_url.rstrip('/')}/g/{slug}/{g['slug']}"
+        # If the studio has enabled digital delivery, the client downloads here too.
+        g["download_url"] = delivery_url(settings, g["delivery_token"]) if g.get("delivery_token") else None
 
     questionnaires = [q for q in list_questionnaires(conn, tenant_id, client_id=client["id"])
                       if q["status"] in ("sent", "completed")]
@@ -103,6 +107,9 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
     for a in appointments:
         a["book_url"] = f"{settings.public_url.rstrip('/')}/book/{a['token']}"
 
+    pending = pending_testimonial(conn, tenant_id, client["id"])
+    review_url = testimonial_public_url(settings, pending["token"]) if pending else None
+
     return {
         "tenant": tenant,
         "projects": list_projects(conn, tenant_id, client_id=client["id"]),
@@ -112,4 +119,5 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
         "galleries": galleries,
         "questionnaires": questionnaires,
         "appointments": appointments,
+        "review_url": review_url,
     }
