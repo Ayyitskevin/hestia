@@ -38,6 +38,7 @@ from .routes import (
     content,
     contracts,
     crm,
+    delivery,
     forms,
     galleries,
     health,
@@ -170,6 +171,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(pay.router)
     app.include_router(sign.router)
     app.include_router(portal.router)
+    app.include_router(delivery.router)
     app.include_router(forms.router)
     app.include_router(book.router)
     app.include_router(webhooks.router)
