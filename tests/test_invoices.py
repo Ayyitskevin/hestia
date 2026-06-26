@@ -3,6 +3,7 @@
 from conftest import login_owner, onboard_studio
 
 from hestia.crm import create_client, create_project
+from hestia.db import connect
 from hestia.invoices import (
     create_invoice,
     get_invoice,
@@ -95,3 +96,47 @@ def test_http_invoice_and_pay_flow(client):
 
 def test_pay_unknown_token_404(client):
     assert client.get("/pay/nope-not-a-token").status_code == 404
+
+
+# --- cross-tenant isolation (audit hardening) -------------------------------
+
+def test_invoice_join_does_not_leak_cross_tenant_client(conn, settings):
+    """An invoice that (wrongly) carries another studio's client_id must not surface
+    that studio's client name/email — the joins are tenant-matched."""
+    a, b = _tenant(conn, "A"), _tenant(conn, "B")
+    ca = create_client(conn, tenant_id=a["id"], name="SECRET-A", email="a@example.com")
+    # tenant B's invoice references tenant A's client id (IDs are globally unique)
+    inv = create_invoice(conn, settings, tenant_id=b["id"], title="X", amount_cents=100,
+                         client_id=ca["id"])
+    conn.commit()
+    got = get_invoice(conn, b["id"], inv["id"])
+    assert got["client_name"] is None and got["client_email"] is None     # A's data not leaked
+    listed = {i["id"]: i for i in list_invoices(conn, b["id"])}
+    assert listed[inv["id"]]["client_name"] is None
+
+
+def test_invoice_create_drops_foreign_client_and_project(client, app):
+    """The create route must reject a client_id/project_id this studio doesn't own,
+    so a stray cross-tenant reference can never ride along on the invoice."""
+    creds = onboard_studio(client, email="iso@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        my_tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        other = create_tenant(conn, name="Other", shoot_type="wedding")
+        fc = create_client(conn, tenant_id=other["id"], name="Foreign", email="f@example.com")
+        fp = create_project(conn, tenant_id=other["id"], name="FP", client_id=None,
+                            shoot_type="wedding", status="lead")
+        conn.commit()
+        fcid, fpid = fc["id"], fp["id"]
+    finally:
+        conn.close()
+    client.post("/invoices", data={"title": "X", "amount": "100",
+                                   "client_id": str(fcid), "project_id": str(fpid)})
+    conn = connect(app.state.settings.db_path)
+    try:
+        row = conn.execute("SELECT client_id, project_id FROM invoices WHERE tenant_id = ?",
+                           (my_tid,)).fetchone()
+    finally:
+        conn.close()
+    assert row["client_id"] is None and row["project_id"] is None          # both foreign refs dropped

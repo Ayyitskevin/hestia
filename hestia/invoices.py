@@ -7,6 +7,7 @@ callback never double-settles. Tenant-scoped throughout.
 
 from __future__ import annotations
 
+import datetime
 import sqlite3
 
 from .automations import emit_event
@@ -55,8 +56,10 @@ def get_invoice(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> di
         """
         SELECT i.*, c.name AS client_name, c.email AS client_email, p.name AS project_name
           FROM invoices i
-          LEFT JOIN clients c ON c.id = i.client_id
-          LEFT JOIN projects p ON p.id = i.project_id
+          -- tenant-match the joins: an invoice carrying another studio's client_id /
+          -- project_id (IDs are global) must not surface that studio's name or email
+          LEFT JOIN clients c ON c.id = i.client_id AND c.tenant_id = i.tenant_id
+          LEFT JOIN projects p ON p.id = i.project_id AND p.tenant_id = i.tenant_id
          WHERE i.id = ? AND i.tenant_id = ?
         """,
         (invoice_id, tenant_id),
@@ -82,8 +85,11 @@ def list_invoices(
         "  CASE WHEN i.status = 'sent' AND date(i.due_date) IS NOT NULL "
         "       AND date(i.due_date) < date('now') "
         "       THEN CAST(julianday('now') - julianday(date(i.due_date)) AS INTEGER) END AS days_overdue "
-        "  FROM invoices i LEFT JOIN clients c ON c.id = i.client_id "
-        "  LEFT JOIN projects p ON p.id = i.project_id WHERE i.tenant_id = ?"
+        # tenant-match the joins so a stray cross-tenant client_id/project_id can't
+        # surface another studio's client or project name in this list
+        "  FROM invoices i LEFT JOIN clients c ON c.id = i.client_id AND c.tenant_id = i.tenant_id "
+        "  LEFT JOIN projects p ON p.id = i.project_id AND p.tenant_id = i.tenant_id "
+        "  WHERE i.tenant_id = ?"
     )
     params: list = [tenant_id]
     if project_id is not None:
@@ -156,7 +162,9 @@ def accounts_receivable(conn: sqlite3.Connection, tenant_id: str) -> dict:
         "SELECT COALESCE(SUM(amount_cents), 0) AS outstanding, COUNT(*) AS outstanding_count, "
         f"  COALESCE(SUM(CASE WHEN {_OVERDUE_SQL} THEN amount_cents ELSE 0 END), 0) AS overdue, "
         f"  COALESCE(SUM(CASE WHEN {_OVERDUE_SQL} THEN 1 ELSE 0 END), 0) AS overdue_count "
-        "FROM invoices WHERE tenant_id = ? AND status = 'sent'",
+        # plan_id IS NULL: plan installments are tracked under their payment plan, not
+        # the flat invoices list — so A/R here matches what that list actually shows
+        "FROM invoices WHERE tenant_id = ? AND status = 'sent' AND plan_id IS NULL",
         (tenant_id,),
     ).fetchone()
     return {
@@ -166,9 +174,22 @@ def accounts_receivable(conn: sqlite3.Connection, tenant_id: str) -> dict:
     }
 
 
+def _is_overdue(due_date) -> bool:
+    """True if a parseable ISO due_date is before today — same notion of "overdue"
+    the SQL date() comparison uses. Empty/free-text dates count as not overdue."""
+    if not due_date:
+        return False
+    try:
+        return datetime.date.fromisoformat(str(due_date).strip()) < datetime.date.today()
+    except ValueError:
+        return False
+
+
 def send_invoice_reminder(conn: sqlite3.Connection, settings: Settings, invoice: dict) -> str | None:
-    """Email the client a friendly past-due nudge with the pay link. Returns the
-    send status, or None when there's no client email to send to."""
+    """Email the client a payment nudge with the pay link. The wording adapts to
+    whether the invoice is actually past due, so a manual nudge on a not-yet-due
+    invoice doesn't falsely claim it's overdue. Returns the send status, or None
+    when there's no client email to send to."""
     to = (invoice.get("client_email") or "").strip()
     if not to:
         return None
@@ -176,14 +197,15 @@ def send_invoice_reminder(conn: sqlite3.Connection, settings: Settings, invoice:
     studio = trow["name"] if trow else "your photographer"
     amount = invoice.get("amount_display") or money(invoice["amount_cents"], invoice.get("currency", "usd"))
     pay_url = invoice_public_url(settings, invoice["token"])
-    subject = f'Reminder: invoice "{invoice["title"]}" is past due'
-    body = (
-        f"Hi {invoice.get('client_name') or 'there'},\n\n"
-        f'A friendly reminder that your invoice from {studio} — "{invoice["title"]}" '
-        f"for {amount} — is now past due.\n\n"
-        f"You can pay securely here:\n{pay_url}\n\n"
-        f"Thank you!\n{studio}"
-    )
+    title = invoice["title"]
+    if _is_overdue(invoice.get("due_date")):
+        subject = f'Reminder: invoice "{title}" is past due'
+        lead = f'your invoice from {studio} — "{title}" for {amount} — is now past due.'
+    else:
+        subject = f'Reminder: invoice "{title}" from {studio}'
+        lead = f'a friendly reminder about your invoice from {studio} — "{title}" for {amount}.'
+    body = (f"Hi {invoice.get('client_name') or 'there'},\n\n{lead}\n\n"
+            f"You can pay securely here:\n{pay_url}\n\nThank you!\n{studio}")
     return notify(conn, settings, to=to, subject=subject, body=body, tenant_id=invoice["tenant_id"])
 
 
@@ -200,15 +222,22 @@ def record_invoice_reminder(conn: sqlite3.Connection, tenant_id: str, invoice_id
 
 def send_overdue_reminders(conn: sqlite3.Connection, settings: Settings, *,
                            cooldown_days: int = 7, limit: int = 500) -> int:
-    """Across all tenants, nudge each overdue invoice not reminded within the
-    cooldown window, then stamp it so the next sweep leaves it alone until the
-    window passes again. The cooldown is what keeps a daily sweep from spamming.
-    Returns the number of reminders actually sent."""
+    """Across all tenants, nudge each overdue invoice whose client has an email on
+    file and who hasn't been reminded within the cooldown window. Returns reminders
+    sent.
+
+    Two correctness guards:
+    - The inner JOIN + non-empty email filter means an invoice with no client (or no
+      client email) is never selected — so it can't be rescanned every sweep forever.
+    - Each invoice is *claimed* first (record_invoice_reminder is an atomic UPDATE
+      gated on status='sent'); only a successful claim sends. An invoice paid between
+      this SELECT and the send therefore can't receive a duplicate reminder."""
     rows = conn.execute(
-        "SELECT i.id, i.tenant_id, i.title, i.amount_cents, i.currency, i.token, "
+        "SELECT i.id, i.tenant_id, i.title, i.amount_cents, i.currency, i.token, i.due_date, "
         "       c.name AS client_name, c.email AS client_email "
-        "FROM invoices i LEFT JOIN clients c ON c.id = i.client_id AND c.tenant_id = i.tenant_id "
+        "FROM invoices i JOIN clients c ON c.id = i.client_id AND c.tenant_id = i.tenant_id "
         f"WHERE i.status = 'sent' AND {_OVERDUE_SQL.replace('due_date', 'i.due_date')} "
+        "  AND TRIM(COALESCE(c.email, '')) <> '' "
         "  AND (i.last_reminder_at IS NULL OR i.last_reminder_at < datetime('now', ?)) "
         "ORDER BY i.id LIMIT ?",
         (f"-{int(cooldown_days)} days", limit),
@@ -216,7 +245,7 @@ def send_overdue_reminders(conn: sqlite3.Connection, settings: Settings, *,
     sent = 0
     for r in rows:
         inv = _hydrate(dict(r))
-        if send_invoice_reminder(conn, settings, inv):
-            record_invoice_reminder(conn, inv["tenant_id"], inv["id"])
+        if record_invoice_reminder(conn, inv["tenant_id"], inv["id"]):   # claim before send
+            send_invoice_reminder(conn, settings, inv)
             sent += 1
     return sent
