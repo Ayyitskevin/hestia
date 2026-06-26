@@ -74,3 +74,20 @@ def test_gallery_detail_shows_engagement(client, app):
     page = client.get(f"/galleries/{gid}")
     assert page.status_code == 200
     assert "Engagement" in page.text and "views" in page.text and "downloads" in page.text
+
+
+def test_galleries_list_shows_engagement_column(client, app):
+    creds = onboard_studio(client, email="list@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        g = create_gallery(conn, tenant_id=tid, title="Opened")
+        conn.execute("UPDATE galleries SET view_count = 4, download_count = 2 WHERE id = ?", (g["id"],))
+        create_gallery(conn, tenant_id=tid, title="Untouched")
+        conn.commit()
+    finally:
+        conn.close()
+    page = client.get("/galleries")
+    assert page.status_code == 200 and "Engagement" in page.text
+    assert "👁 4 · ⬇ 2" in page.text                                  # the opened gallery's counts

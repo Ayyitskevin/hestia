@@ -8,7 +8,7 @@
 {% if galleries %}
 <div class="card">
   <table>
-    <thead><tr><th>Gallery</th><th>Client</th><th>Images</th><th>Status</th></tr></thead>
+    <thead><tr><th>Gallery</th><th>Client</th><th>Images</th><th>Status</th><th>Engagement</th></tr></thead>
     <tbody>
       {% for g in galleries %}
       <tr>
@@ -16,6 +16,7 @@
         <td class="muted">{{ g.client_name or "—" }}</td>
         <td>{{ g.image_count }}</td>
         <td><span class="pill {{ 'on' if g.status == 'published' else 'off' }}">{{ g.status }}</span></td>
+        <td class="muted" title="views · downloads">{% if g.view_count or g.download_count %}👁 {{ g.view_count }} · ⬇ {{ g.download_count }}{% else %}—{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
