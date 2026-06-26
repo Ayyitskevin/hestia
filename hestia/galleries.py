@@ -17,6 +17,25 @@ from .storage import Storage, image_key
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
+# Content types we'll serve INLINE. Upload content_type is client-controlled, so a
+# malicious "image" declared text/html would otherwise render as a page on our own
+# origin (stored XSS). Anything not on this allowlist is served as an opaque
+# download instead of being interpreted by the browser.
+# Note: SVG is deliberately excluded — it can carry inline <script>, so we never
+# render it on our origin (it falls through to an octet-stream download).
+_INLINE_IMAGE_TYPES = frozenset({
+    "image/jpeg", "image/png", "image/webp", "image/gif", "image/avif",
+    "image/heic", "image/heif", "image/tiff", "image/bmp",
+})
+
+
+def safe_inline_type(content_type: str | None) -> str:
+    """The media type to serve INLINE for a stored image. Real raster types pass
+    through; anything else (notably text/html) becomes octet-stream so the browser
+    downloads it rather than executing it on our origin."""
+    ct = (content_type or "").split(";", 1)[0].strip().lower()
+    return ct if ct in _INLINE_IMAGE_TYPES else "application/octet-stream"
+
 
 def _slugify(value: str) -> str:
     return _SLUG_RE.sub("-", (value or "").strip().lower()).strip("-") or "gallery"

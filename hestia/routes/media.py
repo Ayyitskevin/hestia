@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
 from ..auth import context_from_session
+from ..galleries import safe_inline_type
 from .deps import db_conn, storage_of
 
 router = APIRouter()
@@ -33,4 +34,6 @@ def serve_media(request: Request, key: str):
         data = storage.open(key)
     except FileNotFoundError:
         return Response(status_code=404)
-    return Response(content=data, media_type=img["content_type"])
+    # Served inline → clamp to a safe image type so a stored text/html "image" can't
+    # execute as a page on our origin (the content_type is client-supplied at upload).
+    return Response(content=data, media_type=safe_inline_type(img["content_type"]))

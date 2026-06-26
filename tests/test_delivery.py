@@ -82,7 +82,7 @@ def test_public_download_individual_and_zip(client, conn, storage):
 
     one = client.get(f"/d/{token}/{imgs[0]['id']}")
     assert one.status_code == 200
-    assert one.headers["content-disposition"] == 'attachment; filename="a.jpg"'
+    assert one.headers["content-disposition"].startswith('attachment; filename="a.jpg"')
     assert one.content == b"AAA-original"   # the real original bytes, as a download
 
     z = client.get(f"/d/{token}/all.zip")
@@ -142,6 +142,33 @@ def test_delivery_view_is_gallery_scoped(client, conn, storage):
     conn.commit()
     secret = list_images(conn, g2["id"])[0]
     assert client.get(f"/d/{token1}/{secret['id']}/view").status_code == 404
+
+
+def test_intl_filename_downloads_without_crashing(client, conn, storage):
+    # CJK/Cyrillic/emoji filenames are routine for real clients; a latin-1-only
+    # Content-Disposition would 500 on them. RFC 5987 filename* fixes it.
+    t, g = _gallery(conn)
+    _img(conn, storage, t, g, "写真.jpg", b"JPEGDATA")
+    token = enable_delivery(conn, t["id"], g["id"])
+    conn.commit()
+    img = list_images(conn, g["id"])[0]
+    r = client.get(f"/d/{token}/{img['id']}")
+    assert r.status_code == 200 and r.content == b"JPEGDATA"
+    assert "filename*=UTF-8''" in r.headers["content-disposition"]
+
+
+def test_inline_view_clamps_unsafe_content_type(client, conn, storage):
+    # A stored "image" declared text/html must NOT be served as renderable HTML on
+    # our origin (stored XSS) — the inline route clamps it to an opaque download type.
+    t, g = _gallery(conn)
+    add_image(conn, storage, tenant_id=t["id"], gallery_id=g["id"], filename="evil.html",
+              fileobj=io.BytesIO(b"<script>alert(1)</script>"), content_type="text/html")
+    token = enable_delivery(conn, t["id"], g["id"])
+    conn.commit()
+    img = list_images(conn, g["id"])[0]
+    r = client.get(f"/d/{token}/{img['id']}/view")
+    assert r.status_code == 200
+    assert r.headers["content-type"].split(";")[0] == "application/octet-stream"
 
 
 def test_enable_emails_client_once_on_first_enable(client, app):
