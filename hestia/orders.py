@@ -31,7 +31,8 @@ def _resolve_bundle(conn: sqlite3.Connection, offer: dict, sku: str) -> dict | N
 def _client_project_for_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int):
     row = conn.execute(
         "SELECT p.id AS project_id, p.client_id AS client_id FROM galleries g "
-        "LEFT JOIN projects p ON p.id = g.project_id WHERE g.id = ? AND g.tenant_id = ?",
+        "LEFT JOIN projects p ON p.id = g.project_id AND p.tenant_id = g.tenant_id "
+        "WHERE g.id = ? AND g.tenant_id = ?",
         (gallery_id, tenant_id),
     ).fetchone()
     if not row:
@@ -72,7 +73,7 @@ def _hydrate(row: dict) -> dict:
 def get_order(conn: sqlite3.Connection, tenant_id: str, order_id: int) -> dict | None:
     row = conn.execute(
         "SELECT o.*, i.token AS invoice_token, i.status AS invoice_status "
-        "FROM orders o LEFT JOIN invoices i ON i.id = o.invoice_id "
+        "FROM orders o LEFT JOIN invoices i ON i.id = o.invoice_id AND i.tenant_id = o.tenant_id "
         "WHERE o.id = ? AND o.tenant_id = ?",
         (order_id, tenant_id),
     ).fetchone()
@@ -81,7 +82,8 @@ def get_order(conn: sqlite3.Connection, tenant_id: str, order_id: int) -> dict |
 
 def list_orders(conn: sqlite3.Connection, tenant_id: str, *, gallery_id: int | None = None) -> list[dict]:
     sql = ("SELECT o.*, i.token AS invoice_token, i.status AS invoice_status "
-           "FROM orders o LEFT JOIN invoices i ON i.id = o.invoice_id WHERE o.tenant_id = ?")
+           "FROM orders o LEFT JOIN invoices i ON i.id = o.invoice_id AND i.tenant_id = o.tenant_id "
+           "WHERE o.tenant_id = ?")
     params: list = [tenant_id]
     if gallery_id is not None:
         sql += " AND o.gallery_id = ?"

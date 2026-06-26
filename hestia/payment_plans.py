@@ -96,8 +96,8 @@ def get_payment_plan(conn: sqlite3.Connection, tenant_id: str, plan_id: int) -> 
         """
         SELECT pp.*, c.name AS client_name, c.email AS client_email, p.name AS project_name
           FROM payment_plans pp
-          LEFT JOIN clients c ON c.id = pp.client_id
-          LEFT JOIN projects p ON p.id = pp.project_id
+          LEFT JOIN clients c ON c.id = pp.client_id AND c.tenant_id = pp.tenant_id
+          LEFT JOIN projects p ON p.id = pp.project_id AND p.tenant_id = pp.tenant_id
          WHERE pp.id = ? AND pp.tenant_id = ?
         """,
         (plan_id, tenant_id),
@@ -120,8 +120,8 @@ def list_payment_plans(
     sql = (
         "SELECT pp.*, c.name AS client_name, p.name AS project_name "
         "  FROM payment_plans pp "
-        "  LEFT JOIN clients c ON c.id = pp.client_id "
-        "  LEFT JOIN projects p ON p.id = pp.project_id "
+        "  LEFT JOIN clients c ON c.id = pp.client_id AND c.tenant_id = pp.tenant_id "
+        "  LEFT JOIN projects p ON p.id = pp.project_id AND p.tenant_id = pp.tenant_id "
         " WHERE pp.tenant_id = ?"
     )
     params: list = [tenant_id]

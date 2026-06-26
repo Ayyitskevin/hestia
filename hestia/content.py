@@ -138,7 +138,7 @@ def project_keywords(conn: sqlite3.Connection, tenant_id: str, project_id: int, 
     rows = conn.execute(
         """
         SELECT ia.keywords_json FROM image_analyses ia
-          JOIN galleries g ON g.id = ia.gallery_id
+          JOIN galleries g ON g.id = ia.gallery_id AND g.tenant_id = ia.tenant_id
          WHERE g.project_id = ? AND ia.tenant_id = ?
         """,
         (project_id, tenant_id),
