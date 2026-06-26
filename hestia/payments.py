@@ -113,7 +113,9 @@ class StripePayments:
             "cancel_url": cancel_url,
             "line_items[0][quantity]": "1",
             "line_items[0][price_data][currency]": invoice["currency"],
-            "line_items[0][price_data][unit_amount]": str(invoice["amount_cents"]),
+            # charge the total the client owes: pre-tax subtotal + any sales tax
+            "line_items[0][price_data][unit_amount]":
+                str(invoice["amount_cents"] + int(invoice.get("tax_cents") or 0)),
             "line_items[0][price_data][product_data][name]": invoice["title"],
             "client_reference_id": invoice["token"],
             "metadata[invoice_token]": invoice["token"],

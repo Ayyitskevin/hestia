@@ -36,19 +36,25 @@ def create_invoice(
     plan_id: int | None = None,
     due_date: str = "",
     sequence: int = 0,
+    tax_cents: int = 0,
 ) -> dict:
     token = new_session_token()[:28]
     cur = conn.execute(
         """
         INSERT INTO invoices
             (tenant_id, client_id, project_id, title, amount_cents, currency, token,
-             plan_id, due_date, sequence)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             plan_id, due_date, sequence, tax_cents)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (tenant_id, client_id, project_id, title.strip(), max(0, int(amount_cents)),
-         settings.currency, token, plan_id, due_date.strip(), int(sequence)),
+         settings.currency, token, plan_id, due_date.strip(), int(sequence), max(0, int(tax_cents))),
     )
     return get_invoice(conn, tenant_id, cur.lastrowid)
+
+
+def tax_for(amount_cents: int, rate_bps: int) -> int:
+    """Sales tax in cents for a subtotal at a basis-point rate (850 = 8.50%)."""
+    return round(max(0, int(amount_cents)) * max(0, int(rate_bps)) / 10000)
 
 
 def get_invoice(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> dict | None:
@@ -142,7 +148,13 @@ def mark_paid(conn: sqlite3.Connection, *, token: str, provider: str, ref: str) 
 
 
 def _hydrate(row: dict) -> dict:
-    row["amount_display"] = money(row["amount_cents"], row.get("currency", "usd"))
+    cur = row.get("currency", "usd")
+    tax = int(row.get("tax_cents") or 0)            # rows that don't select it → no tax
+    row["amount_display"] = money(row["amount_cents"], cur)   # the pre-tax subtotal
+    row["tax_cents"] = tax
+    row["tax_display"] = money(tax, cur)
+    row["total_cents"] = int(row["amount_cents"]) + tax
+    row["total_display"] = money(row["total_cents"], cur)     # what the client pays
     return row
 
 

@@ -10,7 +10,7 @@
   <header class="client-header">
     <div class="wrap">
       <div class="eyebrow">{{ tenant.name }}</div>
-      <h1>{{ invoice.amount_display }}</h1>
+      <h1>{{ invoice.total_display }}</h1>
     </div>
   </header>
   <main>
@@ -20,9 +20,15 @@
         {% if invoice.status == 'paid' %}
           <div class="alert ok">✓ Paid — thank you! A receipt has been recorded.</div>
         {% else %}
-          <p class="muted">Amount due: <strong>{{ invoice.amount_display }}</strong></p>
+          {% if invoice.tax_cents %}
+          <p class="muted" style="display:flex;justify-content:space-between;margin:0"><span>Subtotal</span><span>{{ invoice.amount_display }}</span></p>
+          <p class="muted" style="display:flex;justify-content:space-between;margin:0"><span>Tax</span><span>{{ invoice.tax_display }}</span></p>
+          <p style="display:flex;justify-content:space-between;margin:4px 0"><strong>Total due</strong><strong>{{ invoice.total_display }}</strong></p>
+          {% else %}
+          <p class="muted">Amount due: <strong>{{ invoice.total_display }}</strong></p>
+          {% endif %}
           <form method="post" action="/pay/{{ invoice.token }}/checkout">
-            <button class="btn" type="submit">Pay {{ invoice.amount_display }}</button>
+            <button class="btn" type="submit">Pay {{ invoice.total_display }}</button>
           </form>
           {% if settings.payments_backend == 'mock' %}
             <p class="hint">Test mode — this is a simulated payment; no card is charged.</p>

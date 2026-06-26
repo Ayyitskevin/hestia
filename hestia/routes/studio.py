@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
@@ -15,6 +17,7 @@ from ..tenants import (
     can_use_style_profile,
     get_tenant,
     get_tenant_by_slug,
+    set_tax_rate,
     set_vision_style,
 )
 from ..testimonials import featured_testimonials
@@ -121,6 +124,21 @@ def site_settings_save(request: Request, headline: str = Form(""), about: str = 
             return RedirectResponse("/login", status_code=303)
         upsert_profile(conn, tenant_id=auth.tenant["id"], headline=headline, about=about,
                        contact_email=contact_email, published=bool(published))
+    return RedirectResponse("/settings/site", status_code=303)
+
+
+@router.post("/settings/tax")
+def tax_settings_save(request: Request, tax_rate: str = Form("0")):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        try:
+            pct = float(tax_rate)                       # a percentage, e.g. 8.5
+            bps = round(pct * 100) if math.isfinite(pct) else 0
+        except (TypeError, ValueError):
+            bps = 0
+        set_tax_rate(conn, auth.tenant["id"], bps)
     return RedirectResponse("/settings/site", status_code=303)
 
 
