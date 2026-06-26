@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Pipeline — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Pipeline</h1>
+    <span class="muted">Your whole book of work by stage — lead to archived.</span>
+  </div>
+  <a class="btn secondary" href="/projects">All projects</a>
+</div>
+
+<div style="display:flex; gap:14px; overflow-x:auto; padding-bottom:8px; align-items:flex-start">
+  {% for s in stages %}
+  <div style="flex:1 0 220px; min-width:220px">
+    <div class="card stack" style="gap:10px">
+      <div>
+        <h3 style="text-transform:capitalize; margin:0">{{ s.stage }} · {{ s.count }}</h3>
+        {% if s.collected_cents %}<span class="muted" style="font-size:.82rem">{{ s.collected_display }} collected</span>{% endif %}
+      </div>
+      {% for p in s.projects %}
+      <div class="card" style="padding:10px; margin:0">
+        <a href="/projects/{{ p.id }}">{{ p.name }}</a>
+        <div class="muted" style="font-size:.8rem">
+          {{ shoot_type_labels.get(p.shoot_type, p.shoot_type) }}{% if p.client_name %} · {{ p.client_name }}{% endif %}{% if p.collected_cents %} · {{ p.collected_display }}{% endif %}
+        </div>
+      </div>
+      {% else %}
+      <p class="muted" style="font-size:.85rem; margin:0">No projects here.</p>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

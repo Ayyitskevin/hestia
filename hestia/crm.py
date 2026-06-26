@@ -229,6 +229,36 @@ def client_timeline(conn: sqlite3.Connection, tenant_id: str, client_id: int, *,
     return events[:limit]
 
 
+def project_pipeline(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
+    """Projects grouped by stage (lead → booked → shooting → delivered → archived)
+    for the portfolio funnel — each stage with its projects, a count, and the revenue
+    collected on them so far. Read-side aggregation, tenant-scoped."""
+    rows = conn.execute(
+        "SELECT p.id, p.name, p.status, p.shoot_type, p.event_date, c.name AS client_name, "
+        "  COALESCE((SELECT SUM(amount_cents) FROM invoices i WHERE i.project_id = p.id "
+        "            AND i.tenant_id = p.tenant_id AND i.status = 'paid'), 0) AS collected_cents "
+        "FROM projects p LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = p.tenant_id "
+        "WHERE p.tenant_id = ? ORDER BY p.created_at DESC",
+        (tenant_id,),
+    ).fetchall()
+    stages = {s: {"stage": s, "projects": [], "count": 0, "collected_cents": 0}
+              for s in PROJECT_STATUSES}
+    for r in rows:
+        st = r["status"] if r["status"] in stages else "lead"
+        d = dict(r)
+        d["collected_display"] = money(d["collected_cents"])
+        g = stages[st]
+        g["projects"].append(d)
+        g["count"] += 1
+        g["collected_cents"] += int(r["collected_cents"])
+    out = []
+    for s in PROJECT_STATUSES:
+        g = stages[s]
+        g["collected_display"] = money(g["collected_cents"])
+        out.append(g)
+    return out
+
+
 def galleries_for_client(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> list[dict]:
     """Every gallery whose project belongs to this client (for the client portal)."""
     rows = conn.execute(
