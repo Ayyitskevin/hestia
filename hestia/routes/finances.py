@@ -20,6 +20,7 @@ from ..finances import (
     profit_summary,
     project_pnl,
 )
+from ..reports import ar_aging, expense_breakdown
 from .deps import db_conn, render
 
 router = APIRouter()
@@ -67,6 +68,18 @@ def finances(request: Request):
         projects = list_projects(conn, tid)
     return render(request, "finances.html", auth=auth, summary=summary, by_project=by_project,
                   expenses=expenses, projects=projects, categories=EXPENSE_CATEGORIES)
+
+
+@router.get("/finances/reports")
+def finances_reports(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        tid = auth.tenant["id"]
+        aging = ar_aging(conn, tid)
+        breakdown = expense_breakdown(conn, tid)
+    return render(request, "finances_reports.html", auth=auth, aging=aging, breakdown=breakdown)
 
 
 @router.post("/finances/expenses")
