@@ -8,7 +8,7 @@
 {% if clients %}
 <div class="card">
   <table>
-    <thead><tr><th>Client</th><th>Email</th><th>Phone</th><th>Projects</th></tr></thead>
+    <thead><tr><th>Client</th><th>Email</th><th>Phone</th><th>Projects</th><th>Lifetime value</th></tr></thead>
     <tbody>
       {% for c in clients %}
       <tr>
@@ -16,6 +16,7 @@
         <td class="muted">{{ c.email or "—" }}</td>
         <td class="muted">{{ c.phone or "—" }}</td>
         <td>{{ c.project_count }}</td>
+        <td>{% if c.lifetime_cents %}{{ c.lifetime_display }}{% else %}<span class="muted">—</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
