@@ -18,6 +18,7 @@ from ..crm import (
     get_project,
     list_clients,
     list_projects,
+    project_pipeline,
     set_project_status,
 )
 from ..db import audit
@@ -150,6 +151,16 @@ def projects_list(request: Request):
         projects = list_projects(conn, auth.tenant["id"])
     return render(request, "crm/projects.html", auth=auth, projects=projects,
                   statuses=PROJECT_STATUSES)
+
+
+@router.get("/pipeline")
+def pipeline(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        stages = project_pipeline(conn, auth.tenant["id"])
+    return render(request, "crm/pipeline.html", auth=auth, stages=stages)
 
 
 @router.get("/projects/new")
