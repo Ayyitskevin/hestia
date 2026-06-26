@@ -47,16 +47,24 @@ def get_client(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> dict
 def list_clients(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT c.*, COUNT(p.id) AS project_count
+        SELECT c.*, COUNT(p.id) AS project_count,
+               COALESCE((SELECT SUM(i.amount_cents) FROM invoices i
+                         WHERE i.client_id = c.id AND i.tenant_id = c.tenant_id
+                           AND i.status = 'paid'), 0) AS lifetime_cents
           FROM clients c
           LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = c.tenant_id
          WHERE c.tenant_id = ?
          GROUP BY c.id
-         ORDER BY c.created_at DESC
+         ORDER BY lifetime_cents DESC, c.created_at DESC
         """,
         (tenant_id,),
     ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["lifetime_display"] = money(int(d["lifetime_cents"]))     # collected revenue, this client
+        out.append(d)
+    return out
 
 
 # ── Projects ────────────────────────────────────────────────────────────────
