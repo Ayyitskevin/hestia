@@ -5,17 +5,40 @@
   <h1>Invoices</h1>
   <a class="btn" href="/invoices/new">+ New invoice</a>
 </div>
+
+{% if ar and ar.outstanding_count %}
+<div class="health-strip" style="margin-bottom:18px">
+  <div class="health-item"><span class="svc">{{ ar.outstanding }}</span>
+    <span class="url">outstanding · {{ ar.outstanding_count }} unpaid</span></div>
+  {% if ar.overdue_count %}
+  <div class="health-item"><span class="svc">{{ ar.overdue }}</span>
+    <span class="url"><span class="pill off">{{ ar.overdue_count }} overdue</span></span></div>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if invoices %}
 <div class="card">
   <table>
-    <thead><tr><th>Invoice</th><th>Client</th><th>Amount</th><th>Status</th></tr></thead>
+    <thead><tr><th>Invoice</th><th>Client</th><th>Amount</th><th>Status</th><th></th></tr></thead>
     <tbody>
       {% for i in invoices %}
       <tr>
         <td><a href="/invoices/{{ i.id }}">{{ i.title }}</a></td>
         <td class="muted">{{ i.client_name or i.project_name or "—" }}</td>
         <td>{{ i.amount_display }}</td>
-        <td><span class="pill {{ 'on' if i.status == 'paid' else 'off' }}">{{ i.status }}</span></td>
+        <td>
+          <span class="pill {{ 'on' if i.status == 'paid' else 'off' }}">{{ i.status }}</span>
+          {% if i.is_overdue %}<span class="pill off" title="{{ i.days_overdue }} day(s) past due">overdue{% if i.days_overdue %} · {{ i.days_overdue }}d{% endif %}</span>{% endif %}
+        </td>
+        <td style="text-align:right">
+          {% if i.status == 'sent' %}
+          <form method="post" action="/invoices/{{ i.id }}/remind" style="margin:0">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit">{{ 'Remind again' if i.reminder_count else 'Remind' }}{% if i.reminder_count %} ({{ i.reminder_count }}){% endif %}</button>
+          </form>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
