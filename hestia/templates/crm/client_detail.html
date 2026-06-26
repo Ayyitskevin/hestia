@@ -14,6 +14,27 @@
 {% if client.notes %}<div class="card" style="margin-bottom:18px"><p class="muted">{{ client.notes }}</p></div>{% endif %}
 
 <div class="card stack" style="margin-bottom:18px">
+  <h3>Tags</h3>
+  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center">
+    {% for t in tags %}
+    <span class="pill on" style="display:inline-flex; align-items:center; gap:6px">
+      <a href="/clients?tag={{ t|urlencode }}" style="color:inherit; text-decoration:none">{{ t }}</a>
+      <form method="post" action="/clients/{{ client.id }}/tags/delete" style="margin:0; display:inline">
+        {% include "_csrf.html" %}
+        <input type="hidden" name="tag" value="{{ t }}">
+        <button type="submit" title="Remove" style="background:none; border:none; cursor:pointer; color:inherit; padding:0; font-weight:bold">×</button>
+      </form>
+    </span>
+    {% else %}<span class="muted">No tags yet — segment this client (VIP, repeat, 2026-wedding).</span>{% endfor %}
+    <form method="post" action="/clients/{{ client.id }}/tags" style="margin:0; display:inline-flex; gap:6px">
+      {% include "_csrf.html" %}
+      <input type="text" name="tag" placeholder="add tag" style="width:130px" maxlength="40">
+      <button class="btn ghost" type="submit">+ Tag</button>
+    </form>
+  </div>
+</div>
+
+<div class="card stack" style="margin-bottom:18px">
   <h3>Client portal</h3>
   {% if portal_link %}
     <p class="muted">One branded link where {{ client.name }} sees their projects, contracts,
