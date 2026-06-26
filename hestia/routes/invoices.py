@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
@@ -10,11 +12,14 @@ from ..crm import list_clients, list_projects
 from ..db import audit
 from ..email import notify
 from ..invoices import (
+    accounts_receivable,
     create_invoice,
     get_invoice,
     invoice_public_url,
     list_invoices,
+    record_invoice_reminder,
     send_invoice,
+    send_invoice_reminder,
     void_invoice,
 )
 from .deps import db_conn, render, settings_of
@@ -31,7 +36,9 @@ def _user(request: Request, conn):
 
 def _to_cents(raw: str) -> int:
     try:
-        return int(round(float(raw.replace("$", "").replace(",", "").strip()) * 100))
+        dollars = float(raw.replace("$", "").replace(",", "").strip())
+        # 'inf'/'nan' parse but overflow round() to int — treat non-finite as zero.
+        return int(round(dollars * 100)) if math.isfinite(dollars) else 0
     except (ValueError, AttributeError):
         return 0
 
@@ -44,7 +51,8 @@ def invoices_list(request: Request):
             return RedirectResponse("/login", status_code=303)
         # Plan installments live under their payment plan, not the flat list.
         invoices = list_invoices(conn, auth.tenant["id"], standalone_only=True)
-    return render(request, "invoices/invoices.html", auth=auth, invoices=invoices)
+        ar = accounts_receivable(conn, auth.tenant["id"])
+    return render(request, "invoices/invoices.html", auth=auth, invoices=invoices, ar=ar)
 
 
 @router.get("/new")
@@ -128,3 +136,21 @@ def invoice_void(request: Request, invoice_id: int):
             audit(conn, actor="owner", action="invoice.void", tenant_id=auth.tenant["id"],
                   detail=invoice["title"])
     return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)
+
+
+@router.post("/{invoice_id}/remind")
+def invoice_remind(request: Request, invoice_id: int):
+    """Owner-initiated past-due nudge. Bypasses the auto-sweep cooldown (the owner
+    explicitly clicked), but still only nudges a 'sent', unpaid invoice."""
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        invoice = get_invoice(conn, auth.tenant["id"], invoice_id)
+        if invoice and invoice["status"] == "sent" and send_invoice_reminder(conn, settings, invoice):
+            record_invoice_reminder(conn, auth.tenant["id"], invoice_id)
+            audit(conn, actor="owner", action="invoice.reminded", tenant_id=auth.tenant["id"],
+                  detail=f"{invoice['title']} · {invoice['amount_display']}")
+        conn.commit()
+    return RedirectResponse("/invoices", status_code=303)

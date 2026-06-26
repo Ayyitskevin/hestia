@@ -20,10 +20,13 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         (tenant_id, limit))]
 
     unpaid = [dict(r) for r in conn.execute(
-        "SELECT i.id, i.title, i.amount_cents, i.currency, i.status, c.name AS client_name "
+        "SELECT i.id, i.title, i.amount_cents, i.currency, i.status, c.name AS client_name, "
+        # flag the overdue ones (sent, past a parseable due_date) and float them up
+        "  CASE WHEN i.status = 'sent' AND date(i.due_date) IS NOT NULL "
+        "       AND date(i.due_date) < date('now') THEN 1 ELSE 0 END AS is_overdue "
         "FROM invoices i LEFT JOIN clients c ON c.id = i.client_id "
         "WHERE i.tenant_id = ? AND i.status IN ('draft', 'sent') "
-        "ORDER BY i.id DESC LIMIT ?",
+        "ORDER BY is_overdue DESC, i.id DESC LIMIT ?",
         (tenant_id, limit))]
     for inv in unpaid:
         inv["amount_display"] = money(inv["amount_cents"], inv.get("currency") or "usd")

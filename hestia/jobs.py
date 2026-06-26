@@ -196,16 +196,36 @@ def requeue_job(conn, job_id: int, *, stale_after_seconds: int = 900) -> bool:
     return cur.rowcount > 0
 
 
+def _remind_overdue(db_path: str | Path, settings: Settings) -> int:
+    """Worker-cadence wrapper: open a connection and nudge overdue invoices whose
+    clients haven't been reminded recently. Kept here (not in invoices.py) so the
+    jobs↔invoices import stays one-directional; the import is deferred to call time
+    to avoid a cycle at module load."""
+    from .db import connect
+    from .invoices import send_overdue_reminders
+    conn = connect(db_path)
+    try:
+        n = send_overdue_reminders(conn, settings)
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
 def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_sleep: float = 0.5,
-               reclaim_interval: float = 60.0) -> None:
-    """Background loop: drain the queue and periodically reclaim orphaned jobs.
+               reclaim_interval: float = 60.0, remind_interval: float = 3600.0) -> None:
+    """Background loop: drain the queue, periodically reclaim orphaned jobs, and
+    sweep for overdue invoices to remind.
 
     Reclaiming must run *on a cadence*, not just at startup: a job orphaned by a
     restart is younger than the stale window at that moment, so a single startup
     sweep skips it and nothing would ever pick it up once it ages past the window.
     We reclaim every ``reclaim_interval`` seconds so an orphan is recovered within
-    roughly ``stale_window + reclaim_interval``."""
+    roughly ``stale_window + reclaim_interval``. The overdue-reminder sweep runs on
+    its own (slower) ``remind_interval``; a per-invoice cooldown — not this cadence —
+    is what bounds how often any one client is nudged."""
     last_reclaim = 0.0  # 0 → reclaim immediately on the first iteration
+    last_remind = 0.0   # 0 → sweep overdue invoices on the first iteration too
     while not stop_event.is_set():
         if time.monotonic() - last_reclaim >= reclaim_interval:
             try:
@@ -213,6 +233,12 @@ def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_slee
             except Exception:  # noqa: BLE001 - never let reclaim kill the worker
                 pass
             last_reclaim = time.monotonic()
+        if time.monotonic() - last_remind >= remind_interval:
+            try:
+                _remind_overdue(db_path, settings)
+            except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
+                pass
+            last_remind = time.monotonic()
         try:
             kind = run_next(db_path, settings)
         except Exception:  # noqa: BLE001 - the worker must never die on a bad job

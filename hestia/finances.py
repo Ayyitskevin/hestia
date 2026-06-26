@@ -74,12 +74,19 @@ def expenses_total(conn: sqlite3.Connection, tenant_id: str, *, project_id: int 
 
 
 def revenue_total(conn: sqlite3.Connection, tenant_id: str, *, project_id: int | None = None) -> int:
-    """Collected revenue (cents). Tenant-wide counts paid invoices + paid orders;
+    """Collected revenue (cents). Tenant-wide counts paid invoices + paid orders,
     a single project counts its paid invoices (orders are gallery sales, not always
-    project-tagged)."""
+    project-tagged).
+
+    A gallery sale creates a *paired* invoice + order of the same amount (see
+    ``orders.create_order``), and the pay flow marks both paid. Counting both would
+    double the sale, so the tenant-wide invoice sum excludes order-backing invoices
+    — each sale is then counted once, as its order row."""
     if project_id is None:
         inv = _scalar(conn, "SELECT COALESCE(SUM(amount_cents), 0) AS total FROM invoices "
-                      "WHERE tenant_id = ? AND status = 'paid'", (tenant_id,))
+                      "WHERE tenant_id = ? AND status = 'paid' AND id NOT IN "
+                      "(SELECT invoice_id FROM orders WHERE tenant_id = ? AND invoice_id IS NOT NULL)",
+                      (tenant_id, tenant_id))
         orders = _scalar(conn, "SELECT COALESCE(SUM(amount_cents), 0) AS total FROM orders "
                          "WHERE tenant_id = ? AND status = 'paid'", (tenant_id,))
         return inv + orders
@@ -100,12 +107,16 @@ def profit_summary(conn: sqlite3.Connection, tenant_id: str, *, project_id: int 
 
 def income_rows(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     """Collected income — paid invoices and paid orders — as flat rows, oldest first,
-    for an accountant-ready export."""
+    for an accountant-ready export. Order-backing invoices are excluded so a gallery
+    sale (its paired invoice + order) appears once, as its order row — matching the
+    tenant-wide total in :func:`revenue_total`."""
     rows: list[dict] = []
     for r in conn.execute(
         "SELECT i.created_at AS date, i.title AS description, i.amount_cents, c.name AS client_name "
         "FROM invoices i LEFT JOIN clients c ON c.id = i.client_id AND c.tenant_id = i.tenant_id "
-        "WHERE i.tenant_id = ? AND i.status = 'paid'", (tenant_id,)).fetchall():
+        "WHERE i.tenant_id = ? AND i.status = 'paid' AND i.id NOT IN "
+        "(SELECT invoice_id FROM orders WHERE tenant_id = ? AND invoice_id IS NOT NULL)",
+        (tenant_id, tenant_id)).fetchall():
         rows.append({"date": r["date"], "type": "invoice", "description": r["description"],
                      "client": r["client_name"] or "", "amount_cents": int(r["amount_cents"])})
     for r in conn.execute(
@@ -122,9 +133,13 @@ def project_pnl(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 50) ->
     activity, lowest-profit first so a money-losing shoot surfaces at the top."""
     rows = conn.execute(
         "SELECT p.id, p.name, "
+        # tenant-scope the subqueries too: a stray project_id on another studio's
+        # invoice/expense must never be attributed to this project's P&L.
         "  COALESCE((SELECT SUM(amount_cents) FROM invoices i "
-        "            WHERE i.project_id = p.id AND i.status = 'paid'), 0) AS revenue, "
-        "  COALESCE((SELECT SUM(amount_cents) FROM expenses e WHERE e.project_id = p.id), 0) AS expenses "
+        "            WHERE i.project_id = p.id AND i.tenant_id = p.tenant_id "
+        "              AND i.status = 'paid'), 0) AS revenue, "
+        "  COALESCE((SELECT SUM(amount_cents) FROM expenses e "
+        "            WHERE e.project_id = p.id AND e.tenant_id = p.tenant_id), 0) AS expenses "
         "FROM projects p WHERE p.tenant_id = ?",
         (tenant_id,),
     ).fetchall()
