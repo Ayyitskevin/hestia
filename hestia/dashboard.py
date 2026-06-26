@@ -14,7 +14,7 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
     """Actionable items for the dashboard, each scoped to the tenant."""
     leads = [dict(r) for r in conn.execute(
         "SELECT p.id, p.name, p.created_at, p.shoot_type, c.name AS client_name "
-        "FROM projects p LEFT JOIN clients c ON c.id = p.client_id "
+        "FROM projects p LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = p.tenant_id "
         "WHERE p.tenant_id = ? AND p.status = 'lead' "
         "ORDER BY p.created_at ASC LIMIT ?",  # oldest unanswered first
         (tenant_id, limit))]
@@ -24,8 +24,10 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         # flag the overdue ones (sent, past a parseable due_date) and float them up
         "  CASE WHEN i.status = 'sent' AND date(i.due_date) IS NOT NULL "
         "       AND date(i.due_date) < date('now') THEN 1 ELSE 0 END AS is_overdue "
-        "FROM invoices i LEFT JOIN clients c ON c.id = i.client_id "
-        "WHERE i.tenant_id = ? AND i.status IN ('draft', 'sent') "
+        "FROM invoices i LEFT JOIN clients c ON c.id = i.client_id AND c.tenant_id = i.tenant_id "
+        # plan_id IS NULL: installments live under their payment plan, not this list,
+        # so they don't get double-counted here and under /payment-plans
+        "WHERE i.tenant_id = ? AND i.status IN ('draft', 'sent') AND i.plan_id IS NULL "
         "ORDER BY is_overdue DESC, i.id DESC LIMIT ?",
         (tenant_id, limit))]
     for inv in unpaid:
@@ -36,7 +38,7 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
     # rather than mis-sorted by a lexicographic string compare.
     upcoming = [dict(r) for r in conn.execute(
         "SELECT a.id, a.title, a.starts_at, a.status, c.name AS client_name "
-        "FROM appointments a LEFT JOIN clients c ON c.id = a.client_id "
+        "FROM appointments a LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id "
         "WHERE a.tenant_id = ? AND a.status != 'canceled' "
         "AND datetime(a.starts_at) IS NOT NULL AND datetime(a.starts_at) >= datetime('now') "
         "ORDER BY datetime(a.starts_at) ASC LIMIT ?",

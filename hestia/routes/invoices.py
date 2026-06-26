@@ -8,7 +8,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
-from ..crm import list_clients, list_projects
+from ..crm import get_client, get_project, list_clients, list_projects
 from ..db import audit
 from ..email import notify
 from ..invoices import (
@@ -74,11 +74,16 @@ def invoice_create(request: Request, title: str = Form(...), amount: str = Form(
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
+        tid = auth.tenant["id"]
+        # only attach a client/project this studio actually owns — a stray cross-tenant
+        # id would otherwise ride along on the invoice and surface via the joins
+        raw_c = int(client_id) if client_id.strip().isdigit() else None
+        cid = raw_c if raw_c and get_client(conn, tid, raw_c) else None
+        raw_p = int(project_id) if project_id.strip().isdigit() else None
+        pid = raw_p if raw_p and get_project(conn, tid, raw_p) else None
         invoice = create_invoice(
-            conn, settings_of(request), tenant_id=auth.tenant["id"], title=title,
-            amount_cents=_to_cents(amount),
-            client_id=int(client_id) if client_id.strip().isdigit() else None,
-            project_id=int(project_id) if project_id.strip().isdigit() else None,
+            conn, settings_of(request), tenant_id=tid, title=title,
+            amount_cents=_to_cents(amount), client_id=cid, project_id=pid,
         )
     return RedirectResponse(f"/invoices/{invoice['id']}", status_code=303)
 
@@ -147,10 +152,16 @@ def invoice_remind(request: Request, invoice_id: int):
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
-        invoice = get_invoice(conn, auth.tenant["id"], invoice_id)
-        if invoice and invoice["status"] == "sent" and send_invoice_reminder(conn, settings, invoice):
-            record_invoice_reminder(conn, auth.tenant["id"], invoice_id)
-            audit(conn, actor="owner", action="invoice.reminded", tenant_id=auth.tenant["id"],
-                  detail=f"{invoice['title']} · {invoice['amount_display']}")
+        tid = auth.tenant["id"]
+        invoice = get_invoice(conn, tid, invoice_id)
+        if invoice and invoice["status"] == "sent":
+            if send_invoice_reminder(conn, settings, invoice):
+                record_invoice_reminder(conn, tid, invoice_id)
+                audit(conn, actor="owner", action="invoice.reminded", tenant_id=tid,
+                      detail=f"{invoice['title']} · {invoice['amount_display']}")
+            else:
+                # no client email on file — leave a trail rather than a silent no-op
+                audit(conn, actor="owner", action="invoice.remind_skipped", tenant_id=tid,
+                      detail=f"{invoice['title']} · no client email")
         conn.commit()
     return RedirectResponse("/invoices", status_code=303)

@@ -190,7 +190,9 @@ def dashboard(request: Request):
         runs = list_runs(conn, tenant["id"], limit=6)
         plan = plan_status(tenant)
         unpaid = conn.execute(
-            "SELECT COUNT(*) AS n FROM invoices WHERE tenant_id = ? AND status IN ('draft','sent')",
+            # plan installments are tracked under their plan, not the flat invoice list
+            "SELECT COUNT(*) AS n FROM invoices "
+            "WHERE tenant_id = ? AND status IN ('draft','sent') AND plan_id IS NULL",
             (tenant["id"],),
         ).fetchone()["n"]
         counts = {
