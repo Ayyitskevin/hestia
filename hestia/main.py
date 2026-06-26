@@ -39,6 +39,7 @@ from .routes import (
     contracts,
     crm,
     delivery,
+    finances,
     forms,
     galleries,
     health,
@@ -164,6 +165,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(content.router, dependencies=csrf)
     app.include_router(studio.router, dependencies=csrf)
     app.include_router(testimonials.router, dependencies=csrf)
+    app.include_router(finances.router, dependencies=csrf)
     app.include_router(billing.router, dependencies=csrf)
     app.include_router(pipeline_ui.router, dependencies=csrf)
     app.include_router(api.router)
