@@ -19,6 +19,7 @@ LIMITS: dict[str, tuple[int, float]] = {
     "admin_login": (10, 60),
     "inquiry": (5, 60),
     "checkout": (15, 60),
+    "download": (10, 60),
     "password_reset": (5, 60),
     "signup": (5, 60),
 }

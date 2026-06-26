@@ -49,6 +49,20 @@ def test_needs_attention_aggregates(conn, settings):
     assert a["total"] == 4
 
 
+def test_upcoming_excludes_unparseable_freetext_times(conn):
+    t = create_tenant(conn, name="Freetext Studio", shoot_type="wedding")
+    conn.execute("INSERT INTO appointments (tenant_id, title, status, token, starts_at) "
+                 "VALUES (?, 'Real session', 'confirmed', 'tok-iso', datetime('now','+2 days'))",
+                 (t["id"],))
+    conn.execute("INSERT INTO appointments (tenant_id, title, status, token, starts_at) "
+                 "VALUES (?, 'Vague session', 'confirmed', 'tok-text', 'sometime next week')",
+                 (t["id"],))
+    conn.commit()
+    # a parseable timestamp is upcoming; free text yields NULL via datetime() and is
+    # excluded (not shown as stale or mis-sorted by a string compare)
+    assert [x["title"] for x in needs_attention(conn, t["id"])["upcoming"]] == ["Real session"]
+
+
 def test_dashboard_page_shows_attention(client, app):
     creds = onboard_studio(client, name="Dash Studio", email="dash@example.com")
     login_owner(client, creds)

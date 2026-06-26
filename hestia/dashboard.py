@@ -28,12 +28,15 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
     for inv in unpaid:
         inv["amount_display"] = money(inv["amount_cents"], inv.get("currency") or "usd")
 
+    # starts_at is free-text (owners type it), so parse via datetime(): a real
+    # timestamp compares chronologically; unparseable text yields NULL and is excluded
+    # rather than mis-sorted by a lexicographic string compare.
     upcoming = [dict(r) for r in conn.execute(
         "SELECT a.id, a.title, a.starts_at, a.status, c.name AS client_name "
         "FROM appointments a LEFT JOIN clients c ON c.id = a.client_id "
         "WHERE a.tenant_id = ? AND a.status != 'canceled' "
-        "AND a.starts_at != '' AND a.starts_at >= datetime('now') "
-        "ORDER BY a.starts_at ASC LIMIT ?",
+        "AND datetime(a.starts_at) IS NOT NULL AND datetime(a.starts_at) >= datetime('now') "
+        "ORDER BY datetime(a.starts_at) ASC LIMIT ?",
         (tenant_id, limit))]
 
     # Published galleries the client can see but can't yet download — finish the job.
