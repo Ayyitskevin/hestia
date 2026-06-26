@@ -13,6 +13,7 @@ import sqlite3
 
 from .automations import emit_event
 from .features import normalize_shoot_type
+from .invoices import money
 
 PROJECT_STATUSES = ("lead", "booked", "shooting", "delivered", "archived")
 
@@ -150,6 +151,82 @@ def galleries_for_project(conn: sqlite3.Connection, tenant_id: str, project_id: 
         (tenant_id, project_id),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def client_timeline(conn: sqlite3.Connection, tenant_id: str, client_id: int, *,
+                    limit: int = 60) -> list[dict]:
+    """A chronological feed of everything that's happened with a client across the
+    whole loop — added → projects → contracts → questionnaires → sessions → invoices
+    → payment plans → delivered galleries — newest first. Pure read-side aggregation
+    for the client detail page; each event is tenant-scoped."""
+    events: list[dict] = []
+
+    def add(date, icon, label, url=None):
+        if date:                                    # skip events with no usable date
+            events.append({"date": date, "icon": icon, "label": label, "url": url})
+
+    client = conn.execute("SELECT created_at FROM clients WHERE id = ? AND tenant_id = ?",
+                          (client_id, tenant_id)).fetchone()
+    if not client:
+        return []
+    add(client["created_at"], "👤", "Added as a client")
+
+    for r in conn.execute("SELECT id, name, created_at FROM projects "
+                          "WHERE tenant_id = ? AND client_id = ?", (tenant_id, client_id)):
+        add(r["created_at"], "📁", f"Project created — {r['name']}", f"/projects/{r['id']}")
+
+    for r in conn.execute("SELECT id, title, status, created_at, signed_at FROM contracts "
+                          "WHERE tenant_id = ? AND client_id = ? AND status != 'void'",
+                          (tenant_id, client_id)):
+        if r["status"] == "signed":
+            add(r["signed_at"] or r["created_at"], "✍️", f"Signed contract — {r['title']}",
+                f"/contracts/{r['id']}")
+        else:
+            verb = "Sent" if r["status"] == "sent" else "Drafted"
+            add(r["created_at"], "📄", f"{verb} contract — {r['title']}", f"/contracts/{r['id']}")
+
+    for r in conn.execute("SELECT id, title, status, created_at FROM questionnaires "
+                          "WHERE tenant_id = ? AND client_id = ? AND status IN ('sent', 'completed')",
+                          (tenant_id, client_id)):
+        verb = "Completed" if r["status"] == "completed" else "Sent"
+        icon = "✅" if r["status"] == "completed" else "📋"
+        add(r["created_at"], icon, f"{verb} questionnaire — {r['title']}")
+
+    for r in conn.execute("SELECT id, title, status, starts_at, created_at FROM appointments "
+                          "WHERE tenant_id = ? AND client_id = ? AND status != 'canceled'",
+                          (tenant_id, client_id)):
+        if r["status"] == "confirmed":
+            add(r["starts_at"] or r["created_at"], "📅", f"Session booked — {r['title']}",
+                f"/schedule/{r['id']}")
+        else:
+            add(r["created_at"], "📅", f"Session proposed — {r['title']}", f"/schedule/{r['id']}")
+
+    for r in conn.execute("SELECT id, title, amount_cents, currency, status, created_at, paid_at "
+                          "FROM invoices WHERE tenant_id = ? AND client_id = ? "
+                          "AND status != 'void' AND plan_id IS NULL", (tenant_id, client_id)):
+        amt = money(r["amount_cents"], r["currency"] or "usd")
+        if r["status"] == "paid":
+            add(r["paid_at"] or r["created_at"], "💵", f"Paid invoice — {r['title']} ({amt})",
+                f"/invoices/{r['id']}")
+        else:
+            verb = "Sent" if r["status"] == "sent" else "Drafted"
+            add(r["created_at"], "🧾", f"{verb} invoice — {r['title']} ({amt})", f"/invoices/{r['id']}")
+
+    for r in conn.execute("SELECT id, title, created_at FROM payment_plans "
+                          "WHERE tenant_id = ? AND client_id = ? AND status != 'void'",
+                          (tenant_id, client_id)):
+        add(r["created_at"], "📆", f"Payment plan — {r['title']}", f"/payment-plans/{r['id']}")
+
+    for r in conn.execute(
+            "SELECT g.id, g.title, g.published_at, g.created_at FROM galleries g "
+            "JOIN projects p ON p.id = g.project_id AND p.tenant_id = g.tenant_id "
+            "WHERE g.tenant_id = ? AND p.client_id = ? AND g.status = 'published'",
+            (tenant_id, client_id)):
+        add(r["published_at"] or r["created_at"], "🖼️", f"Gallery delivered — {r['title']}",
+            f"/galleries/{r['id']}")
+
+    events.sort(key=lambda e: e["date"], reverse=True)
+    return events[:limit]
 
 
 def galleries_for_client(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> list[dict]:

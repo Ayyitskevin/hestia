@@ -10,6 +10,7 @@ from ..content import list_packs, recipes_for
 from ..contracts import list_contracts
 from ..crm import (
     PROJECT_STATUSES,
+    client_timeline,
     create_client,
     create_project,
     galleries_for_project,
@@ -83,6 +84,7 @@ def client_detail(request: Request, client_id: int):
         if not client:
             return RedirectResponse("/clients", status_code=303)
         projects = list_projects(conn, auth.tenant["id"], client_id=client_id)
+        timeline = client_timeline(conn, auth.tenant["id"], client_id)
         ref_code = referral_code_for(conn, auth.tenant["id"], client_id)
         balance = credit_balance(conn, auth.tenant["id"], client_id)
         credits = list_credits(conn, auth.tenant["id"], client_id)
@@ -93,8 +95,9 @@ def client_detail(request: Request, client_id: int):
     for c in credits:
         c["amount_display"] = money(c["amount_cents"])
     return render(request, "crm/client_detail.html", auth=auth, client=client,
-                  projects=projects, portal_link=portal_link, refer_link=refer_link,
-                  credits=credits, credit_balance_display=money(balance), credit_balance=balance)
+                  projects=projects, timeline=timeline, portal_link=portal_link,
+                  refer_link=refer_link, credits=credits,
+                  credit_balance_display=money(balance), credit_balance=balance)
 
 
 @router.post("/clients/{client_id}/portal")
