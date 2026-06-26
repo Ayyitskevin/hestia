@@ -48,7 +48,7 @@ def list_clients(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
         """
         SELECT c.*, COUNT(p.id) AS project_count
           FROM clients c
-          LEFT JOIN projects p ON p.client_id = c.id
+          LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = c.tenant_id
          WHERE c.tenant_id = ?
          GROUP BY c.id
          ORDER BY c.created_at DESC
@@ -90,7 +90,7 @@ def get_project(conn: sqlite3.Connection, tenant_id: str, project_id: int) -> di
         """
         SELECT p.*, c.name AS client_name
           FROM projects p
-          LEFT JOIN clients c ON c.id = p.client_id
+          LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = p.tenant_id
          WHERE p.id = ? AND p.tenant_id = ?
         """,
         (project_id, tenant_id),
@@ -102,7 +102,7 @@ def list_projects(conn: sqlite3.Connection, tenant_id: str, *, client_id: int | 
     sql = (
         "SELECT p.*, c.name AS client_name, "
         "       (SELECT COUNT(*) FROM galleries g WHERE g.project_id = p.id) AS gallery_count "
-        "  FROM projects p LEFT JOIN clients c ON c.id = p.client_id "
+        "  FROM projects p LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = p.tenant_id "
         " WHERE p.tenant_id = ?"
     )
     params: list = [tenant_id]
@@ -155,7 +155,7 @@ def galleries_for_project(conn: sqlite3.Connection, tenant_id: str, project_id: 
 def galleries_for_client(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> list[dict]:
     """Every gallery whose project belongs to this client (for the client portal)."""
     rows = conn.execute(
-        "SELECT g.* FROM galleries g JOIN projects p ON p.id = g.project_id "
+        "SELECT g.* FROM galleries g JOIN projects p ON p.id = g.project_id AND p.tenant_id = g.tenant_id "
         "WHERE g.tenant_id = ? AND p.client_id = ? ORDER BY g.created_at DESC",
         (tenant_id, client_id),
     ).fetchall()

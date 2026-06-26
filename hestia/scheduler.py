@@ -69,8 +69,8 @@ def get_appointment(conn: sqlite3.Connection, tenant_id: str, appt_id: int) -> d
         """
         SELECT a.*, c.name AS client_name, c.email AS client_email, p.name AS project_name
           FROM appointments a
-          LEFT JOIN clients c ON c.id = a.client_id
-          LEFT JOIN projects p ON p.id = a.project_id
+          LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id
+          LEFT JOIN projects p ON p.id = a.project_id AND p.tenant_id = a.tenant_id
          WHERE a.id = ? AND a.tenant_id = ?
         """,
         (appt_id, tenant_id),
@@ -88,8 +88,8 @@ def get_appointment_by_token(conn: sqlite3.Connection, token: str) -> dict | Non
         """
         SELECT a.*, c.name AS client_name, p.name AS project_name
           FROM appointments a
-          LEFT JOIN clients c ON c.id = a.client_id
-          LEFT JOIN projects p ON p.id = a.project_id
+          LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id
+          LEFT JOIN projects p ON p.id = a.project_id AND p.tenant_id = a.tenant_id
          WHERE a.token = ?
         """,
         (token,),
@@ -116,8 +116,8 @@ def list_appointments(
         "SELECT a.*, c.name AS client_name, p.name AS project_name, "
         "       (SELECT COUNT(*) FROM appointment_options o WHERE o.appointment_id = a.id) AS option_count "
         "  FROM appointments a "
-        "  LEFT JOIN clients c ON c.id = a.client_id "
-        "  LEFT JOIN projects p ON p.id = a.project_id "
+        "  LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id "
+        "  LEFT JOIN projects p ON p.id = a.project_id AND p.tenant_id = a.tenant_id "
         " WHERE a.tenant_id = ?"
     )
     params: list = [tenant_id]

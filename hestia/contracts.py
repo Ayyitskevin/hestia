@@ -48,8 +48,8 @@ def get_contract(conn: sqlite3.Connection, tenant_id: str, contract_id: int) -> 
         """
         SELECT ct.*, c.name AS client_name, c.email AS client_email, p.name AS project_name
           FROM contracts ct
-          LEFT JOIN clients c ON c.id = ct.client_id
-          LEFT JOIN projects p ON p.id = ct.project_id
+          LEFT JOIN clients c ON c.id = ct.client_id AND c.tenant_id = ct.tenant_id
+          LEFT JOIN projects p ON p.id = ct.project_id AND p.tenant_id = ct.tenant_id
          WHERE ct.id = ? AND ct.tenant_id = ?
         """,
         (contract_id, tenant_id),
@@ -62,8 +62,8 @@ def get_contract_by_token(conn: sqlite3.Connection, token: str) -> dict | None:
         """
         SELECT ct.*, c.name AS client_name, p.name AS project_name
           FROM contracts ct
-          LEFT JOIN clients c ON c.id = ct.client_id
-          LEFT JOIN projects p ON p.id = ct.project_id
+          LEFT JOIN clients c ON c.id = ct.client_id AND c.tenant_id = ct.tenant_id
+          LEFT JOIN projects p ON p.id = ct.project_id AND p.tenant_id = ct.tenant_id
          WHERE ct.token = ?
         """,
         (token,),
@@ -78,8 +78,8 @@ def list_contracts(
     sql = (
         "SELECT ct.*, c.name AS client_name, p.name AS project_name "
         "  FROM contracts ct "
-        "  LEFT JOIN clients c ON c.id = ct.client_id "
-        "  LEFT JOIN projects p ON p.id = ct.project_id "
+        "  LEFT JOIN clients c ON c.id = ct.client_id AND c.tenant_id = ct.tenant_id "
+        "  LEFT JOIN projects p ON p.id = ct.project_id AND p.tenant_id = ct.tenant_id "
         " WHERE ct.tenant_id = ?"
     )
     params: list = [tenant_id]

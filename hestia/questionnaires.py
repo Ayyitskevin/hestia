@@ -59,8 +59,8 @@ def get_questionnaire(conn: sqlite3.Connection, tenant_id: str, qid: int) -> dic
         """
         SELECT q.*, c.name AS client_name, c.email AS client_email, p.name AS project_name
           FROM questionnaires q
-          LEFT JOIN clients c ON c.id = q.client_id
-          LEFT JOIN projects p ON p.id = q.project_id
+          LEFT JOIN clients c ON c.id = q.client_id AND c.tenant_id = q.tenant_id
+          LEFT JOIN projects p ON p.id = q.project_id AND p.tenant_id = q.tenant_id
          WHERE q.id = ? AND q.tenant_id = ?
         """,
         (qid, tenant_id),
@@ -77,8 +77,8 @@ def get_questionnaire_by_token(conn: sqlite3.Connection, token: str) -> dict | N
         """
         SELECT q.*, c.name AS client_name, p.name AS project_name
           FROM questionnaires q
-          LEFT JOIN clients c ON c.id = q.client_id
-          LEFT JOIN projects p ON p.id = q.project_id
+          LEFT JOIN clients c ON c.id = q.client_id AND c.tenant_id = q.tenant_id
+          LEFT JOIN projects p ON p.id = q.project_id AND p.tenant_id = q.tenant_id
          WHERE q.token = ?
         """,
         (token,),
@@ -98,8 +98,8 @@ def list_questionnaires(
         "SELECT q.*, c.name AS client_name, p.name AS project_name, "
         "       (SELECT COUNT(*) FROM questionnaire_items qi WHERE qi.questionnaire_id = q.id) AS item_count "
         "  FROM questionnaires q "
-        "  LEFT JOIN clients c ON c.id = q.client_id "
-        "  LEFT JOIN projects p ON p.id = q.project_id "
+        "  LEFT JOIN clients c ON c.id = q.client_id AND c.tenant_id = q.tenant_id "
+        "  LEFT JOIN projects p ON p.id = q.project_id AND p.tenant_id = q.tenant_id "
         " WHERE q.tenant_id = ?"
     )
     params: list = [tenant_id]
