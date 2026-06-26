@@ -11,7 +11,12 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response, StreamingResponse
 
 from ..delivery import get_gallery_by_delivery_token, iter_zip
-from ..galleries import list_images, safe_inline_type
+from ..galleries import (
+    list_images,
+    record_gallery_download,
+    record_gallery_view,
+    safe_inline_type,
+)
 from ..ratelimit import enforce
 from .deps import db_conn, render, storage_of
 
@@ -35,6 +40,7 @@ def delivery_page(request: Request, token: str):
         if not gallery:
             return render(request, "offer_missing.html", auth=None, status_code=404)
         images = list_images(conn, gallery["id"])
+        record_gallery_view(conn, gallery["id"])          # the client opened their gallery
     total_bytes = sum(img.get("bytes") or 0 for img in images)
     return render(request, "delivery.html", auth=None, gallery=gallery, images=images,
                   token=token, total_bytes=total_bytes)
@@ -49,6 +55,8 @@ def delivery_zip(request: Request, token: str):
         if not gallery:
             return Response(status_code=404)
         images = list_images(conn, gallery["id"])
+        if images:
+            record_gallery_download(conn, gallery["id"])  # whole-set zip download
     if not images:
         return Response(status_code=404)
     # Stream the archive (bounded memory) so a multi-GB wedding gallery can't OOM us.
@@ -73,6 +81,7 @@ def delivery_file(request: Request, token: str, image_id: int):
         if not img:
             return Response(status_code=404)
         img = dict(img)
+        record_gallery_download(conn, gallery["id"])      # individual original download
     try:
         data = storage.open(img["storage_key"])
     except FileNotFoundError:

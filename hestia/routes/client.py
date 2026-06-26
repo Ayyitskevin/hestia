@@ -6,7 +6,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from ..campaigns import discount_bundle, get_active_campaign
-from ..galleries import get_gallery_by_slug, get_image, list_images
+from ..galleries import get_gallery_by_slug, get_image, list_images, record_gallery_view
 from ..orders import create_order
 from ..proofing import (
     add_comment,
@@ -102,6 +102,7 @@ def client_gallery(request: Request, slug: str, gallery_slug: str):
         images = list_images(conn, gallery["id"]) if unlocked else []
         offer = None
         if unlocked:
+            record_gallery_view(conn, gallery["id"])      # client opened their proofing gallery
             from ..sales import get_offer_for_gallery, offer_public_url
             from .deps import settings_of
             o = get_offer_for_gallery(conn, tenant["id"], gallery["id"])

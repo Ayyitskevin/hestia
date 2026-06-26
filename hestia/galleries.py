@@ -81,6 +81,19 @@ def get_gallery_by_slug(conn: sqlite3.Connection, tenant_id: str, slug: str) -> 
     return dict(row) if row else None
 
 
+def record_gallery_view(conn: sqlite3.Connection, gallery_id: int) -> None:
+    """Count a client opening the gallery (delivery or proofing page) + stamp last seen.
+    By gallery id: the public routes have already resolved the gallery via its token/PIN."""
+    conn.execute("UPDATE galleries SET view_count = view_count + 1, "
+                 "last_viewed_at = datetime('now') WHERE id = ?", (gallery_id,))
+
+
+def record_gallery_download(conn: sqlite3.Connection, gallery_id: int) -> None:
+    """Count a download action — the whole-set zip, or an individual original."""
+    conn.execute("UPDATE galleries SET download_count = download_count + 1 WHERE id = ?",
+                 (gallery_id,))
+
+
 def list_galleries(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM galleries WHERE tenant_id = ? ORDER BY created_at DESC", (tenant_id,)

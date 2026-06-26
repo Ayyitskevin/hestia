@@ -96,6 +96,18 @@
   {% endif %}
 </div>
 
+<div class="card stack" style="margin-top:18px">
+  <h3>Engagement</h3>
+  <p class="muted">Whether your client has opened and downloaded their gallery.</p>
+  <div class="health-strip">
+    <div class="health-item"><span class="svc">{{ gallery.view_count or 0 }}</span> <span class="url">views</span></div>
+    <div class="health-item"><span class="svc">{{ gallery.download_count or 0 }}</span> <span class="url">downloads</span></div>
+    <div class="health-item"><span class="svc">{{ favorites|length }}</span> <span class="url">favorite{{ '' if favorites|length == 1 else 's' }}</span></div>
+    <div class="health-item"><span class="svc">{{ '✓' if gallery.last_viewed_at else '—' }}</span>
+      <span class="url">{% if gallery.last_viewed_at %}last seen {{ gallery.last_viewed_at[:10] }}{% else %}not opened yet{% endif %}</span></div>
+  </div>
+</div>
+
 {% if orders %}
 <div class="card stack" style="margin-top:18px">
   <h3>Orders · {{ orders|length }}</h3>
