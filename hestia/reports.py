@@ -12,6 +12,7 @@ formatted for display with :func:`hestia.invoices.money`.
 
 from __future__ import annotations
 
+import datetime
 import sqlite3
 
 from .invoices import money
@@ -58,6 +59,55 @@ def ar_aging(conn: sqlite3.Connection, tenant_id: str) -> dict:
     overdue = sum(b["cents"] for b in buckets if b["label"] != "Not yet due")
     return {"buckets": buckets, "total_cents": total, "total": money(total),
             "overdue_cents": overdue, "overdue": money(overdue)}
+
+
+def _recent_months(n: int) -> list[str]:
+    """The last ``n`` calendar months as 'YYYY-MM', oldest first, ending this month."""
+    today = datetime.date.today()
+    out, y, m = [], today.year, today.month
+    for _ in range(n):
+        out.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            m, y = 12, y - 1
+    out.reverse()
+    return out
+
+
+def monthly_pnl(conn: sqlite3.Connection, tenant_id: str, *, months: int = 6) -> list[dict]:
+    """Revenue, expenses, and profit per calendar month for the last ``months``,
+    oldest first. Revenue counts each sale once — paid invoices excluding the ones
+    that back an order, plus paid orders — attributed to the month it was paid (the
+    backing invoice's pay date for an order). Expenses use their incurred date when
+    parseable, else when they were logged."""
+    rev: dict[str, int] = {}
+    for r in conn.execute(
+        "SELECT strftime('%Y-%m', COALESCE(paid_at, created_at)) AS ym, amount_cents AS cents "
+        "FROM invoices WHERE tenant_id = ? AND status = 'paid' AND id NOT IN "
+        "(SELECT invoice_id FROM orders WHERE tenant_id = ? AND invoice_id IS NOT NULL)",
+        (tenant_id, tenant_id)).fetchall():
+        if r["ym"]:
+            rev[r["ym"]] = rev.get(r["ym"], 0) + int(r["cents"])
+    for r in conn.execute(
+        "SELECT strftime('%Y-%m', COALESCE(i.paid_at, o.created_at)) AS ym, o.amount_cents AS cents "
+        "FROM orders o LEFT JOIN invoices i ON i.id = o.invoice_id AND i.tenant_id = o.tenant_id "
+        "WHERE o.tenant_id = ? AND o.status = 'paid'",
+        (tenant_id,)).fetchall():
+        if r["ym"]:
+            rev[r["ym"]] = rev.get(r["ym"], 0) + int(r["cents"])
+    exp: dict[str, int] = {}
+    for r in conn.execute(
+        "SELECT strftime('%Y-%m', COALESCE(date(incurred_on), created_at)) AS ym, "
+        "SUM(amount_cents) AS cents FROM expenses WHERE tenant_id = ? GROUP BY ym",
+        (tenant_id,)).fetchall():
+        if r["ym"]:
+            exp[r["ym"]] = exp.get(r["ym"], 0) + int(r["cents"])
+    out = []
+    for ym in _recent_months(months):
+        rc, ec = rev.get(ym, 0), exp.get(ym, 0)
+        out.append({"month": ym, "revenue_cents": rc, "expenses_cents": ec, "profit_cents": rc - ec,
+                    "revenue": money(rc), "expenses": money(ec), "profit": money(rc - ec)})
+    return out
 
 
 def expense_breakdown(conn: sqlite3.Connection, tenant_id: str) -> dict:

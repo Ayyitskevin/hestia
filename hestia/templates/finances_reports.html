@@ -10,6 +10,31 @@
 </div>
 
 <div class="card stack">
+  <h3>Monthly trend</h3>
+  <p class="muted">Revenue, expenses, and profit by month — your studio's trajectory. Each sale counts once.</p>
+  {% set maxrev = trend|map(attribute='revenue_cents')|max %}
+  <table>
+    <thead><tr><th>Month</th><th>Revenue</th><th>Expenses</th><th>Profit</th><th style="width:30%"></th></tr></thead>
+    <tbody>
+      {% for m in trend %}
+      <tr>
+        <td>{{ m.month }}</td>
+        <td>{{ m.revenue }}</td>
+        <td class="muted">{{ m.expenses }}</td>
+        <td><span class="pill {{ 'on' if m.profit_cents >= 0 else 'off' }}">{{ m.profit }}</span></td>
+        <td>
+          <div style="background:rgba(127,127,127,.15);border-radius:5px;height:9px;overflow:hidden">
+            <div style="height:9px;border-radius:5px;background:#3a7ca5;
+                 width:{{ (100 * m.revenue_cents / maxrev)|round if maxrev else 0 }}%"></div>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card stack" style="margin-top:18px">
   <h3>A/R aging · {{ aging.total }} outstanding</h3>
   <p class="muted">Outstanding invoices grouped by how overdue they are
     {% if aging.overdue_cents %}— <span class="pill off">{{ aging.overdue }} overdue</span>{% endif %}.</p>

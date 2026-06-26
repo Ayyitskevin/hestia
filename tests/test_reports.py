@@ -8,7 +8,7 @@ from hestia.db import connect
 from hestia.finances import create_expense
 from hestia.invoices import create_invoice, send_invoice
 from hestia.payment_plans import create_payment_plan, deposit_balance_installments
-from hestia.reports import ar_aging, expense_breakdown
+from hestia.reports import ar_aging, expense_breakdown, monthly_pnl
 from hestia.tenants import create_tenant
 
 TODAY = datetime.date.today()
@@ -99,3 +99,34 @@ def test_reports_page_renders(client, app):
 
 def test_reports_requires_login(client):
     assert client.get("/finances/reports", follow_redirects=False).status_code == 303
+
+
+# --- monthly trend ----------------------------------------------------------
+
+def _paid_invoice(conn, settings, tenant_id, cents):
+    inv = create_invoice(conn, settings, tenant_id=tenant_id, title="Pkg", amount_cents=cents)
+    conn.execute("UPDATE invoices SET status = 'paid' WHERE id = ?", (inv["id"],))
+    return inv
+
+
+def test_monthly_pnl_counts_each_sale_once(conn, settings):
+    t = create_tenant(conn, name="Trend", shoot_type="wedding")
+    _paid_invoice(conn, settings, t["id"], 300000)                     # standalone package
+    binv = _paid_invoice(conn, settings, t["id"], 50000)              # a gallery sale: paired
+    conn.execute("INSERT INTO orders (tenant_id, invoice_id, sku, name, amount_cents, status) "
+                 "VALUES (?, ?, 'favorites', 'Sale', 50000, 'paid')", (t["id"], binv["id"]))
+    create_expense(conn, tenant_id=t["id"], amount_cents=80000, category="gear")
+    conn.commit()
+    trend = monthly_pnl(conn, t["id"], months=6)
+    assert len(trend) == 6
+    cur = trend[-1]                                                   # this month
+    assert cur["revenue_cents"] == 350000                            # 300k + 50k once (not 400k)
+    assert cur["expenses_cents"] == 80000 and cur["profit_cents"] == 270000
+
+
+def test_monthly_pnl_empty_is_zeroed(conn):
+    t = create_tenant(conn, name="Quiet", shoot_type="wedding")
+    conn.commit()
+    trend = monthly_pnl(conn, t["id"], months=3)
+    assert len(trend) == 3
+    assert all(m["revenue_cents"] == 0 and m["profit_cents"] == 0 for m in trend)
