@@ -90,4 +90,23 @@
   <a class="btn" href="/projects/new?client_id={{ client.id }}">Create a project</a>
   {% endif %}
 </div>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>Activity</h3>
+  {% if timeline %}
+  <div class="stack" style="gap:10px">
+    {% for e in timeline %}
+    <div style="display:flex; gap:10px; align-items:baseline">
+      <span style="font-size:1.1em">{{ e.icon }}</span>
+      <div style="flex:1">
+        {% if e.url %}<a href="{{ e.url }}">{{ e.label }}</a>{% else %}{{ e.label }}{% endif %}
+      </div>
+      <span class="muted" style="font-size:.85em; white-space:nowrap">{{ e.date[:10] }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No activity yet — it fills in as you book, bill, shoot, and deliver.</p>
+  {% endif %}
+</div>
 {% endblock %}
