@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
@@ -76,7 +77,10 @@ def add_expense(request: Request, amount: str = Form(""), category: str = Form("
         if not auth:
             return RedirectResponse("/login", status_code=303)
         try:
-            cents = round(float(amount) * 100)
+            dollars = float(amount)
+            # 'inf'/'1e400'/'nan' parse as floats but round() to int overflows — treat
+            # any non-finite amount as zero rather than letting it 500 the page.
+            cents = round(dollars * 100) if math.isfinite(dollars) else 0
         except (TypeError, ValueError):
             cents = 0
         if cents > 0:

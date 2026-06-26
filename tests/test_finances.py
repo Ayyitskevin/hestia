@@ -12,12 +12,14 @@ from hestia.finances import (
     list_expenses,
     profit_summary,
     project_pnl,
+    revenue_total,
 )
 from hestia.invoices import create_invoice
 from hestia.tenants import create_tenant
 
 
 def _paid_order(conn, tenant_id, cents):
+    # a STANDALONE paid order (no backing invoice) — counts on its own
     conn.execute("INSERT INTO orders (tenant_id, sku, name, amount_cents, status) "
                  "VALUES (?, 'print-8x10', 'Print', ?, 'paid')", (tenant_id, cents))
 
@@ -27,6 +29,17 @@ def _paid_invoice(conn, settings, *, tenant_id, cents, project_id=None, client_i
                          client_id=client_id, project_id=project_id)
     conn.execute("UPDATE invoices SET status = 'paid' WHERE id = ?", (inv["id"],))
     return inv
+
+
+def _paid_gallery_sale(conn, settings, *, tenant_id, cents, project_id=None, client_id=None):
+    """Reproduce a real gallery sale: orders.create_order pairs an order with a backing
+    invoice of the SAME amount, and the pay flow marks both paid. Returns the order id."""
+    inv = _paid_invoice(conn, settings, tenant_id=tenant_id, cents=cents,
+                        project_id=project_id, client_id=client_id)
+    cur = conn.execute(
+        "INSERT INTO orders (tenant_id, invoice_id, sku, name, amount_cents, status) "
+        "VALUES (?, ?, 'favorites', 'Gallery sale', ?, 'paid')", (tenant_id, inv["id"], cents))
+    return cur.lastrowid
 
 
 # --- module logic -----------------------------------------------------------
@@ -98,6 +111,52 @@ def test_expenses_are_tenant_scoped(conn):
     assert list_expenses(conn, t2["id"]) == []                   # not visible cross-tenant
     assert delete_expense(conn, t2["id"], e["id"]) is False      # not deletable cross-tenant
     assert expenses_total(conn, t1["id"]) == 5000
+
+
+# --- revenue counts a paired sale once (regression) -------------------------
+
+def test_gallery_sale_counts_once_not_twice(conn, settings):
+    """A gallery sale is a paired invoice + order of the same amount, both marked paid.
+    Counting both would double the sale; tenant-wide revenue and the income export
+    must report it once."""
+    t = create_tenant(conn, name="Sale", shoot_type="wedding")
+    c = create_client(conn, tenant_id=t["id"], name="Buyer")
+    _paid_gallery_sale(conn, settings, tenant_id=t["id"], cents=50000, client_id=c["id"])
+    conn.commit()
+    assert revenue_total(conn, t["id"]) == 50000                 # $500 once, not $1,000
+    assert profit_summary(conn, t["id"])["revenue_cents"] == 50000
+    rows = income_rows(conn, t["id"])
+    assert len(rows) == 1                                        # backing invoice not a 2nd row
+    assert rows[0]["type"] == "order" and rows[0]["amount_cents"] == 50000
+
+
+def test_revenue_mixes_standalone_invoice_and_gallery_sale(conn, settings):
+    """A normal package invoice and a gallery sale each count once — the sale's backing
+    invoice is excluded, the standalone invoice is not."""
+    t = create_tenant(conn, name="Mix", shoot_type="wedding")
+    _paid_invoice(conn, settings, tenant_id=t["id"], cents=300000)        # package invoice
+    _paid_gallery_sale(conn, settings, tenant_id=t["id"], cents=50000)    # gallery print sale
+    conn.commit()
+    assert revenue_total(conn, t["id"]) == 350000                # 300k + 50k, each once
+    rows = income_rows(conn, t["id"])
+    assert len(rows) == 2 and sum(r["amount_cents"] for r in rows) == 350000
+
+
+def test_project_pnl_subqueries_are_tenant_scoped(conn, settings):
+    """A foreign studio's invoice/expense that (wrongly) references my project id must
+    not bleed into my project's P&L — the subqueries are tenant-scoped."""
+    mine = create_tenant(conn, name="Mine", shoot_type="wedding")
+    theirs = create_tenant(conn, name="Theirs", shoot_type="wedding")
+    p = create_project(conn, tenant_id=mine["id"], name="Shoot", client_id=None,
+                       shoot_type="wedding", status="booked")
+    _paid_invoice(conn, settings, tenant_id=mine["id"], cents=100000, project_id=p["id"])
+    # foreign rows pointed at my project id
+    _paid_invoice(conn, settings, tenant_id=theirs["id"], cents=999999, project_id=p["id"])
+    create_expense(conn, tenant_id=theirs["id"], amount_cents=777777, project_id=p["id"])
+    conn.commit()
+    row = next(r for r in project_pnl(conn, mine["id"]) if r["name"] == "Shoot")
+    assert row["revenue"] == "$1,000.00"                         # only my 100k
+    assert row["profit_cents"] == 100000                         # foreign expense excluded too
 
 
 # --- HTTP -------------------------------------------------------------------
@@ -205,3 +264,20 @@ def test_add_expense_ignores_a_foreign_project(client, app):
     finally:
         conn.close()
     assert row["project_id"] is None      # a project this studio doesn't own is dropped
+
+
+def test_add_expense_tolerates_non_finite_amount(client, app):
+    """'inf'/'1e400'/'nan' parse as floats but overflow round()-to-int — a non-finite
+    amount must be ignored (no expense), not 500 the page."""
+    creds = onboard_studio(client, email="inf@example.com")
+    login_owner(client, creds)
+    for bad in ("inf", "1e400", "nan", "-inf"):
+        r = client.post("/finances/expenses", data={"amount": bad, "category": "gear",
+                                                    "description": "boom"})
+        assert r.status_code in (200, 303)        # redirect back, never a 500
+    conn = connect(app.state.settings.db_path)
+    try:
+        n = conn.execute("SELECT COUNT(*) AS n FROM expenses").fetchone()["n"]
+    finally:
+        conn.close()
+    assert n == 0                                  # nothing logged from a non-finite amount
