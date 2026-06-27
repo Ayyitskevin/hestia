@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from .. import messaging
 from ..albums import get_album_for_gallery
@@ -26,7 +26,7 @@ from ..jobs import drain, enqueue
 from ..orders import list_orders
 from ..pipeline import start_run
 from ..products import get_set_for_gallery
-from ..proofing import comments_for_gallery, favorite_image_ids
+from ..proofing import comments_for_gallery, favorite_image_ids, list_favorites
 from ..sales import get_offer_for_gallery, offer_public_url
 from ..tenants import get_tenant, tenant_flags
 from ..vision import cull_summary
@@ -122,6 +122,22 @@ def gallery_detail(request: Request, gallery_id: int):
                   storage=storage_of(request), flags=flags, project=project, album=album,
                   product_set=product_set, favorites=favorites, comments=comments, campaign=campaign,
                   orders=orders, fulfillments=fulfillments, cull=cull, delivery_link=delivery_link)
+
+
+@router.get("/{gallery_id}/selects.txt")
+def gallery_selects(request: Request, gallery_id: int):
+    """Download the client's picks as a plain filename list — drop straight into
+    Lightroom/your editor to pull the album & print selects. Owner-only, tenant-scoped."""
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if not get_gallery(conn, auth.tenant["id"], gallery_id):
+            return RedirectResponse("/galleries", status_code=303)
+        favs = list_favorites(conn, auth.tenant["id"], gallery_id)
+    body = "".join(f"{f['filename']}\n" for f in favs)
+    return Response(content=body, media_type="text/plain",
+                    headers={"Content-Disposition": f'attachment; filename="selects-{gallery_id}.txt"'})
 
 
 @router.post("/{gallery_id}/delivery")
