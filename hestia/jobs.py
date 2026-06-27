@@ -228,6 +228,22 @@ def _remind_pending_documents(db_path: str | Path, settings: Settings) -> int:
         conn.close()
 
 
+def _send_owner_digests(db_path: str | Path, settings: Settings) -> int:
+    """Worker-cadence wrapper: email each studio owner their 'what needs you' digest,
+    on a weekly per-tenant cooldown — so running this hourly is harmless (the cooldown,
+    not this cadence, bounds how often any one owner is emailed). Deferred imports keep
+    the jobs↔modules edge one-way."""
+    from .dashboard import send_owner_digests
+    from .db import connect
+    conn = connect(db_path)
+    try:
+        n = send_owner_digests(conn, settings)
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
 def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_sleep: float = 0.5,
                reclaim_interval: float = 60.0, remind_interval: float = 3600.0) -> None:
     """Background loop: drain the queue, periodically reclaim orphaned jobs, and
@@ -256,6 +272,10 @@ def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_slee
                 pass
             try:
                 _remind_pending_documents(db_path, settings)
+            except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
+                pass
+            try:
+                _send_owner_digests(db_path, settings)
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
                 pass
             last_remind = time.monotonic()

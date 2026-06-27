@@ -13,6 +13,7 @@
     <a class="btn secondary" href="/clients/new">+ Client</a>
     <a class="btn secondary" href="/projects/new">+ Project</a>
     <a class="btn secondary" href="/invoices/new">+ Invoice</a>
+    {% if attention.total or reconnect %}<form method="post" action="/dashboard/digest" style="margin:0">{% include "_csrf.html" %}<button class="btn ghost" type="submit">✉ Email me this</button></form>{% endif %}
   </div>
 </div>
 
