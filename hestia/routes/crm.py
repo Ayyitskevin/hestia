@@ -8,6 +8,7 @@ import io
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
+from .. import messaging
 from ..auth import context_from_session
 from ..content import list_packs, recipes_for
 from ..contracts import list_contracts
@@ -29,6 +30,7 @@ from ..crm import (
     tags_for_client,
 )
 from ..db import audit
+from ..email import list_emails, notify
 from ..invoices import list_invoices, money
 from ..payment_plans import list_payment_plans
 from ..portal import enable_portal, portal_url, regenerate_portal_token
@@ -128,6 +130,10 @@ def client_detail(request: Request, client_id: int):
         ref_code = referral_code_for(conn, auth.tenant["id"], client_id)
         balance = credit_balance(conn, auth.tenant["id"], client_id)
         credits = list_credits(conn, auth.tenant["id"], client_id)
+        # Messages we've sent this client (matched by recipient) — the in-app record.
+        addr = (client.get("email") or "").strip().lower()
+        messages = [e for e in list_emails(conn, auth.tenant["id"])
+                    if (e.get("to_addr") or "").strip().lower() == addr] if addr else []
     settings = settings_of(request)
     portal_link = portal_url(settings, client["portal_token"]) \
         if client.get("portal_token") else None
@@ -136,8 +142,49 @@ def client_detail(request: Request, client_id: int):
         c["amount_display"] = money(c["amount_cents"])
     return render(request, "crm/client_detail.html", auth=auth, client=client,
                   projects=projects, timeline=timeline, tags=tags, portal_link=portal_link,
-                  refer_link=refer_link, credits=credits,
+                  refer_link=refer_link, credits=credits, messages=messages,
                   credit_balance_display=money(balance), credit_balance=balance)
+
+
+@router.get("/clients/{client_id}/email")
+def client_email_compose(request: Request, client_id: int):
+    """Compose a personal email to the client — pre-filled from the 'Reply to an inquiry'
+    template (customizable under Email templates). The studio edits and sends it here, so
+    the message, signature, and record all stay inside Hestia."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        client = get_client(conn, auth.tenant["id"], client_id)
+        if not client:
+            return RedirectResponse("/clients", status_code=303)
+        if not (client.get("email") or "").strip():     # nothing to send to
+            return RedirectResponse(f"/clients/{client_id}", status_code=303)
+        ctx = {"client": client["name"], "studio": auth.tenant.get("name", "your studio")}
+        draft = messaging.render(conn, auth.tenant["id"], "inquiry_reply", ctx)
+    return render(request, "crm/client_email.html", auth=auth, client=client,
+                  subject=draft["subject"], body=draft["body"])
+
+
+@router.post("/clients/{client_id}/email")
+def client_email_send(request: Request, client_id: int,
+                      subject: str = Form(""), body: str = Form("")):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        client = get_client(conn, auth.tenant["id"], client_id)
+        if not client:
+            return RedirectResponse("/clients", status_code=303)
+        to = (client.get("email") or "").strip()
+        if to and (subject.strip() or body.strip()):
+            notify(conn, settings, to=to, subject=subject.strip(), body=body,
+                   tenant_id=auth.tenant["id"])      # signed=True → studio signature appended
+            audit(conn, actor="owner", action="client.emailed", tenant_id=auth.tenant["id"],
+                  detail=f"{client['name']} · {subject.strip()[:80]}")
+            conn.commit()
+    return RedirectResponse(f"/clients/{client_id}", status_code=303)
 
 
 @router.post("/clients/{client_id}/tags")

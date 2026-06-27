@@ -12,6 +12,7 @@
     </span>
   </div>
   <div style="display:flex; gap:10px">
+    {% if project.client_id %}<a class="btn ghost" href="/clients/{{ project.client_id }}/email">✉ Email</a>{% endif %}
     <a class="btn ghost" href="/contracts/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Contract</a>
     <a class="btn ghost" href="/questionnaires/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Form</a>
     <a class="btn ghost" href="/schedule/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Session</a>
