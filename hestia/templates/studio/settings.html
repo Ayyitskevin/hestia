@@ -65,6 +65,21 @@
 </div>
 
 <div class="card stack" style="margin-top:18px">
+  <h3>Weekly digest</h3>
+  <p class="muted">A once-a-week email of what needs you — new leads, unpaid invoices,
+    upcoming sessions, galleries to deliver, and clients to reconnect with. You can always
+    pull it up on demand from the dashboard.</p>
+  <form method="post" action="/settings/digest">
+    {% include "_csrf.html" %}
+    <label style="display:flex; align-items:center; gap:8px">
+      <input type="checkbox" name="digest_enabled" value="1" {{ 'checked' if tenant.digest_enabled else '' }}>
+      Email me the weekly digest
+    </label>
+    <div class="form-actions"><button class="btn" type="submit">Save</button></div>
+  </form>
+</div>
+
+<div class="card stack" style="margin-top:18px">
   <h3>AI style profile</h3>
   {% if can_style %}
     <p class="muted">Describe the look you cull and sell toward — your culling and hero picks
