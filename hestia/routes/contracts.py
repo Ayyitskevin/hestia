@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
+from .. import messaging
 from ..auth import context_from_session
 from ..contracts import (
     contract_public_url,
@@ -99,16 +100,15 @@ def contract_send(request: Request, contract_id: int):
             # Email the client their sign link (mock records it; smtp also delivers).
             to = contract.get("signer_email") or contract.get("client_email")
             if to:
-                sign_url = contract_public_url(settings, contract["token"])
-                studio = auth.tenant.get("name", "your photographer")
-                who = contract.get("signer_name") or contract.get("client_name") or "there"
-                notify(
-                    conn, settings, to=to, tenant_id=auth.tenant["id"],
-                    subject=f"{studio}: please review and sign — {contract['title']}",
-                    body=(f"Hi {who},\n\n{studio} has sent you a contract to review and "
-                          f"sign: {contract['title']}.\n\nReview and sign here:\n{sign_url}\n\n"
-                          f"Thank you!"),
-                )
+                ctx = {
+                    "client": contract.get("signer_name") or contract.get("client_name") or "there",
+                    "studio": auth.tenant.get("name", "your photographer"),
+                    "title": contract["title"],
+                    "sign_url": contract_public_url(settings, contract["token"]),
+                }
+                msg = messaging.render(conn, auth.tenant["id"], "contract_send", ctx)
+                notify(conn, settings, to=to, tenant_id=auth.tenant["id"],
+                       subject=msg["subject"], body=msg["body"])
         conn.commit()
     return RedirectResponse(f"/contracts/{contract_id}", status_code=303)
 

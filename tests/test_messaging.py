@@ -4,8 +4,19 @@ and the wired client emails (appointment confirm, invoice send)."""
 from conftest import login_owner, onboard_studio
 
 from hestia import messaging
+from hestia.contracts import (
+    create_contract,
+    get_contract,
+    send_contract,
+    send_contract_reminder,
+)
 from hestia.crm import create_client
 from hestia.email import list_emails
+from hestia.questionnaires import (
+    create_questionnaire,
+    get_questionnaire,
+    send_questionnaire_reminder,
+)
 from hestia.scheduler import _notify, create_appointment
 from hestia.tenants import create_tenant
 
@@ -117,3 +128,70 @@ def test_messages_page_save_and_reset(client, conn):
     client.post("/settings/messages/invoice_send", data={"subject": "", "body": ""})  # reset
     assert messaging.get_template(conn, tid, "invoice_send")["subject"] \
         == messaging.TEMPLATES["invoice_send"]["subject"]
+
+
+# ── contract & questionnaire templates (slice 2) ─────────────────────────────
+
+
+def test_all_kinds_registered_in_editor(conn):
+    t = create_tenant(conn, name="S", shoot_type="wedding")
+    kinds = {x["kind"] for x in messaging.list_templates(conn, t["id"])}
+    assert {"appointment_confirm", "appointment_reminder", "invoice_send",
+            "contract_send", "contract_reminder",
+            "questionnaire_send", "questionnaire_reminder"} <= kinds
+
+
+def test_contract_send_uses_custom_template(client, conn):
+    login_owner(client, onboard_studio(client, name="Lux", email="owner@ct.com"))
+    tid = conn.execute("SELECT id FROM tenants ORDER BY id DESC LIMIT 1").fetchone()["id"]
+    messaging.set_template(conn, tid, "contract_send",
+                           subject="Sign here, {client}", body="{studio} needs your sig: {sign_url}")
+    conn.commit()                                                # release the write lock before HTTP
+    client.post("/clients", data={"name": "Pat", "email": "pat@ct.com"})
+    cid = conn.execute("SELECT id FROM clients WHERE email='pat@ct.com'").fetchone()["id"]
+    rct = client.post("/contracts", data={"title": "Booking", "body": "terms", "client_id": str(cid)})
+    contract_id = int(str(rct.url).rstrip("/").split("/")[-1])
+    client.post(f"/contracts/{contract_id}/send")
+    row = conn.execute("SELECT subject, body FROM emails WHERE to_addr='pat@ct.com'").fetchone()
+    assert row["subject"] == "Sign here, Pat"
+    assert "needs your sig:" in row["body"] and "/sign/" in row["body"]
+
+
+def test_contract_reminder_uses_custom_template(conn, settings):
+    t = create_tenant(conn, name="Ct", shoot_type="wedding")
+    c = create_client(conn, tenant_id=t["id"], name="Sam", email="sam@ct.com")
+    ct = create_contract(conn, tenant_id=t["id"], title="Agreement", client_id=c["id"])
+    send_contract(conn, t["id"], ct["id"])
+    messaging.set_template(conn, t["id"], "contract_reminder",
+                           subject="Still need your sig on {title}", body="Sign: {sign_url}")
+    conn.commit()
+    send_contract_reminder(conn, settings, get_contract(conn, t["id"], ct["id"]))
+    row = [m for m in list_emails(conn, t["id"]) if m["to_addr"] == "sam@ct.com"][0]
+    assert row["subject"] == "Still need your sig on Agreement" and "/sign/" in row["body"]
+
+
+def test_questionnaire_send_uses_custom_template(client, conn):
+    login_owner(client, onboard_studio(client, name="Q", email="owner@q.com"))
+    tid = conn.execute("SELECT id FROM tenants ORDER BY id DESC LIMIT 1").fetchone()["id"]
+    messaging.set_template(conn, tid, "questionnaire_send",
+                           subject="Quick Qs for {client}", body="{studio} asks: {fill_url}")
+    c = create_client(conn, tenant_id=tid, name="Pat", email="pat@q.com")
+    q = create_questionnaire(conn, tenant_id=tid, title="Details", prompts=["Venue?"], client_id=c["id"])
+    conn.commit()
+    client.post(f"/questionnaires/{q['id']}/send")
+    row = conn.execute("SELECT subject, body FROM emails WHERE to_addr='pat@q.com'").fetchone()
+    assert row["subject"] == "Quick Qs for Pat" and "/q/" in row["body"]
+
+
+def test_questionnaire_reminder_uses_custom_template(conn, settings):
+    t = create_tenant(conn, name="Qr", shoot_type="wedding")
+    c = create_client(conn, tenant_id=t["id"], name="Sam", email="sam@q.com")
+    q = create_questionnaire(conn, tenant_id=t["id"], title="Details", prompts=["Venue?"],
+                             client_id=c["id"])
+    conn.execute("UPDATE questionnaires SET status='sent' WHERE id=?", (q["id"],))
+    messaging.set_template(conn, t["id"], "questionnaire_reminder",
+                           subject="Still need {title}", body="Fill: {fill_url}")
+    conn.commit()
+    send_questionnaire_reminder(conn, settings, get_questionnaire(conn, t["id"], q["id"]))
+    row = [m for m in list_emails(conn, t["id"]) if m["to_addr"] == "sam@q.com"][0]
+    assert row["subject"] == "Still need Details" and "/q/" in row["body"]

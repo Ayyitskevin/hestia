@@ -37,6 +37,36 @@ TEMPLATES: dict[str, dict] = {
                  "Pay securely here:\n{pay_url}\n\nThank you!"),
         "variables": ["client", "studio", "title", "amount", "pay_url", "note"],
     },
+    "contract_send": {
+        "label": "Contract to sign",
+        "subject": "{studio}: please review and sign — {title}",
+        "body": ("Hi {client},\n\n{studio} has sent you a contract to review and sign: {title}.\n\n"
+                 "Review and sign here:\n{sign_url}\n\nThank you!"),
+        "variables": ["client", "studio", "title", "sign_url"],
+    },
+    "contract_reminder": {
+        "label": "Contract reminder",
+        "subject": 'Reminder: please sign "{title}"',
+        "body": ("Hi {client},\n\nA friendly reminder from {studio} to review and sign your "
+                 'contract — "{title}". It only takes a minute.\n\n'
+                 "Review and sign here:\n{sign_url}\n\nThank you!\n{studio}"),
+        "variables": ["client", "studio", "title", "sign_url"],
+    },
+    "questionnaire_send": {
+        "label": "Questionnaire",
+        "subject": "{studio}: a quick questionnaire — {title}",
+        "body": ("Hi {client},\n\n{studio} would love a few details for {title}.\n\n"
+                 "Fill it out here:\n{fill_url}\n\nThank you!"),
+        "variables": ["client", "studio", "title", "fill_url"],
+    },
+    "questionnaire_reminder": {
+        "label": "Questionnaire reminder",
+        "subject": 'Reminder: a quick questionnaire — "{title}"',
+        "body": ("Hi {client},\n\nA friendly reminder from {studio} — we'd still love a few "
+                 'details for "{title}". It only takes a minute.\n\n'
+                 "Fill it out here:\n{fill_url}\n\nThank you!\n{studio}"),
+        "variables": ["client", "studio", "title", "fill_url"],
+    },
 }
 
 _VAR = re.compile(r"\{(\w+)\}")

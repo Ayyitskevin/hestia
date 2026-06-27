@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from . import messaging
 from .automations import emit_event
 from .config import Settings
 from .crypto import new_session_token
@@ -182,13 +183,14 @@ def send_questionnaire_reminder(conn: sqlite3.Connection, settings: Settings, q:
     if not to:
         return None
     trow = conn.execute("SELECT name FROM tenants WHERE id = ?", (q["tenant_id"],)).fetchone()
-    studio = trow["name"] if trow else "your photographer"
-    fill_url = questionnaire_public_url(settings, q["token"])
-    body = (f"Hi {q.get('client_name') or 'there'},\n\nA friendly reminder from {studio} — "
-            f"we'd still love a few details for \"{q['title']}\". It only takes a minute.\n\n"
-            f"Fill it out here:\n{fill_url}\n\nThank you!\n{studio}")
-    return notify(conn, settings, to=to, subject=f'Reminder: a quick questionnaire — "{q["title"]}"',
-                  body=body, tenant_id=q["tenant_id"])
+    ctx = {
+        "client": q.get("client_name") or "there",
+        "studio": trow["name"] if trow else "your photographer",
+        "title": q["title"], "fill_url": questionnaire_public_url(settings, q["token"]),
+    }
+    msg = messaging.render(conn, q["tenant_id"], "questionnaire_reminder", ctx)
+    return notify(conn, settings, to=to, subject=msg["subject"], body=msg["body"],
+                  tenant_id=q["tenant_id"])
 
 
 def record_questionnaire_reminder(conn: sqlite3.Connection, tenant_id: str, qid: int) -> bool:

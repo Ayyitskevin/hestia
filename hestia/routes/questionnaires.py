@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
+from .. import messaging
 from ..auth import context_from_session
 from ..crm import list_clients, list_projects
 from ..db import audit
@@ -99,15 +100,15 @@ def questionnaire_send(request: Request, qid: int):
                   detail=q["title"])
             to = q.get("client_email")
             if to:
-                fill_url = questionnaire_public_url(settings, q["token"])
-                studio = auth.tenant.get("name", "your photographer")
-                notify(
-                    conn, settings, to=to, tenant_id=auth.tenant["id"],
-                    subject=f"{studio}: a quick questionnaire — {q['title']}",
-                    body=(f"Hi {q.get('client_name') or 'there'},\n\n{studio} would love a few "
-                          f"details for {q['title']}.\n\nFill it out here:\n{fill_url}\n\n"
-                          f"Thank you!"),
-                )
+                ctx = {
+                    "client": q.get("client_name") or "there",
+                    "studio": auth.tenant.get("name", "your photographer"),
+                    "title": q["title"],
+                    "fill_url": questionnaire_public_url(settings, q["token"]),
+                }
+                msg = messaging.render(conn, auth.tenant["id"], "questionnaire_send", ctx)
+                notify(conn, settings, to=to, tenant_id=auth.tenant["id"],
+                       subject=msg["subject"], body=msg["body"])
         conn.commit()
     return RedirectResponse(f"/questionnaires/{qid}", status_code=303)
 
