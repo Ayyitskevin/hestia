@@ -3,11 +3,25 @@
 {% block content %}
 <div class="page-title">
   <h1>Schedule</h1>
-  <div style="display:flex; gap:10px">
-    <a class="btn secondary" href="/schedule/calendar.ics" title="Download an .ics you can import or subscribe to">📅 Subscribe</a>
-    <a class="btn" href="/schedule/new">+ New session</a>
-  </div>
+  <a class="btn" href="/schedule/new">+ New session</a>
 </div>
+
+<details class="card" style="margin-bottom:18px">
+  <summary style="cursor:pointer; font-weight:600">📅 Subscribe to your calendar</summary>
+  <div class="stack" style="margin-top:10px; gap:8px">
+    <p class="muted" style="margin:0">Add this private link in Google, Apple, or Outlook Calendar
+      (“Subscribe from URL”) to see your sessions appear and stay up to date automatically.</p>
+    <a class="offer-url" href="{{ feed_url }}">{{ feed_url }}</a>
+    <div style="display:flex; gap:8px; flex-wrap:wrap">
+      <a class="btn secondary" href="/schedule/calendar.ics">Download .ics</a>
+      <form method="post" action="/schedule/calendar/regenerate" style="margin:0"
+            onsubmit="return confirm('Regenerate the link? Any calendar already subscribed will stop updating.')">
+        {% include "_csrf.html" %}
+        <button class="btn ghost" type="submit">Regenerate link</button>
+      </form>
+    </div>
+  </div>
+</details>
 {% if agenda %}
 <div class="card stack" style="margin-bottom:18px">
   <h3>Agenda · next 3 weeks</h3>
