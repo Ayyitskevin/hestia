@@ -145,11 +145,17 @@ def mark_paid(conn: sqlite3.Connection, *, token: str, provider: str, ref: str) 
     ).fetchone()
     if not row or row["status"] == "paid":
         return False
-    conn.execute(
+    # Atomic claim: the status guard + rowcount is the real idempotency barrier — the
+    # pre-read above is only a fast path. Two near-concurrent callbacks (Stripe retries
+    # at-least-once) can both pass that read; only the one whose UPDATE actually flips
+    # 'paid' settles, so invoice.paid never audits or emits twice for one payment.
+    cur = conn.execute(
         "UPDATE invoices SET status = 'paid', provider = ?, provider_ref = ?, "
-        "paid_at = datetime('now') WHERE token = ?",
+        "paid_at = datetime('now') WHERE token = ? AND status != 'paid'",
         (provider, ref, token),
     )
+    if cur.rowcount == 0:           # lost the race — already settled by another caller
+        return False
     audit(conn, actor=f"payment:{provider}", action="invoice.paid", tenant_id=row["tenant_id"],
           detail=f"{row['title']} · {money(row['amount_cents'], row['currency'])}")
     emit_event(conn, tenant_id=row["tenant_id"], event="invoice.paid",

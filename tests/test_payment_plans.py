@@ -161,3 +161,16 @@ def test_http_send_schedule_emails_links(client, app):
         conn.close()
     assert any("payment schedule" in m["subject"].lower() for m in outbox)
     assert any("/pay/" in m["body"] for m in outbox)
+
+
+def test_to_cents_handles_non_finite_money():
+    """The amount parser degrades to 0 on non-finite input instead of a 500 (it
+    catches OverflowError via the math.isfinite guard), matching the invoices route."""
+    from hestia.routes.payment_plans import _to_cents
+
+    assert _to_cents("2,500.50") == 250050          # normal money still parses
+    assert _to_cents("inf") == 0                     # would OverflowError in int(round(inf))
+    assert _to_cents("-inf") == 0
+    assert _to_cents("1e400") == 0                   # parses to inf
+    assert _to_cents("nan") == 0
+    assert _to_cents("not money") == 0

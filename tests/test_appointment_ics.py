@@ -63,6 +63,15 @@ def test_ics_escapes_special_chars(conn):
     assert "LOCATION:A\\,B" in ics
 
 
+def test_ics_escapes_embedded_carriage_returns(conn):
+    """An owner title with an embedded CR/LF can't inject extra calendar lines."""
+    t = create_tenant(conn, name="Inj", shoot_type="wedding")
+    appt = _confirmed(conn, t["id"], title="Shoot\r\nBEGIN:VALARM\r\nACTION:DISPLAY")
+    ics = appointment_ics(conn, appt)
+    assert "\r\nBEGIN:VALARM" not in ics                          # not split onto its own line
+    assert "SUMMARY:Shoot\\nBEGIN:VALARM\\nACTION:DISPLAY" in ics  # folded + escaped inline
+
+
 # ── HTTP routes ──────────────────────────────────────────────────────────────
 
 

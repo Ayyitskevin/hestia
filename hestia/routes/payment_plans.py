@@ -7,6 +7,8 @@ and surface progress.
 
 from __future__ import annotations
 
+import math
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
@@ -36,7 +38,9 @@ def _user(request: Request, conn):
 
 def _to_cents(raw: str) -> int:
     try:
-        return int(round(float(raw.replace("$", "").replace(",", "").strip()) * 100))
+        dollars = float(raw.replace("$", "").replace(",", "").strip())
+        # 'inf'/'nan' parse but overflow round() to int — treat non-finite as zero.
+        return int(round(dollars * 100)) if math.isfinite(dollars) else 0
     except (ValueError, AttributeError):
         return 0
 
