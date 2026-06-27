@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import csv
+import io
+
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from ..auth import context_from_session
 from ..content import list_packs, recipes_for
@@ -57,6 +60,35 @@ def clients_list(request: Request, tag: str = ""):
         clients = list_clients(conn, auth.tenant["id"], tag=tag or None)
         tags = all_tags(conn, auth.tenant["id"])
     return render(request, "crm/clients.html", auth=auth, clients=clients, tags=tags, active_tag=tag)
+
+
+def _csv_safe(value) -> str:
+    """Neutralize CSV formula injection — a cell starting with = + - @ (or a control
+    char) is treated as a formula by spreadsheets; prefix a quote so it stays text.
+    Client names/tags are owner-entered, but better safe."""
+    s = str(value)
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
+
+@router.get("/clients/export.csv")
+def clients_export(request: Request, tag: str = ""):
+    """Export the client book as CSV (name, contact, tags, projects, lifetime value),
+    honoring the active tag filter — e.g. export just the 'vip' clients."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        clients = list_clients(conn, auth.tenant["id"], tag=tag or None)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["name", "email", "phone", "tags", "projects", "lifetime_value"])
+    for c in clients:
+        writer.writerow([_csv_safe(x) for x in (
+            c["name"], c.get("email") or "", c.get("phone") or "",
+            " ".join(c.get("tags") or []), c["project_count"], f"{c['lifetime_cents'] / 100:.2f}",
+        )])
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": 'attachment; filename="clients.csv"'})
 
 
 @router.get("/clients/new")
