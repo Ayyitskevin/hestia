@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from . import messaging
 from .automations import emit_event
 from .config import Settings
 from .crypto import new_session_token
@@ -159,14 +160,14 @@ def send_contract_reminder(conn: sqlite3.Connection, settings: Settings, contrac
     if not to:
         return None
     trow = conn.execute("SELECT name FROM tenants WHERE id = ?", (contract["tenant_id"],)).fetchone()
-    studio = trow["name"] if trow else "your photographer"
-    who = contract.get("signer_name") or contract.get("client_name") or "there"
-    sign_url = contract_public_url(settings, contract["token"])
-    body = (f"Hi {who},\n\nA friendly reminder from {studio} to review and sign your "
-            f"contract — \"{contract['title']}\". It only takes a minute.\n\n"
-            f"Review and sign here:\n{sign_url}\n\nThank you!\n{studio}")
-    return notify(conn, settings, to=to, subject=f'Reminder: please sign "{contract["title"]}"',
-                  body=body, tenant_id=contract["tenant_id"])
+    ctx = {
+        "client": contract.get("signer_name") or contract.get("client_name") or "there",
+        "studio": trow["name"] if trow else "your photographer",
+        "title": contract["title"], "sign_url": contract_public_url(settings, contract["token"]),
+    }
+    msg = messaging.render(conn, contract["tenant_id"], "contract_reminder", ctx)
+    return notify(conn, settings, to=to, subject=msg["subject"], body=msg["body"],
+                  tenant_id=contract["tenant_id"])
 
 
 def record_contract_reminder(conn: sqlite3.Connection, tenant_id: str, contract_id: int) -> bool:
