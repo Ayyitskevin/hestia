@@ -13,6 +13,7 @@ from ..questionnaires import (
     create_questionnaire,
     get_questionnaire,
     list_questionnaires,
+    questionnaire_public_url,
     send_questionnaire,
     void_questionnaire,
 )
@@ -26,10 +27,6 @@ def _user(request: Request, conn):
     if not auth or not auth.tenant:
         return None
     return auth
-
-
-def questionnaire_public_url(settings, token: str) -> str:
-    return f"{settings.public_url.rstrip('/')}/q/{token}"
 
 
 @router.get("")

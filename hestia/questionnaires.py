@@ -13,8 +13,10 @@ from __future__ import annotations
 import sqlite3
 
 from .automations import emit_event
+from .config import Settings
 from .crypto import new_session_token
 from .db import audit
+from .email import notify
 
 QUESTIONNAIRE_STATUSES = ("draft", "sent", "completed", "void")
 
@@ -164,3 +166,60 @@ def submit_questionnaire(conn: sqlite3.Connection, *, token: str, answers: dict)
                context={"client_id": q["client_id"], "project_id": q["project_id"],
                         "title": q["title"]})
     return True
+
+
+def questionnaire_public_url(settings: Settings, token: str) -> str:
+    return f"{settings.public_url.rstrip('/')}/q/{token}"
+
+
+# --- chase responses: nudge clients sitting on an unfilled questionnaire --------
+
+
+def send_questionnaire_reminder(conn: sqlite3.Connection, settings: Settings, q: dict) -> str | None:
+    """Email a friendly nudge with the fill-out link. Returns the send status, or
+    None when the client has no email on file."""
+    to = (q.get("client_email") or "").strip()
+    if not to:
+        return None
+    trow = conn.execute("SELECT name FROM tenants WHERE id = ?", (q["tenant_id"],)).fetchone()
+    studio = trow["name"] if trow else "your photographer"
+    fill_url = questionnaire_public_url(settings, q["token"])
+    body = (f"Hi {q.get('client_name') or 'there'},\n\nA friendly reminder from {studio} — "
+            f"we'd still love a few details for \"{q['title']}\". It only takes a minute.\n\n"
+            f"Fill it out here:\n{fill_url}\n\nThank you!\n{studio}")
+    return notify(conn, settings, to=to, subject=f'Reminder: a quick questionnaire — "{q["title"]}"',
+                  body=body, tenant_id=q["tenant_id"])
+
+
+def record_questionnaire_reminder(conn: sqlite3.Connection, tenant_id: str, qid: int) -> bool:
+    """Atomically stamp a reminder as sent — gates the next nudge. Only a still-'sent'
+    questionnaire is stamped; True iff a row changed (claim-before-send)."""
+    cur = conn.execute(
+        "UPDATE questionnaires SET last_reminder_at = datetime('now'), "
+        "reminder_count = reminder_count + 1 WHERE id = ? AND tenant_id = ? AND status = 'sent'",
+        (qid, tenant_id),
+    )
+    return cur.rowcount > 0
+
+
+def send_incomplete_reminders(conn: sqlite3.Connection, settings: Settings, *,
+                              cooldown_days: int = 7, limit: int = 500) -> int:
+    """Across all tenants, nudge each unfilled ('sent') questionnaire whose client has
+    an email and hasn't been reminded within the cooldown. Each is claimed first (an
+    atomic UPDATE gated on status='sent'); only a successful claim sends, so a
+    questionnaire completed between this SELECT and the send gets no late nudge."""
+    rows = conn.execute(
+        "SELECT q.id, q.tenant_id, q.title, q.token, c.name AS client_name, c.email AS client_email "
+        "FROM questionnaires q JOIN clients c ON c.id = q.client_id AND c.tenant_id = q.tenant_id "
+        "WHERE q.status = 'sent' AND TRIM(COALESCE(c.email, '')) <> '' "
+        "  AND (q.last_reminder_at IS NULL OR q.last_reminder_at < datetime('now', ?)) "
+        "ORDER BY q.id LIMIT ?",
+        (f"-{int(cooldown_days)} days", limit),
+    ).fetchall()
+    sent = 0
+    for r in rows:
+        q = dict(r)
+        if record_questionnaire_reminder(conn, q["tenant_id"], q["id"]):   # claim before send
+            send_questionnaire_reminder(conn, settings, q)
+            sent += 1
+    return sent

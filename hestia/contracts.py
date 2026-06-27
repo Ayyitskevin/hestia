@@ -15,6 +15,7 @@ from .automations import emit_event
 from .config import Settings
 from .crypto import new_session_token
 from .db import audit
+from .email import notify
 
 CONTRACT_STATUSES = ("draft", "sent", "signed", "void")
 
@@ -146,3 +147,59 @@ def sign_contract(
 
 def contract_public_url(settings: Settings, token: str) -> str:
     return f"{settings.public_url.rstrip('/')}/sign/{token}"
+
+
+# --- chase signatures: nudge clients sitting on an unsigned contract -----------
+
+
+def send_contract_reminder(conn: sqlite3.Connection, settings: Settings, contract: dict) -> str | None:
+    """Email a friendly nudge with the sign link. Recipient is the named signer's
+    email, else the client's. Returns the send status, or None with no address."""
+    to = (contract.get("signer_email") or contract.get("client_email") or "").strip()
+    if not to:
+        return None
+    trow = conn.execute("SELECT name FROM tenants WHERE id = ?", (contract["tenant_id"],)).fetchone()
+    studio = trow["name"] if trow else "your photographer"
+    who = contract.get("signer_name") or contract.get("client_name") or "there"
+    sign_url = contract_public_url(settings, contract["token"])
+    body = (f"Hi {who},\n\nA friendly reminder from {studio} to review and sign your "
+            f"contract — \"{contract['title']}\". It only takes a minute.\n\n"
+            f"Review and sign here:\n{sign_url}\n\nThank you!\n{studio}")
+    return notify(conn, settings, to=to, subject=f'Reminder: please sign "{contract["title"]}"',
+                  body=body, tenant_id=contract["tenant_id"])
+
+
+def record_contract_reminder(conn: sqlite3.Connection, tenant_id: str, contract_id: int) -> bool:
+    """Atomically stamp a reminder as sent — gates the next nudge. Only a still-'sent'
+    contract is stamped; True iff a row changed (claim-before-send, no double nudge)."""
+    cur = conn.execute(
+        "UPDATE contracts SET last_reminder_at = datetime('now'), reminder_count = reminder_count + 1 "
+        "WHERE id = ? AND tenant_id = ? AND status = 'sent'",
+        (contract_id, tenant_id),
+    )
+    return cur.rowcount > 0
+
+
+def send_unsigned_reminders(conn: sqlite3.Connection, settings: Settings, *,
+                            cooldown_days: int = 7, limit: int = 500) -> int:
+    """Across all tenants, nudge each unsigned ('sent') contract that has an email to
+    reach (signer or client) and hasn't been reminded within the cooldown. Each is
+    claimed first (an atomic UPDATE gated on status='sent'); only a successful claim
+    sends, so a contract signed between this SELECT and the send gets no late nudge."""
+    rows = conn.execute(
+        "SELECT ct.id, ct.tenant_id, ct.title, ct.token, ct.signer_name, ct.signer_email, "
+        "       c.name AS client_name, c.email AS client_email "
+        "FROM contracts ct LEFT JOIN clients c ON c.id = ct.client_id AND c.tenant_id = ct.tenant_id "
+        "WHERE ct.status = 'sent' "
+        "  AND (TRIM(COALESCE(ct.signer_email, '')) <> '' OR TRIM(COALESCE(c.email, '')) <> '') "
+        "  AND (ct.last_reminder_at IS NULL OR ct.last_reminder_at < datetime('now', ?)) "
+        "ORDER BY ct.id LIMIT ?",
+        (f"-{int(cooldown_days)} days", limit),
+    ).fetchall()
+    sent = 0
+    for r in rows:
+        c = dict(r)
+        if record_contract_reminder(conn, c["tenant_id"], c["id"]):   # claim before send
+            send_contract_reminder(conn, settings, c)
+            sent += 1
+    return sent
