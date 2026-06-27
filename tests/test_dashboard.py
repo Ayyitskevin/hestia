@@ -4,7 +4,7 @@ from conftest import login_owner, onboard_studio
 
 from hestia.contracts import create_contract, send_contract
 from hestia.crm import create_client, create_project
-from hestia.dashboard import needs_attention
+from hestia.dashboard import money_snapshot, needs_attention
 from hestia.db import connect
 from hestia.delivery import enable_delivery
 from hestia.galleries import create_gallery, publish_gallery
@@ -140,3 +140,50 @@ def test_dashboard_page_shows_awaiting_signature(client, app):
     page = client.get("/dashboard")
     assert page.status_code == 200
     assert "Awaiting signature" in page.text and "Please sign me" in page.text
+
+
+def test_money_snapshot_reports_month_revenue_and_outstanding(conn, settings):
+    t = create_tenant(conn, name="Money Studio", shoot_type="wedding")
+    c = create_client(conn, tenant_id=t["id"], name="Cli")
+    paid = create_invoice(conn, settings, tenant_id=t["id"], title="Paid",
+                          amount_cents=300000, client_id=c["id"])
+    conn.execute("UPDATE invoices SET status='paid', paid_at=datetime('now') WHERE id=?",
+                 (paid["id"],))                                  # revenue this month
+    sent = create_invoice(conn, settings, tenant_id=t["id"], title="Owed",
+                          amount_cents=125000, client_id=c["id"])
+    conn.execute("UPDATE invoices SET status='sent' WHERE id=?", (sent["id"],))  # outstanding
+    conn.commit()
+
+    snap = money_snapshot(conn, t["id"])
+    assert snap["month"]["revenue_cents"] == 300000
+    assert snap["month"]["profit_cents"] == 300000              # no expenses → profit = revenue
+    assert snap["ar"]["outstanding_cents"] == 125000
+
+
+def test_money_snapshot_is_tenant_scoped(conn, settings):
+    a = create_tenant(conn, name="A", shoot_type="wedding")
+    b = create_tenant(conn, name="B", shoot_type="wedding")
+    paid = create_invoice(conn, settings, tenant_id=b["id"], title="B paid", amount_cents=500000)
+    conn.execute("UPDATE invoices SET status='paid', paid_at=datetime('now') WHERE id=?",
+                 (paid["id"],))
+    conn.commit()
+    snap = money_snapshot(conn, a["id"])                         # A sees none of B's money
+    assert snap["month"]["revenue_cents"] == 0 and snap["ar"]["outstanding_cents"] == 0
+
+
+def test_dashboard_page_shows_money_card(client, app):
+    creds = onboard_studio(client, name="Snap Studio", email="snap@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Cli")
+        sent = create_invoice(conn, app.state.settings, tenant_id=tid, title="Owed",
+                              amount_cents=125000, client_id=c["id"])
+        conn.execute("UPDATE invoices SET status='sent' WHERE id=?", (sent["id"],))
+        conn.commit()
+    finally:
+        conn.close()
+    page = client.get("/dashboard")
+    assert page.status_code == 200
+    assert "Money" in page.text and "$1,250.00" in page.text     # outstanding A/R shown

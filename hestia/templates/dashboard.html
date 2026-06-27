@@ -24,6 +24,18 @@
   <a class="health-item" href="/studio/{{ tenant.slug }}" target="_blank"><span class="svc">↗</span> <span class="url">public site</span></a>
 </div>
 
+<div class="card" style="margin-bottom:18px">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px">
+    <h3 style="margin:0">Money</h3>
+    <a class="muted" href="/finances" style="font-size:.85rem">Finances →</a>
+  </div>
+  <div style="display:flex; gap:32px; flex-wrap:wrap">
+    <div><div class="label">Revenue · this month</div><div style="font-size:1.35rem">{{ snapshot.month.revenue }}</div></div>
+    <div><div class="label">Profit · this month</div><div style="font-size:1.35rem">{{ snapshot.month.profit }}</div></div>
+    <div><div class="label">Outstanding</div><div style="font-size:1.35rem">{{ snapshot.ar.outstanding }}{% if snapshot.ar.overdue_cents %} <span class="pill off" style="font-size:.62rem; vertical-align:middle">{{ snapshot.ar.overdue }} overdue</span>{% endif %}</div></div>
+  </div>
+</div>
+
 <div class="card stack" style="margin-bottom:18px">
   <h3>Needs attention{% if attention.total %} · {{ attention.total }}{% endif %}</h3>
   {% if attention.total == 0 %}

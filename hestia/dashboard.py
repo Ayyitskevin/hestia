@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import sqlite3
 
-from .invoices import money
+from .invoices import accounts_receivable, money
+from .reports import monthly_pnl
 
 
 def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8) -> dict:
@@ -79,3 +80,13 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         "total": (len(leads) + len(unpaid) + len(upcoming) + len(to_deliver)
                   + len(awaiting_contract) + len(awaiting_questionnaire)),
     }
+
+
+def money_snapshot(conn: sqlite3.Connection, tenant_id: str) -> dict:
+    """Money at a glance for the dashboard: this calendar month's revenue and profit,
+    plus what's still outstanding (and the overdue slice). Reuses the finances reports
+    and A/R, so the figures match the Finances page exactly — revenue counts paid work
+    once, profit nets expenses, outstanding is sent-unpaid (plan installments excluded)."""
+    month = monthly_pnl(conn, tenant_id, months=1)[0]   # current month, with displays
+    ar = accounts_receivable(conn, tenant_id)
+    return {"month": month, "ar": ar}
