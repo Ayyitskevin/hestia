@@ -3,7 +3,15 @@
 {% block wrap_class %}narrow{% endblock %}
 {% block content %}
 <div class="card stack">
-  <h1>New contract</h1>
+  <div class="page-title" style="margin:0">
+    <h1>New contract</h1>
+    <a class="btn secondary" href="/contracts/templates">Manage templates</a>
+  </div>
+  {% if templates %}
+  {% set q = ('&client_id=' ~ preselect_client if preselect_client else '') ~ ('&project_id=' ~ preselect_project if preselect_project else '') %}
+  <p class="muted" style="margin-bottom:0">Start from a saved template:
+    {% for t in templates %}<a href="/contracts/new?template_id={{ t.id }}{{ q }}">{{ t.name }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+  {% endif %}
   <form method="post" action="/contracts">
     {% include "_csrf.html" %}
     <label for="title">Title</label>
@@ -11,7 +19,7 @@
 
     <label for="body">Terms</label>
     <textarea id="body" name="body" rows="12"
-      placeholder="The agreement your client will read and sign. Include the scope, deliverables, dates, fees, and cancellation terms."></textarea>
+      placeholder="The agreement your client will read and sign. Include the scope, deliverables, dates, fees, and cancellation terms.">{{ prefill_body }}</textarea>
 
     <label for="signer_name">Signer name <span class="muted">(optional)</span></label>
     <input type="text" id="signer_name" name="signer_name" placeholder="Sarah & James">

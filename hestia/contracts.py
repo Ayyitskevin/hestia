@@ -204,3 +204,39 @@ def send_unsigned_reminders(conn: sqlite3.Connection, settings: Settings, *,
             send_contract_reminder(conn, settings, c)
             sent += 1
     return sent
+
+
+# --- reusable contract templates: save boilerplate, start a contract from it -----
+
+
+def save_contract_template(conn: sqlite3.Connection, *, tenant_id: str, name: str,
+                           body: str) -> dict | None:
+    """Save a named reusable contract template. Empty name is ignored (returns None)."""
+    label = (name or "").strip()
+    if not label:
+        return None
+    cur = conn.execute(
+        "INSERT INTO contract_templates (tenant_id, name, body) VALUES (?, ?, ?)",
+        (tenant_id, label[:200], (body or "").strip()),
+    )
+    return get_contract_template(conn, tenant_id, cur.lastrowid)
+
+
+def list_contract_templates(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM contract_templates WHERE tenant_id = ? ORDER BY name, id", (tenant_id,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_contract_template(conn: sqlite3.Connection, tenant_id: str, template_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM contract_templates WHERE id = ? AND tenant_id = ?", (template_id, tenant_id)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def delete_contract_template(conn: sqlite3.Connection, tenant_id: str, template_id: int) -> None:
+    conn.execute(
+        "DELETE FROM contract_templates WHERE id = ? AND tenant_id = ?", (template_id, tenant_id)
+    )
