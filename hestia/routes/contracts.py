@@ -169,3 +169,17 @@ def contract_void(request: Request, contract_id: int):
             audit(conn, actor="owner", action="contract.void", tenant_id=auth.tenant["id"],
                   detail=contract["title"])
     return RedirectResponse(f"/contracts/{contract_id}", status_code=303)
+
+
+@router.post("/{contract_id}/save-as-template")
+def contract_save_as_template(request: Request, contract_id: int):
+    """Save this contract's title + terms as a reusable template, then show the library."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        contract = get_contract(conn, auth.tenant["id"], contract_id)
+        if contract:
+            save_contract_template(conn, tenant_id=auth.tenant["id"],
+                                   name=contract["title"], body=contract.get("body") or "")
+    return RedirectResponse("/contracts/templates", status_code=303)

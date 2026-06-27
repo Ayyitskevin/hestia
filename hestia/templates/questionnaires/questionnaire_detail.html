@@ -17,6 +17,9 @@
     {% if q.status != 'completed' and q.status != 'void' %}
       <form method="post" action="/questionnaires/{{ q.id }}/void">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Void</button></form>
     {% endif %}
+    {% if q['items'] %}
+      <form method="post" action="/questionnaires/{{ q.id }}/save-as-template">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Save as template</button></form>
+    {% endif %}
   </div>
 </div>
 

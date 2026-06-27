@@ -169,3 +169,18 @@ def questionnaire_void(request: Request, qid: int):
             audit(conn, actor="owner", action="questionnaire.void", tenant_id=auth.tenant["id"],
                   detail=q["title"])
     return RedirectResponse(f"/questionnaires/{qid}", status_code=303)
+
+
+@router.post("/{qid}/save-as-template")
+def questionnaire_save_as_template(request: Request, qid: int):
+    """Save this questionnaire's title + question set as a reusable template."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        q = get_questionnaire(conn, auth.tenant["id"], qid)
+        if q:
+            prompts = "\n".join(item["prompt"] for item in q.get("items", []))
+            save_questionnaire_template(conn, tenant_id=auth.tenant["id"],
+                                        name=q["title"], prompts=prompts)
+    return RedirectResponse("/questionnaires/templates", status_code=303)

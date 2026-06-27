@@ -17,6 +17,7 @@
     {% if contract.status != 'signed' and contract.status != 'void' %}
       <form method="post" action="/contracts/{{ contract.id }}/void">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Void</button></form>
     {% endif %}
+    <form method="post" action="/contracts/{{ contract.id }}/save-as-template">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Save as template</button></form>
   </div>
 </div>
 
