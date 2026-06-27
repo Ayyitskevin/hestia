@@ -2,12 +2,14 @@
 
 from conftest import login_owner, onboard_studio
 
+from hestia.contracts import create_contract, send_contract
 from hestia.crm import create_client, create_project
 from hestia.dashboard import needs_attention
 from hestia.db import connect
 from hestia.delivery import enable_delivery
 from hestia.galleries import create_gallery, publish_gallery
 from hestia.invoices import create_invoice
+from hestia.questionnaires import create_questionnaire, send_questionnaire
 from hestia.tenants import create_tenant
 
 
@@ -17,6 +19,7 @@ def test_needs_attention_empty(conn):
     a = needs_attention(conn, t["id"])
     assert a["total"] == 0
     assert a["leads"] == [] and a["unpaid"] == [] and a["upcoming"] == [] and a["to_deliver"] == []
+    assert a["awaiting_contract"] == [] and a["awaiting_questionnaire"] == []
 
 
 def test_needs_attention_aggregates(conn, settings):
@@ -84,3 +87,56 @@ def test_dashboard_all_clear_for_fresh_studio(client):
     creds = onboard_studio(client, name="Clean Studio", email="clean@example.com")
     login_owner(client, creds)
     assert "all caught up" in client.get("/dashboard").text
+
+
+def test_needs_attention_surfaces_awaiting_client_actions(conn):
+    t = create_tenant(conn, name="Pending Studio", shoot_type="wedding")
+    c = create_client(conn, tenant_id=t["id"], name="Pat")
+    ct = create_contract(conn, tenant_id=t["id"], title="Wedding agreement", client_id=c["id"])
+    send_contract(conn, t["id"], ct["id"])                         # sent → awaiting signature
+    q = create_questionnaire(conn, tenant_id=t["id"], title="Wedding details",
+                             prompts=["Venue?"], client_id=c["id"])
+    send_questionnaire(conn, t["id"], q["id"])                     # sent → awaiting response
+    # excluded: an unsent draft, a signed contract, and a completed questionnaire
+    create_contract(conn, tenant_id=t["id"], title="Draft only")
+    signed = create_contract(conn, tenant_id=t["id"], title="Already signed")
+    send_contract(conn, t["id"], signed["id"])
+    conn.execute("UPDATE contracts SET status='signed' WHERE id=?", (signed["id"],))
+    done = create_questionnaire(conn, tenant_id=t["id"], title="Done form", prompts=["X?"])
+    send_questionnaire(conn, t["id"], done["id"])
+    conn.execute("UPDATE questionnaires SET status='completed' WHERE id=?", (done["id"],))
+    conn.commit()
+
+    a = needs_attention(conn, t["id"])
+    assert [x["title"] for x in a["awaiting_contract"]] == ["Wedding agreement"]
+    assert a["awaiting_contract"][0]["client_name"] == "Pat"
+    assert [x["title"] for x in a["awaiting_questionnaire"]] == ["Wedding details"]
+    assert a["total"] == 2                                         # only the two sent items
+
+
+def test_awaiting_client_actions_are_tenant_scoped(conn):
+    a = create_tenant(conn, name="A", shoot_type="wedding")
+    b = create_tenant(conn, name="B", shoot_type="wedding")
+    ct = create_contract(conn, tenant_id=b["id"], title="B contract")
+    send_contract(conn, b["id"], ct["id"])
+    q = create_questionnaire(conn, tenant_id=b["id"], title="B form", prompts=["X?"])
+    send_questionnaire(conn, b["id"], q["id"])
+    conn.commit()
+    res = needs_attention(conn, a["id"])                           # A sees none of B's
+    assert res["awaiting_contract"] == [] and res["awaiting_questionnaire"] == []
+
+
+def test_dashboard_page_shows_awaiting_signature(client, app):
+    creds = onboard_studio(client, name="Sig Studio", email="sig@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        ct = create_contract(conn, tenant_id=tid, title="Please sign me")
+        send_contract(conn, tid, ct["id"])
+        conn.commit()
+    finally:
+        conn.close()
+    page = client.get("/dashboard")
+    assert page.status_code == 200
+    assert "Awaiting signature" in page.text and "Please sign me" in page.text

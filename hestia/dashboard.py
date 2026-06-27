@@ -52,10 +52,30 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         "ORDER BY id DESC LIMIT ?",
         (tenant_id, limit))]
 
+    # Contracts sent but not yet signed — the booking can't proceed until they are.
+    # Client join tenant-matched so a stray cross-tenant client_id can't surface a name.
+    awaiting_contract = [dict(r) for r in conn.execute(
+        "SELECT ct.id, ct.title, c.name AS client_name FROM contracts ct "
+        "LEFT JOIN clients c ON c.id = ct.client_id AND c.tenant_id = ct.tenant_id "
+        "WHERE ct.tenant_id = ? AND ct.status = 'sent' "
+        "ORDER BY ct.created_at ASC LIMIT ?",  # oldest unsigned first
+        (tenant_id, limit))]
+
+    # Questionnaires sent but not yet completed — chase the details you need to shoot.
+    awaiting_questionnaire = [dict(r) for r in conn.execute(
+        "SELECT q.id, q.title, c.name AS client_name FROM questionnaires q "
+        "LEFT JOIN clients c ON c.id = q.client_id AND c.tenant_id = q.tenant_id "
+        "WHERE q.tenant_id = ? AND q.status = 'sent' "
+        "ORDER BY q.created_at ASC LIMIT ?",
+        (tenant_id, limit))]
+
     return {
         "leads": leads,
         "unpaid": unpaid,
         "upcoming": upcoming,
         "to_deliver": to_deliver,
-        "total": len(leads) + len(unpaid) + len(upcoming) + len(to_deliver),
+        "awaiting_contract": awaiting_contract,
+        "awaiting_questionnaire": awaiting_questionnaire,
+        "total": (len(leads) + len(unpaid) + len(upcoming) + len(to_deliver)
+                  + len(awaiting_contract) + len(awaiting_questionnaire)),
     }
