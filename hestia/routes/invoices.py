@@ -7,6 +7,7 @@ import math
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
+from .. import messaging
 from ..auth import context_from_session
 from ..crm import get_client, get_project, list_clients, list_projects
 from ..db import audit
@@ -131,20 +132,17 @@ def invoice_send(request: Request, invoice_id: int):
                   detail=f"{invoice['title']} · {invoice['amount_display']}")
         # Email the client their pay link (mock records it; smtp also delivers).
         if invoice and invoice.get("client_email"):
-            pay_url = invoice_public_url(settings, invoice["token"])
-            studio = auth.tenant.get("name", "your photographer")
             note = (invoice.get("note") or "").strip()
-            body = (f"Hi {invoice.get('client_name') or 'there'},\n\n"
-                    f"{studio} sent you an invoice for {invoice['title']} — "
-                    f"{invoice['amount_display']}.\n\n")
-            if note:                                        # the studio's personal message
-                body += f"{note}\n\n"
-            body += f"Pay securely here:\n{pay_url}\n\nThank you!"
-            notify(
-                conn, settings, to=invoice["client_email"], tenant_id=auth.tenant["id"],
-                subject=f"{studio}: invoice for {invoice['title']} ({invoice['amount_display']})",
-                body=body,
-            )
+            ctx = {
+                "client": invoice.get("client_name") or "there",
+                "studio": auth.tenant.get("name", "your photographer"),
+                "title": invoice["title"], "amount": invoice["amount_display"],
+                "pay_url": invoice_public_url(settings, invoice["token"]),
+                "note": f"{note}\n\n" if note else "",      # the studio's personal message
+            }
+            msg = messaging.render(conn, auth.tenant["id"], "invoice_send", ctx)
+            notify(conn, settings, to=invoice["client_email"], tenant_id=auth.tenant["id"],
+                   subject=msg["subject"], body=msg["body"])
         conn.commit()
     return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)
 

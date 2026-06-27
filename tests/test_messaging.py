@@ -1,0 +1,119 @@
+"""Customizable email templates — defaults, per-tenant overrides, safe variable fill,
+and the wired client emails (appointment confirm, invoice send)."""
+
+from conftest import login_owner, onboard_studio
+
+from hestia import messaging
+from hestia.crm import create_client
+from hestia.email import list_emails
+from hestia.scheduler import _notify, create_appointment
+from hestia.tenants import create_tenant
+
+# ── module ───────────────────────────────────────────────────────────────────
+
+
+def test_render_uses_default(conn):
+    t = create_tenant(conn, name="Studio", shoot_type="wedding")
+    msg = messaging.render(conn, t["id"], "invoice_send",
+                           {"client": "Sam", "studio": "Studio", "title": "Balance",
+                            "amount": "$500.00", "pay_url": "/pay/x", "note": ""})
+    assert msg["subject"] == "Studio: invoice for Balance ($500.00)"
+    assert "Hi Sam," in msg["body"] and "/pay/x" in msg["body"]
+
+
+def test_render_uses_custom_override(conn):
+    t = create_tenant(conn, name="Studio", shoot_type="wedding")
+    messaging.set_template(conn, t["id"], "invoice_send",
+                           subject="Your invoice, {client}", body="Pay {amount}: {pay_url}")
+    msg = messaging.render(conn, t["id"], "invoice_send",
+                           {"client": "Sam", "amount": "$500.00", "pay_url": "/pay/x"})
+    assert msg["subject"] == "Your invoice, Sam"
+    assert msg["body"] == "Pay $500.00: /pay/x"
+
+
+def test_fill_leaves_unknown_tokens(conn):
+    t = create_tenant(conn, name="S", shoot_type="wedding")
+    messaging.set_template(conn, t["id"], "invoice_send", subject="{client} {bogus}", body="x")
+    msg = messaging.render(conn, t["id"], "invoice_send", {"client": "Sam"})
+    assert msg["subject"] == "Sam {bogus}"                       # unknown token preserved, no crash
+
+
+def test_set_blank_resets_to_default(conn):
+    t = create_tenant(conn, name="S", shoot_type="wedding")
+    messaging.set_template(conn, t["id"], "invoice_send", subject="Custom", body="Custom")
+    assert messaging.get_template(conn, t["id"], "invoice_send")["subject"] == "Custom"
+    messaging.set_template(conn, t["id"], "invoice_send", subject="", body="")   # blank → reset
+    assert messaging.get_template(conn, t["id"], "invoice_send")["subject"] \
+        == messaging.TEMPLATES["invoice_send"]["subject"]
+
+
+def test_list_templates_flags_customized(conn):
+    t = create_tenant(conn, name="S", shoot_type="wedding")
+    messaging.set_template(conn, t["id"], "appointment_confirm", subject="Hi", body="There")
+    by_kind = {x["kind"]: x for x in messaging.list_templates(conn, t["id"])}
+    assert by_kind["appointment_confirm"]["customized"] is True
+    assert by_kind["invoice_send"]["customized"] is False
+
+
+def test_templates_are_tenant_scoped(conn):
+    a = create_tenant(conn, name="A", shoot_type="wedding")
+    b = create_tenant(conn, name="B", shoot_type="wedding")
+    messaging.set_template(conn, a["id"], "invoice_send", subject="A only", body="x")
+    assert messaging.get_template(conn, b["id"], "invoice_send")["subject"] \
+        == messaging.TEMPLATES["invoice_send"]["subject"]       # B sees the default
+
+
+# ── wired emails ─────────────────────────────────────────────────────────────
+
+
+def test_invoice_send_uses_custom_template(client, conn):
+    login_owner(client, onboard_studio(client, name="Lux", email="owner@lux.com"))
+    tid = conn.execute("SELECT id FROM tenants ORDER BY id DESC LIMIT 1").fetchone()["id"]
+    messaging.set_template(conn, tid, "invoice_send",
+                           subject="Invoice from Lux for {title}",
+                           body="Hey {client}, please pay {amount} at {pay_url}. — Lux")
+    conn.commit()
+    client.post("/clients", data={"name": "Pat", "email": "pat@lux.com"})
+    cid = conn.execute("SELECT id FROM clients WHERE email='pat@lux.com'").fetchone()["id"]
+    r = client.post("/invoices", data={"title": "Wedding", "amount": "2500", "client_id": str(cid)})
+    iid = int(str(r.url).rstrip("/").split("/")[-1])
+    client.post(f"/invoices/{iid}/send")
+
+    row = conn.execute("SELECT subject, body FROM emails WHERE to_addr='pat@lux.com'").fetchone()
+    assert row["subject"] == "Invoice from Lux for Wedding"
+    assert "Hey Pat, please pay $2,500.00 at" in row["body"] and "/pay/" in row["body"]
+
+
+def test_appointment_confirm_uses_custom_template(conn, settings):
+    t = create_tenant(conn, name="Sch", shoot_type="wedding")
+    c = create_client(conn, tenant_id=t["id"], name="Sam", email="sam@ex.com")
+    appt = create_appointment(conn, tenant_id=t["id"], title="Engagement", options=["x"],
+                              client_id=c["id"])
+    conn.execute("UPDATE appointments SET status='confirmed', starts_at='2030-01-01 10:00' "
+                 "WHERE id=?", (appt["id"],))
+    messaging.set_template(conn, t["id"], "appointment_confirm",
+                           subject="See you for {title}!", body="{client}, you're booked for {when}.")
+    conn.commit()
+    _notify(settings, {"appointment_id": appt["id"], "kind": "confirm"})
+    row = [m for m in list_emails(conn, t["id"]) if m["to_addr"] == "sam@ex.com"][0]
+    assert row["subject"] == "See you for Engagement!"
+    assert row["body"].startswith("Sam, you're booked for 2030-01-01 10:00.")
+
+
+# ── settings editor ──────────────────────────────────────────────────────────
+
+
+def test_messages_page_save_and_reset(client, conn):
+    login_owner(client, onboard_studio(client, email="msg@owner.com"))
+    tid = conn.execute("SELECT id FROM tenants ORDER BY id DESC LIMIT 1").fetchone()["id"]
+    page = client.get("/settings/messages")
+    assert page.status_code == 200 and "Session confirmed" in page.text and "{client}" in page.text
+
+    client.post("/settings/messages/invoice_send",
+                data={"subject": "My invoice {title}", "body": "Pay {amount}"})
+    assert messaging.get_template(conn, tid, "invoice_send")["subject"] == "My invoice {title}"
+    assert "customized" in client.get("/settings/messages").text
+
+    client.post("/settings/messages/invoice_send", data={"subject": "", "body": ""})  # reset
+    assert messaging.get_template(conn, tid, "invoice_send")["subject"] \
+        == messaging.TEMPLATES["invoice_send"]["subject"]

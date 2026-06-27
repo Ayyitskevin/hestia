@@ -7,6 +7,7 @@ import math
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
+from .. import messaging
 from ..auth import context_from_session
 from ..db import list_audit
 from ..email import list_emails, notify
@@ -151,6 +152,28 @@ def signature_save(request: Request, email_signature: str = Form("")):
             return RedirectResponse("/login", status_code=303)
         set_email_signature(conn, auth.tenant["id"], email_signature)
     return RedirectResponse("/settings/site", status_code=303)
+
+
+@router.get("/settings/messages")
+def message_templates(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        templates = messaging.list_templates(conn, auth.tenant["id"])
+    return render(request, "studio/messages.html", auth=auth, templates=templates)
+
+
+@router.post("/settings/messages/{kind}")
+def message_template_save(request: Request, kind: str, subject: str = Form(""),
+                          body: str = Form("")):
+    """Save a studio's custom email template; blanking both fields resets to default."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        messaging.set_template(conn, auth.tenant["id"], kind, subject=subject, body=body)
+    return RedirectResponse("/settings/messages", status_code=303)
 
 
 @router.get("/settings/outbox")
