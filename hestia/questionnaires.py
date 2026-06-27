@@ -225,3 +225,54 @@ def send_incomplete_reminders(conn: sqlite3.Connection, settings: Settings, *,
             send_questionnaire_reminder(conn, settings, q)
             sent += 1
     return sent
+
+
+# --- reusable question-set templates: save an intake, start a questionnaire from it ---
+
+
+def _clean_prompts(prompts: str) -> str:
+    """Normalize a prompts blob to one trimmed, non-blank question per line."""
+    return "\n".join(ln.strip() for ln in (prompts or "").splitlines() if ln.strip())
+
+
+def save_questionnaire_template(conn: sqlite3.Connection, *, tenant_id: str, name: str,
+                                prompts: str) -> dict | None:
+    """Save a named reusable question set. Empty name is ignored (returns None); the
+    prompts are normalized to one question per line (same format as the create form)."""
+    label = (name or "").strip()
+    if not label:
+        return None
+    cur = conn.execute(
+        "INSERT INTO questionnaire_templates (tenant_id, name, prompts) VALUES (?, ?, ?)",
+        (tenant_id, label[:200], _clean_prompts(prompts)),
+    )
+    return get_questionnaire_template(conn, tenant_id, cur.lastrowid)
+
+
+def list_questionnaire_templates(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM questionnaire_templates WHERE tenant_id = ? ORDER BY name, id", (tenant_id,)
+    ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["prompt_count"] = len([ln for ln in d["prompts"].splitlines() if ln.strip()])
+        out.append(d)
+    return out
+
+
+def get_questionnaire_template(conn: sqlite3.Connection, tenant_id: str,
+                               template_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM questionnaire_templates WHERE id = ? AND tenant_id = ?",
+        (template_id, tenant_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def delete_questionnaire_template(conn: sqlite3.Connection, tenant_id: str,
+                                  template_id: int) -> None:
+    conn.execute(
+        "DELETE FROM questionnaire_templates WHERE id = ? AND tenant_id = ?",
+        (template_id, tenant_id),
+    )

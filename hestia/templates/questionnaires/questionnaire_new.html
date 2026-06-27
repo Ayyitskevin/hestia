@@ -3,7 +3,15 @@
 {% block wrap_class %}narrow{% endblock %}
 {% block content %}
 <div class="card stack">
-  <h1>New questionnaire</h1>
+  <div class="page-title" style="margin:0">
+    <h1>New questionnaire</h1>
+    <a class="btn secondary" href="/questionnaires/templates">Manage templates</a>
+  </div>
+  {% if templates %}
+  {% set q = ('&client_id=' ~ preselect_client if preselect_client else '') ~ ('&project_id=' ~ preselect_project if preselect_project else '') %}
+  <p class="muted" style="margin-bottom:0">Start from a saved template:
+    {% for t in templates %}<a href="/questionnaires/new?template_id={{ t.id }}{{ q }}">{{ t.name }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+  {% endif %}
   <form method="post" action="/questionnaires">
     {% include "_csrf.html" %}
     <label for="title">Title</label>
@@ -11,7 +19,7 @@
 
     <label for="prompts">Questions <span class="muted">(one per line)</span></label>
     <textarea id="prompts" name="prompts" rows="10"
-      placeholder="What's the date and venue?&#10;Who are the key people we should photograph?&#10;Describe the vibe you're going for.&#10;What's your rough timeline for the day?"></textarea>
+      placeholder="What's the date and venue?&#10;Who are the key people we should photograph?&#10;Describe the vibe you're going for.&#10;What's your rough timeline for the day?">{{ prefill_prompts }}</textarea>
 
     <label for="client_id">Client <span class="muted">(optional)</span></label>
     <select id="client_id" name="client_id">
