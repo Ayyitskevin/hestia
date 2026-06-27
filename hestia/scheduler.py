@@ -13,6 +13,7 @@ canceled before it fires.
 
 from __future__ import annotations
 
+import datetime
 import sqlite3
 
 from .automations import emit_event
@@ -136,6 +137,39 @@ def list_appointments(
         a["kind_label"] = KIND_LABELS.get(a["kind"], a["kind"])
         out.append(a)
     return out
+
+
+def agenda(conn: sqlite3.Connection, tenant_id: str, *, days: int = 21) -> list[dict]:
+    """Upcoming confirmed sessions grouped by day (soonest first) over the next
+    ``days`` — an at-a-glance week view. Sessions with a free-text/unparseable time
+    are excluded (they can't be placed on a day)."""
+    rows = conn.execute(
+        "SELECT a.id, a.title, a.kind, a.starts_at, "
+        "       strftime('%H:%M', a.starts_at) AS at_time, date(a.starts_at) AS day, "
+        "       c.name AS client_name "
+        "FROM appointments a "
+        "LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id "
+        "WHERE a.tenant_id = ? AND a.status = 'confirmed' AND datetime(a.starts_at) IS NOT NULL "
+        "  AND date(a.starts_at) >= date('now') AND date(a.starts_at) <= date('now', ?) "
+        "ORDER BY datetime(a.starts_at)",
+        (tenant_id, f"+{int(days)} days"),
+    ).fetchall()
+    today = datetime.date.today()
+    tomorrow = today + datetime.timedelta(days=1)
+    groups: list[dict] = []
+    for r in rows:
+        d = dict(r)
+        d["kind_label"] = KIND_LABELS.get(d["kind"], d["kind"])
+        if not groups or groups[-1]["day"] != d["day"]:
+            try:
+                dd = datetime.date.fromisoformat(d["day"])
+                label = ("Today" if dd == today else "Tomorrow" if dd == tomorrow
+                         else dd.strftime("%a %b %d"))
+            except (ValueError, TypeError):
+                label = d["day"]
+            groups.append({"day": d["day"], "label": label, "appointments": []})
+        groups[-1]["appointments"].append(d)
+    return groups
 
 
 def book_appointment(conn: sqlite3.Connection, *, token: str, option_id: int) -> bool:
