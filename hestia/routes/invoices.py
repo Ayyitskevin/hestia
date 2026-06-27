@@ -20,6 +20,7 @@ from ..invoices import (
     record_invoice_reminder,
     send_invoice,
     send_invoice_reminder,
+    set_invoice_note,
     tax_for,
     void_invoice,
 )
@@ -70,7 +71,7 @@ def invoice_new(request: Request, project_id: int | None = None, client_id: int 
 
 @router.post("")
 def invoice_create(request: Request, title: str = Form(...), amount: str = Form("0"),
-                   client_id: str = Form(""), project_id: str = Form("")):
+                   client_id: str = Form(""), project_id: str = Form(""), note: str = Form("")):
     with db_conn(request) as conn:
         auth = _user(request, conn)
         if not auth:
@@ -87,9 +88,20 @@ def invoice_create(request: Request, title: str = Form(...), amount: str = Form(
         tax = tax_for(subtotal, auth.tenant.get("tax_rate_bps") or 0)
         invoice = create_invoice(
             conn, settings_of(request), tenant_id=tid, title=title,
-            amount_cents=subtotal, client_id=cid, project_id=pid, tax_cents=tax,
+            amount_cents=subtotal, client_id=cid, project_id=pid, tax_cents=tax, note=note,
         )
     return RedirectResponse(f"/invoices/{invoice['id']}", status_code=303)
+
+
+@router.post("/{invoice_id}/note")
+def invoice_note(request: Request, invoice_id: int, note: str = Form("")):
+    """Add or edit the invoice's personal note (thank-you, payment instructions)."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        set_invoice_note(conn, auth.tenant["id"], invoice_id, note)
+    return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)
 
 
 @router.get("/{invoice_id}")
@@ -121,13 +133,17 @@ def invoice_send(request: Request, invoice_id: int):
         if invoice and invoice.get("client_email"):
             pay_url = invoice_public_url(settings, invoice["token"])
             studio = auth.tenant.get("name", "your photographer")
+            note = (invoice.get("note") or "").strip()
+            body = (f"Hi {invoice.get('client_name') or 'there'},\n\n"
+                    f"{studio} sent you an invoice for {invoice['title']} — "
+                    f"{invoice['amount_display']}.\n\n")
+            if note:                                        # the studio's personal message
+                body += f"{note}\n\n"
+            body += f"Pay securely here:\n{pay_url}\n\nThank you!"
             notify(
                 conn, settings, to=invoice["client_email"], tenant_id=auth.tenant["id"],
                 subject=f"{studio}: invoice for {invoice['title']} ({invoice['amount_display']})",
-                body=(f"Hi {invoice.get('client_name') or 'there'},\n\n"
-                      f"{studio} sent you an invoice for {invoice['title']} — "
-                      f"{invoice['amount_display']}.\n\nPay securely here:\n{pay_url}\n\n"
-                      f"Thank you!"),
+                body=body,
             )
         conn.commit()
     return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)

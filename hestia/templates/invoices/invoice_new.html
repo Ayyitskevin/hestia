@@ -24,6 +24,9 @@
       {% for p in projects %}<option value="{{ p.id }}" {{ 'selected' if preselect_project == p.id else '' }}>{{ p.name }}</option>{% endfor %}
     </select>
 
+    <label for="note">Note to client <span class="muted">(optional — shown on the pay page & in the email)</span></label>
+    <textarea id="note" name="note" rows="3" placeholder="Thank you for choosing us! Balance due two weeks before your date. Venmo @studio also accepted."></textarea>
+
     <div class="form-actions">
       <button class="btn" type="submit">Create invoice</button>
       <a class="btn ghost" href="/invoices">Cancel</a>
