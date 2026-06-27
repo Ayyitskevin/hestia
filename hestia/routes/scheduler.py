@@ -20,6 +20,7 @@ from ..scheduler import (
     get_appointment,
     list_appointments,
     mark_no_show,
+    schedule_ics,
 )
 from .deps import db_conn, render, settings_of
 
@@ -79,6 +80,18 @@ def appointment_create(request: Request, title: str = Form(...), kind: str = For
             project_id=int(project_id) if project_id.strip().isdigit() else None,
         )
     return RedirectResponse(f"/schedule/{appt['id']}", status_code=303)
+
+
+@router.get("/calendar.ics")           # before /{appt_id} so the literal path wins
+def schedule_calendar(request: Request):
+    """Subscribe-able .ics feed of the studio's confirmed sessions."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        ics = schedule_ics(conn, auth.tenant["id"])
+    return Response(content=ics, media_type="text/calendar",
+                    headers={"Content-Disposition": 'attachment; filename="schedule.ics"'})
 
 
 @router.get("/{appt_id}")
