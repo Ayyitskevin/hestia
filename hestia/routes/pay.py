@@ -25,6 +25,24 @@ def pay_page(request: Request, token: str):
     return render(request, "invoices/pay.html", auth=None, invoice=invoice, tenant=tenant)
 
 
+@router.get("/pay/{token}/receipt")
+def pay_receipt(request: Request, token: str):
+    """A printable receipt the client can save — only for a paid invoice. Unpaid or
+    void/unknown falls back to the pay page (which 404s for void/unknown)."""
+    with db_conn(request) as conn:
+        invoice = get_invoice_by_token(conn, token)
+        if not invoice or invoice["status"] != "paid":
+            return RedirectResponse(f"/pay/{token}", status_code=303)
+        tenant = get_tenant(conn, invoice["tenant_id"])
+        crow = conn.execute(
+            "SELECT name FROM clients WHERE id = ? AND tenant_id = ?",
+            (invoice.get("client_id"), invoice["tenant_id"]),
+        ).fetchone() if invoice.get("client_id") else None
+        client_name = crow["name"] if crow else ""
+    return render(request, "invoices/receipt.html", auth=None, invoice=invoice,
+                  tenant=tenant, client_name=client_name)
+
+
 @router.post("/pay/{token}/checkout")
 def pay_checkout(request: Request, token: str):
     enforce(request, "checkout")

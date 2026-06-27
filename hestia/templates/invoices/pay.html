@@ -19,7 +19,8 @@
         <h3>{{ invoice.title }}</h3>
         {% if invoice.note %}<p class="muted" style="white-space:pre-line">{{ invoice.note }}</p>{% endif %}
         {% if invoice.status == 'paid' %}
-          <div class="alert ok">✓ Paid — thank you! A receipt has been recorded.</div>
+          <div class="alert ok">✓ Paid — thank you!</div>
+          <div><a class="btn secondary" href="/pay/{{ invoice.token }}/receipt">View receipt</a></div>
         {% else %}
           {% if invoice.tax_cents %}
           <p class="muted" style="display:flex;justify-content:space-between;margin:0"><span>Subtotal</span><span>{{ invoice.amount_display }}</span></p>

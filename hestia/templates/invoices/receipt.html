@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Receipt · {{ invoice.title }} — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+  <style>
+    @media print { .no-print { display: none; } header.client-header { background: none; } }
+  </style>
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>Receipt</h1>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="padding-top:32px">
+      <div class="card stack">
+        <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px">
+          <div>
+            <div class="label">Receipt</div>
+            <div>#{{ invoice.id }}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="label">Paid</div>
+            <div>{{ invoice.paid_at }}{% if invoice.provider %} · {{ invoice.provider }}{% endif %}</div>
+          </div>
+        </div>
+
+        {% if client_name %}<div><div class="label">Billed to</div><div>{{ client_name }}</div></div>{% endif %}
+
+        <div>
+          <div class="label">For</div>
+          <div>{{ invoice.title }}</div>
+        </div>
+
+        <hr style="border:none; border-top:1px solid #eee; margin:4px 0">
+        {% if invoice.tax_cents %}
+        <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">Subtotal</span><span>{{ invoice.amount_display }}</span></p>
+        <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">Tax</span><span>{{ invoice.tax_display }}</span></p>
+        {% endif %}
+        <p style="display:flex; justify-content:space-between; margin:4px 0; font-size:1.1rem"><strong>Paid</strong><strong>{{ invoice.total_display }}</strong></p>
+
+        <div class="alert ok" style="margin-top:6px">✓ Payment received — thank you!</div>
+        <p class="muted no-print" style="font-size:.85rem; margin:0">Use your browser's Print to save this
+          receipt as a PDF.</p>
+      </div>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">{{ tenant.name }} · powered by Hestia 🔥</div></footer>
+</body>
+</html>
