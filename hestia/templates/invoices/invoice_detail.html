@@ -35,7 +35,12 @@
 </div>
 
 {% if invoice.status == 'paid' %}
-<div class="alert ok">Paid {{ invoice.paid_at }} via {{ invoice.provider }}.</div>
+<div class="alert ok" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
+  <span>Paid {{ invoice.paid_at }} via {{ invoice.provider }}.</span>
+  {% if invoice.client_email %}
+  <form method="post" action="/invoices/{{ invoice.id }}/receipt" style="margin:0">{% include "_csrf.html" %}<button class="btn secondary" type="submit">✉ Send receipt</button></form>
+  {% endif %}
+</div>
 {% endif %}
 
 <div class="card stack">

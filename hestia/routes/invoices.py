@@ -174,6 +174,33 @@ def invoice_record_payment(request: Request, invoice_id: int, method: str = Form
     return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)
 
 
+@router.post("/{invoice_id}/receipt")
+def invoice_receipt(request: Request, invoice_id: int):
+    """Email the client a paid receipt — owner-initiated, for a settled invoice. Works
+    however it was paid (online or recorded offline); a no-op if unpaid or no email."""
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        invoice = get_invoice(conn, auth.tenant["id"], invoice_id)
+        to = (invoice.get("client_email") or "").strip() if invoice else ""
+        if invoice and invoice["status"] == "paid" and to:
+            ctx = {
+                "client": invoice.get("client_name") or "there",
+                "studio": auth.tenant.get("name", "your studio"),
+                "title": invoice["title"],
+                "amount": invoice.get("total_display") or invoice.get("amount_display"),
+            }
+            msg = messaging.render(conn, auth.tenant["id"], "invoice_receipt", ctx)
+            notify(conn, settings, to=to, subject=msg["subject"], body=msg["body"],
+                   tenant_id=auth.tenant["id"])
+            audit(conn, actor="owner", action="invoice.receipt", tenant_id=auth.tenant["id"],
+                  detail=invoice["title"])
+            conn.commit()
+    return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)
+
+
 @router.post("/{invoice_id}/remind")
 def invoice_remind(request: Request, invoice_id: int):
     """Owner-initiated past-due nudge. Bypasses the auto-sweep cooldown (the owner

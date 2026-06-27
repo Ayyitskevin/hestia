@@ -68,6 +68,13 @@ TEMPLATES: dict[str, dict] = {
                  "past due.\n\nYou can pay securely here:\n{pay_url}\n\nThank you!\n{studio}"),
         "variables": ["client", "studio", "title", "amount", "pay_url"],
     },
+    "invoice_receipt": {
+        "label": "Payment receipt",
+        "subject": "Receipt: {title} — paid",
+        "body": ("Hi {client},\n\nThank you! We've received your payment of {amount} for "
+                 "{title}. This is your receipt — no action needed.\n\nWith thanks,\n{studio}"),
+        "variables": ["client", "studio", "title", "amount"],
+    },
     "contract_send": {
         "label": "Contract to sign",
         "subject": "{studio}: please review and sign — {title}",
