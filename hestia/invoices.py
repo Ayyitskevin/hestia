@@ -165,6 +165,43 @@ def mark_paid(conn: sqlite3.Connection, *, token: str, provider: str, ref: str) 
     return True
 
 
+OFFLINE_METHODS = ("cash", "check", "bank transfer", "other")
+
+
+def record_offline_payment(conn: sqlite3.Connection, tenant_id: str, invoice_id: int, *,
+                           method: str = "other") -> bool:
+    """Owner-side: record a payment taken outside the online pay link — cash, check, a
+    bank transfer. Idempotently settles the invoice, returning True only on the single
+    transition to paid. Tenant-scoped; only a draft or sent invoice can be recorded paid
+    (never a void or already-paid one). Fires invoice.paid the same as an online payment,
+    so downstream automations don't care how the money arrived."""
+    label = (method or "other").strip().lower()
+    if label not in OFFLINE_METHODS:
+        label = "other"
+    row = conn.execute(
+        "SELECT title, amount_cents, currency, status, client_id, project_id "
+        "FROM invoices WHERE id = ? AND tenant_id = ?",
+        (invoice_id, tenant_id),
+    ).fetchone()
+    if not row or row["status"] not in ("draft", "sent"):
+        return False
+    # Same atomic claim as mark_paid: the status guard + rowcount is the idempotency
+    # barrier, so a double-click can't settle (or audit/emit) the same invoice twice.
+    cur = conn.execute(
+        "UPDATE invoices SET status = 'paid', provider = ?, provider_ref = 'offline', "
+        "paid_at = datetime('now') WHERE id = ? AND tenant_id = ? AND status IN ('draft', 'sent')",
+        (label, invoice_id, tenant_id),
+    )
+    if cur.rowcount == 0:
+        return False
+    audit(conn, actor="owner", action="invoice.paid", tenant_id=tenant_id,
+          detail=f"{row['title']} · {money(row['amount_cents'], row['currency'])} · {label} (manual)")
+    emit_event(conn, tenant_id=tenant_id, event="invoice.paid",
+               context={"client_id": row["client_id"], "project_id": row["project_id"],
+                        "title": row["title"]})
+    return True
+
+
 def _hydrate(row: dict) -> dict:
     cur = row.get("currency", "usd")
     tax = int(row.get("tax_cents") or 0)            # rows that don't select it → no tax
