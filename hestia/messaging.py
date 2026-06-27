@@ -24,6 +24,14 @@ TEMPLATES: dict[str, dict] = {
                  "you.\n\nWhat's the best way to reach you for a quick chat?\n\nWarmly,\n{studio}"),
         "variables": ["client", "studio"],
     },
+    "broadcast": {
+        "label": "Announcement / broadcast",
+        "subject": "A note from {studio}",
+        "body": ("Hi {client},\n\nI wanted to share a quick update.\n\n"
+                 "[Write your announcement here — mini-sessions, a price change, holiday "
+                 "availability, anything you'd like your clients to know.]\n\nWarmly,\n{studio}"),
+        "variables": ["client", "studio"],
+    },
     "appointment_confirm": {
         "label": "Session confirmed",
         "subject": "Confirmed: {title} on {when}",
@@ -98,6 +106,12 @@ _VAR = re.compile(r"\{(\w+)\}")
 def _fill(text: str, context: dict) -> str:
     """Substitute ``{var}`` from context; an unknown token is left exactly as written."""
     return _VAR.sub(lambda m: str(context.get(m.group(1), m.group(0))), text)
+
+
+def fill(text: str, context: dict) -> str:
+    """Public helper to substitute ``{var}`` placeholders in free-text (e.g. a broadcast
+    body typed by the owner), leaving unknown tokens intact. Mirrors template rendering."""
+    return _fill(text, context)
 
 
 def get_template(conn: sqlite3.Connection, tenant_id: str, kind: str) -> dict:
