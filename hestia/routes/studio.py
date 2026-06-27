@@ -160,7 +160,8 @@ def message_templates(request: Request):
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
-        templates = messaging.list_templates(conn, auth.tenant["id"])
+        templates = messaging.list_templates(conn, auth.tenant["id"],
+                                             studio=auth.tenant.get("name") or "")
     return render(request, "studio/messages.html", auth=auth, templates=templates)
 
 

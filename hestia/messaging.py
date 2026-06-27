@@ -119,18 +119,34 @@ def reset_template(conn: sqlite3.Connection, tenant_id: str, kind: str) -> None:
     )
 
 
-def list_templates(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
-    """Every editable template with the studio's current (custom-or-default) text and
-    whether it's been customized — drives the settings editor."""
+def _sample_context(studio: str) -> dict:
+    """Plausible stand-in values for every variable, for the editor's live preview."""
+    return {
+        "client": "Jordan Lee", "studio": studio or "Your Studio",
+        "title": "Summer Session", "when": "Sat, Jul 18 · 2:00 PM",
+        "location": "\nLocation: Riverside Park", "amount": "$1,500.00", "note": "",
+        "calendar_url": "https://example.com/book/abc123/calendar.ics",
+        "pay_url": "https://example.com/pay/abc123",
+        "sign_url": "https://example.com/sign/abc123",
+        "fill_url": "https://example.com/q/abc123",
+    }
+
+
+def list_templates(conn: sqlite3.Connection, tenant_id: str, *, studio: str = "") -> list[dict]:
+    """Every editable template with the studio's current (custom-or-default) text,
+    whether it's been customized, and a sample-data preview — drives the settings
+    editor. ``studio`` (the tenant's name) is used in the preview only."""
     custom = {r["kind"]: r for r in conn.execute(
         "SELECT kind, subject, body FROM message_templates WHERE tenant_id = ?", (tenant_id,))}
+    sample = _sample_context(studio)
     out = []
     for kind, d in TEMPLATES.items():
         c = custom.get(kind)
+        subject = c["subject"] if c else d["subject"]
+        body = c["body"] if c else d["body"]
         out.append({
             "kind": kind, "label": d["label"], "variables": d["variables"],
-            "subject": c["subject"] if c else d["subject"],
-            "body": c["body"] if c else d["body"],
-            "customized": c is not None,
+            "subject": subject, "body": body, "customized": c is not None,
+            "preview_subject": _fill(subject, sample), "preview_body": _fill(body, sample),
         })
     return out
