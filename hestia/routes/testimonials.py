@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
+from .. import messaging
 from ..auth import context_from_session
 from ..crm import get_client, list_clients
 from ..email import notify
@@ -67,11 +68,10 @@ def request_one(request: Request, client_id: str = Form(""), author_name: str = 
         if client and client.get("email"):  # send the client their link
             url = testimonial_public_url(settings, t["token"])
             studio = auth.tenant.get("name", "your photographer")
+            ctx = {"client": client["name"], "studio": studio, "review_url": url}
+            msg = messaging.render(conn, auth.tenant["id"], "review_request", ctx)
             notify(conn, settings, to=client["email"], tenant_id=auth.tenant["id"],
-                   subject=f"{studio}: how was your experience?",
-                   body=(f"Hi {client['name']},\n\nWe'd love a few words about working with "
-                         f"{studio} — it helps other couples and families find us.\n\n"
-                         f"Leave a quick review here:\n{url}\n\nThank you!"))
+                   subject=msg["subject"], body=msg["body"])
     return RedirectResponse("/settings/testimonials", status_code=303)
 
 

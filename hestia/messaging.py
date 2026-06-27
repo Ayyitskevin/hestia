@@ -105,6 +105,36 @@ TEMPLATES: dict[str, dict] = {
                  "Fill it out here:\n{fill_url}\n\nThank you!\n{studio}"),
         "variables": ["client", "studio", "title", "fill_url"],
     },
+    "gallery_ready": {
+        "label": "Gallery ready to download",
+        "subject": "Your gallery from {studio} is ready to download",
+        "body": ("Hi {client},\n\nYour photos from {studio} are ready! Download the "
+                 "full-resolution files here:\n{download_url}\n\nThe link is private to you "
+                 "— keep it handy.\n\nEnjoy!"),
+        "variables": ["client", "studio", "download_url"],
+    },
+    "print_offer": {
+        "label": "Print sale",
+        "subject": "{studio}: {discount}% off your prints — limited time",
+        "body": ("Hi {client},\n\n{headline} — {discount}% off your prints & albums.\n\n"
+                 "View your collection:\n{offer_url}\n\nDon't wait — the sale ends soon!"),
+        "variables": ["client", "studio", "discount", "headline", "offer_url"],
+    },
+    "payment_schedule": {
+        "label": "Payment schedule",
+        "subject": "{studio}: your payment schedule for {title}",
+        "body": ("Hi {client},\n\n{studio} set up a payment plan for {title} ({total} total)."
+                 "\n\n{schedule}\n\nThank you!"),
+        "variables": ["client", "studio", "title", "total", "schedule"],
+    },
+    "review_request": {
+        "label": "Review request",
+        "subject": "{studio}: how was your experience?",
+        "body": ("Hi {client},\n\nWe'd love a few words about working with {studio} — it "
+                 "helps other couples and families find us.\n\nLeave a quick review here:\n"
+                 "{review_url}\n\nThank you!"),
+        "variables": ["client", "studio", "review_url"],
+    },
 }
 
 _VAR = re.compile(r"\{(\w+)\}")
@@ -173,6 +203,13 @@ def _sample_context(studio: str) -> dict:
         "pay_url": "https://example.com/pay/abc123",
         "sign_url": "https://example.com/sign/abc123",
         "fill_url": "https://example.com/q/abc123",
+        "download_url": "https://example.com/download/abc123",
+        "offer_url": "https://example.com/s/your-studio/abc123",
+        "review_url": "https://example.com/t/abc123",
+        "discount": "15", "headline": "Holiday print sale",
+        "total": "$1,500.00",
+        "schedule": ("- Deposit: $500.00 (due 2026-07-01)\n  https://example.com/pay/dep123\n\n"
+                     "- Balance: $1,000.00 (due 2026-08-01)\n  https://example.com/pay/bal123"),
     }
 
 

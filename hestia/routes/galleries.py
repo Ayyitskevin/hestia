@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
 
+from .. import messaging
 from ..albums import get_album_for_gallery
 from ..auth import context_from_session
 from ..campaigns import create_campaign, end_campaign, get_active_campaign
@@ -144,11 +145,11 @@ def gallery_delivery_enable(request: Request, gallery_id: int):
                 client = get_client(conn, auth.tenant["id"], project["client_id"]) if project and project.get("client_id") else None
                 if client and client.get("email"):
                     studio = auth.tenant.get("name", "your photographer")
+                    ctx = {"client": client["name"], "studio": studio,
+                           "download_url": delivery_url(settings, token)}
+                    msg = messaging.render(conn, auth.tenant["id"], "gallery_ready", ctx)
                     notify(conn, settings, to=client["email"], tenant_id=auth.tenant["id"],
-                           subject=f"Your gallery from {studio} is ready to download",
-                           body=(f"Hi {client['name']},\n\nYour photos from {studio} are ready! "
-                                 f"Download the full-resolution files here:\n{delivery_url(settings, token)}\n\n"
-                                 f"The link is private to you — keep it handy.\n\nEnjoy!"))
+                           subject=msg["subject"], body=msg["body"])
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
 
@@ -206,11 +207,11 @@ def gallery_campaign_launch(request: Request, gallery_id: int, headline: str = F
         if offer and client and client.get("email"):
             url = offer_public_url(settings, auth.tenant["slug"], offer["token"])
             studio = auth.tenant.get("name", "your photographer")
+            ctx = {"client": client["name"], "studio": studio, "discount": max(0, pct),
+                   "headline": headline or "A limited-time sale", "offer_url": url}
+            msg = messaging.render(conn, auth.tenant["id"], "print_offer", ctx)
             notify(conn, settings, to=client["email"], tenant_id=auth.tenant["id"],
-                   subject=f"{studio}: {max(0, pct)}% off your prints — limited time",
-                   body=(f"Hi {client['name']},\n\n{headline or 'A limited-time sale'} — "
-                         f"{max(0, pct)}% off your prints & albums.\n\nView your collection:\n{url}\n\n"
-                         f"Don't wait — the sale ends soon!"))
+                   subject=msg["subject"], body=msg["body"])
         conn.commit()
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
