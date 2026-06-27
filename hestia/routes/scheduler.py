@@ -10,6 +10,7 @@ from ..crm import list_clients, list_projects
 from ..scheduler import (
     APPOINTMENT_KINDS,
     KIND_LABELS,
+    agenda,
     appointment_public_url,
     cancel_appointment,
     confirm_appointment,
@@ -36,7 +37,9 @@ def schedule_list(request: Request):
         if not auth:
             return RedirectResponse("/login", status_code=303)
         appointments = list_appointments(conn, auth.tenant["id"])
-    return render(request, "scheduler/schedule.html", auth=auth, appointments=appointments)
+        upcoming = agenda(conn, auth.tenant["id"])
+    return render(request, "scheduler/schedule.html", auth=auth, appointments=appointments,
+                  agenda=upcoming)
 
 
 @router.get("/new")
