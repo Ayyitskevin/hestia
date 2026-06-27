@@ -195,3 +195,31 @@ def test_questionnaire_reminder_uses_custom_template(conn, settings):
     send_questionnaire_reminder(conn, settings, get_questionnaire(conn, t["id"], q["id"]))
     row = [m for m in list_emails(conn, t["id"]) if m["to_addr"] == "sam@q.com"][0]
     assert row["subject"] == "Still need Details" and "/q/" in row["body"]
+
+
+# ── live preview (slice 3) ───────────────────────────────────────────────────
+
+
+def test_list_templates_includes_sample_preview(conn):
+    t = create_tenant(conn, name="Lux Studio", shoot_type="wedding")
+    by_kind = {x["kind"]: x for x in messaging.list_templates(conn, t["id"], studio="Lux Studio")}
+    conf = by_kind["appointment_confirm"]
+    assert "Jordan Lee" in conf["preview_body"] and "Summer Session" in conf["preview_body"]
+    assert "Lux Studio" in conf["preview_body"]                  # the studio name flows into the sample
+    assert "{client}" not in conf["preview_body"]                # no raw tokens left in the preview
+
+
+def test_preview_reflects_custom_template(conn):
+    t = create_tenant(conn, name="S", shoot_type="wedding")
+    messaging.set_template(conn, t["id"], "invoice_send",
+                           subject="Pay up {client}", body="You owe {amount}.")
+    by_kind = {x["kind"]: x for x in messaging.list_templates(conn, t["id"])}
+    assert by_kind["invoice_send"]["preview_subject"] == "Pay up Jordan Lee"
+    assert by_kind["invoice_send"]["preview_body"] == "You owe $1,500.00."
+
+
+def test_messages_page_renders_preview(client):
+    login_owner(client, onboard_studio(client, name="Preview Studio", email="prev@owner.com"))
+    page = client.get("/settings/messages")
+    assert page.status_code == 200
+    assert "Preview with sample data" in page.text and "Jordan Lee" in page.text

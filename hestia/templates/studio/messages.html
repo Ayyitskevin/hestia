@@ -25,6 +25,15 @@
     <textarea id="body-{{ t.kind }}" name="body" rows="7">{{ t.body }}</textarea>
     <div class="form-actions"><button class="btn" type="submit">Save</button></div>
   </form>
+  <details style="margin-top:4px">
+    <summary class="muted" style="cursor:pointer; font-size:.85rem">Preview with sample data</summary>
+    <div class="card" style="margin-top:8px; background:#faf8f4">
+      <div class="label">Subject</div>
+      <div>{{ t.preview_subject }}</div>
+      <div class="label" style="margin-top:10px">Body</div>
+      <pre style="white-space:pre-wrap; font-family:inherit; margin:0">{{ t.preview_body }}</pre>
+    </div>
+  </details>
   {% if t.customized %}
   <form method="post" action="/settings/messages/{{ t.kind }}" style="margin-top:-6px">
     {% include "_csrf.html" %}
