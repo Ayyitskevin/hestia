@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Email “{{ tag }}” — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Email “{{ tag }}”</h1>
+  <a class="btn secondary" href="/clients?tag={{ tag|urlencode }}">← Back</a>
+</div>
+
+{% if recipients %}
+<p class="muted">Sends one personal email to each of the <strong>{{ recipients|length }}</strong>
+  client{{ '' if recipients|length == 1 else 's' }} tagged “{{ tag }}” who have an email on file.
+  <span class="mono">{client}</span> is filled in per person, and your signature is added
+  automatically. Pre-filled from your <a href="/settings/messages">Announcement</a> template.</p>
+
+<div class="card stack">
+  <form method="post" action="/clients/broadcast"
+        onsubmit="return confirm('Send this to {{ recipients|length }} client{{ '' if recipients|length == 1 else 's' }}?')">
+    {% include "_csrf.html" %}
+    <input type="hidden" name="tag" value="{{ tag }}">
+    <label for="subject">Subject</label>
+    <input type="text" id="subject" name="subject" value="{{ subject }}" required>
+    <label for="body">Message <span class="muted">(use <span class="mono">{client}</span> for the first name)</span></label>
+    <textarea id="body" name="body" rows="12">{{ body }}</textarea>
+    <div class="form-actions">
+      <button class="btn" type="submit">Send to {{ recipients|length }}</button>
+      <a class="btn ghost" href="/clients?tag={{ tag|urlencode }}">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>Recipients <span class="muted" style="font-size:.8rem; font-weight:normal">· {{ recipients|length }}</span></h3>
+  <div style="display:flex; gap:6px; flex-wrap:wrap">
+    {% for c in recipients %}<span class="pill">{{ c.name }}</span>{% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="card stack">
+  <p class="muted">No one tagged “{{ tag }}” has an email on file, so there's no one to send to.
+    Add email addresses on the client pages, then come back.</p>
+  <a class="btn" href="/clients?tag={{ tag|urlencode }}">← Back to {{ tag }}</a>
+</div>
+{% endif %}
+{% endblock %}

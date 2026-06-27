@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
@@ -113,6 +114,58 @@ def client_create(request: Request, name: str = Form(...), email: str = Form("")
         client = create_client(conn, tenant_id=auth.tenant["id"], name=name,
                                email=email, phone=phone, notes=notes)
     return RedirectResponse(f"/clients/{client['id']}", status_code=303)
+
+
+# ── segment broadcast: one message to everyone in a tag (literal path before /{id}) ──
+
+
+@router.get("/clients/broadcast")
+def clients_broadcast_compose(request: Request, tag: str = ""):
+    """Compose one message to everyone in a tag — a deliberate segment. Pre-filled from
+    the 'Announcement / broadcast' template; {client} stays a visible placeholder and is
+    filled per recipient on send."""
+    seg = tag.strip()
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if not seg:                                  # broadcast is always to a chosen segment
+            return RedirectResponse("/clients", status_code=303)
+        recipients = [c for c in list_clients(conn, auth.tenant["id"], tag=seg)
+                      if (c.get("email") or "").strip()]
+        tpl = messaging.get_template(conn, auth.tenant["id"], "broadcast")
+    studio = auth.tenant.get("name", "your studio")
+    # fill {studio} for the preview but leave {client} as a placeholder (filled per send)
+    return render(request, "crm/client_broadcast.html", auth=auth, tag=seg,
+                  recipients=recipients, subject=messaging.fill(tpl["subject"], {"studio": studio}),
+                  body=messaging.fill(tpl["body"], {"studio": studio}))
+
+
+@router.post("/clients/broadcast")
+def clients_broadcast_send(request: Request, tag: str = Form(""),
+                           subject: str = Form(""), body: str = Form("")):
+    seg = tag.strip()
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        sent = 0
+        if seg and (subject.strip() or body.strip()):
+            studio = auth.tenant.get("name", "your studio")
+            for c in list_clients(conn, auth.tenant["id"], tag=seg):
+                to = (c.get("email") or "").strip()
+                if not to:                           # skip segment members with no email
+                    continue
+                ctx = {"client": c["name"], "studio": studio}
+                notify(conn, settings, to=to, subject=messaging.fill(subject.strip(), ctx),
+                       body=messaging.fill(body, ctx), tenant_id=auth.tenant["id"])
+                sent += 1
+            if sent:
+                audit(conn, actor="owner", action="segment.emailed",
+                      tenant_id=auth.tenant["id"], detail=f"{seg} · {sent} recipient(s)")
+                conn.commit()
+    return RedirectResponse(f"/clients?tag={quote(seg)}", status_code=303)
 
 
 @router.get("/clients/{client_id}")
