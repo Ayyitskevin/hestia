@@ -83,7 +83,7 @@
               <td class="muted">{{ a.starts_at or "time TBD" }}</td>
               <td style="text-align:right">
                 {% if a.status == 'proposed' %}<a class="btn secondary" href="{{ a.book_url }}">Pick a time</a>
-                {% else %}<span class="muted">✓ Confirmed</span>{% endif %}
+                {% else %}<span class="muted">✓ Confirmed</span> <a class="btn ghost" href="{{ a.calendar_url }}">📅 Add to calendar</a>{% endif %}
               </td>
             </tr>
             {% endfor %}
@@ -146,7 +146,7 @@
           <tbody>
             {% for inv in invoices %}
             <tr>
-              <td>{{ inv.title }}</td>
+              <td>{{ inv.title }}{% if inv.note %}<div class="muted" style="font-size:.85rem; white-space:pre-line">{{ inv.note }}</div>{% endif %}</td>
               <td>{{ inv.amount_display }}</td>
               <td><span class="pill {{ 'on' if inv.status == 'paid' else 'off' }}">{{ inv.status }}</span></td>
               <td style="text-align:right">

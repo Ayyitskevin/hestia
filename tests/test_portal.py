@@ -15,6 +15,7 @@ from hestia.portal import (
     get_client_by_portal_token,
     regenerate_portal_token,
 )
+from hestia.scheduler import create_appointment
 from hestia.tenants import create_tenant
 from hestia.testimonials import request_testimonial
 
@@ -183,3 +184,50 @@ def test_http_regenerate_revokes(client):
 
 def test_http_unknown_portal_404(client):
     assert client.get("/portal/nope-not-a-real-token").status_code == 404
+
+
+def test_portal_confirmed_appointment_has_calendar_link(conn, settings):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Sarah")
+    conf = create_appointment(conn, tenant_id=t["id"], title="Engagement", options=["x"],
+                              client_id=c["id"])
+    conn.execute("UPDATE appointments SET status='confirmed', starts_at='2030-01-01 10:00' WHERE id=?",
+                 (conf["id"],))
+    create_appointment(conn, tenant_id=t["id"], title="Maybe", options=["y"], client_id=c["id"])
+    conn.commit()
+
+    client = get_client_by_portal_token(conn, enable_portal(conn, t["id"], c["id"]))
+    appts = {a["title"]: a for a in assemble_portal(conn, settings, client)["appointments"]}
+    assert appts["Engagement"]["calendar_url"].endswith(f"/book/{conf['token']}/calendar.ics")
+    assert appts["Maybe"]["calendar_url"] is None         # proposed → no calendar link yet
+
+
+def test_portal_surfaces_invoice_note(conn, settings):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Sarah")
+    create_invoice(conn, settings, tenant_id=t["id"], title="Balance", amount_cents=5000,
+                   client_id=c["id"], note="Venmo also accepted")
+    conn.commit()
+    client = get_client_by_portal_token(conn, enable_portal(conn, t["id"], c["id"]))
+    assert assemble_portal(conn, settings, client)["invoices"][0]["note"] == "Venmo also accepted"
+
+
+def test_http_portal_renders_calendar_link_and_note(client, app):
+    login_owner(client, onboard_studio(client, email="pp@example.com"))
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Sarah")
+        appt = create_appointment(conn, tenant_id=tid, title="Engagement", options=["x"],
+                                  client_id=c["id"])
+        conn.execute("UPDATE appointments SET status='confirmed', starts_at='2030-01-01 10:00' "
+                     "WHERE id=?", (appt["id"],))
+        create_invoice(conn, app.state.settings, tenant_id=tid, title="Balance", amount_cents=5000,
+                       client_id=c["id"], note="Venmo also accepted")
+        tok = enable_portal(conn, tid, c["id"])
+        conn.commit()
+    finally:
+        conn.close()
+    page = client.get(f"/portal/{tok}")
+    assert page.status_code == 200
+    assert "Add to calendar" in page.text and "Venmo also accepted" in page.text
