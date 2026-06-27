@@ -37,19 +37,30 @@ def create_invoice(
     due_date: str = "",
     sequence: int = 0,
     tax_cents: int = 0,
+    note: str = "",
 ) -> dict:
     token = new_session_token()[:28]
     cur = conn.execute(
         """
         INSERT INTO invoices
             (tenant_id, client_id, project_id, title, amount_cents, currency, token,
-             plan_id, due_date, sequence, tax_cents)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             plan_id, due_date, sequence, tax_cents, note)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (tenant_id, client_id, project_id, title.strip(), max(0, int(amount_cents)),
-         settings.currency, token, plan_id, due_date.strip(), int(sequence), max(0, int(tax_cents))),
+         settings.currency, token, plan_id, due_date.strip(), int(sequence), max(0, int(tax_cents)),
+         note.strip()[:1000]),
     )
     return get_invoice(conn, tenant_id, cur.lastrowid)
+
+
+def set_invoice_note(conn: sqlite3.Connection, tenant_id: str, invoice_id: int, note: str) -> None:
+    """Set an invoice's personal note (shown on the pay page, sent in the email).
+    Display only — never touches the amount, tax, or status."""
+    conn.execute(
+        "UPDATE invoices SET note = ? WHERE id = ? AND tenant_id = ?",
+        (note.strip()[:1000], invoice_id, tenant_id),
+    )
 
 
 def tax_for(amount_cents: int, rate_bps: int) -> int:

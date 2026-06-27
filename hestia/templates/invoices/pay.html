@@ -17,6 +17,7 @@
     <div class="wrap narrow" style="padding-top:32px">
       <div class="card stack">
         <h3>{{ invoice.title }}</h3>
+        {% if invoice.note %}<p class="muted" style="white-space:pre-line">{{ invoice.note }}</p>{% endif %}
         {% if invoice.status == 'paid' %}
           <div class="alert ok">✓ Paid — thank you! A receipt has been recorded.</div>
         {% else %}

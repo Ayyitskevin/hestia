@@ -34,4 +34,14 @@
     {% if settings.payments_backend == 'mock' %}(test mode — no real charge){% endif %}
   </p>
 </div>
+
+<div class="card stack">
+  <h3>Note to client</h3>
+  <p class="muted">A personal message — shown on the pay page and included in the invoice email.</p>
+  <form method="post" action="/invoices/{{ invoice.id }}/note">
+    {% include "_csrf.html" %}
+    <textarea name="note" rows="3" placeholder="Thank you for choosing us! Balance due two weeks before your date. Venmo @studio also accepted.">{{ invoice.note }}</textarea>
+    <div class="form-actions"><button class="btn secondary" type="submit">Save note</button></div>
+  </form>
+</div>
 {% endblock %}
