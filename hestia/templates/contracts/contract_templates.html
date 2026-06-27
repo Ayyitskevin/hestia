@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Contract templates — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Contract templates</h1>
+  <a class="btn secondary" href="/contracts">← Contracts</a>
+</div>
+<p class="muted">Save the boilerplate you reuse — your standard booking agreement, model release,
+  or print license — and start a new contract from it in one click. A drafted contract is an
+  independent copy, so editing it never changes the template.</p>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>New template</h3>
+  <form method="post" action="/contracts/templates">
+    {% include "_csrf.html" %}
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" placeholder="Wedding photography agreement" required>
+    <label for="body">Terms</label>
+    <textarea id="body" name="body" rows="10"
+      placeholder="The agreement your client will read and sign. Include the scope, deliverables, dates, fees, and cancellation terms."></textarea>
+    <div class="form-actions"><button class="btn" type="submit">Save template</button></div>
+  </form>
+</div>
+
+{% if templates %}
+{% for t in templates %}
+<div class="card stack" style="margin-top:18px">
+  <div class="page-title" style="margin:0">
+    <h3 style="margin:0">{{ t.name }}</h3>
+    <div style="display:flex; gap:8px">
+      <a class="btn secondary" href="/contracts/new?template_id={{ t.id }}">Use</a>
+      <form method="post" action="/contracts/templates/{{ t.id }}/delete"
+            onsubmit="return confirm('Delete this template? Contracts already created from it are unaffected.')">
+        {% include "_csrf.html" %}<button class="btn ghost" type="submit">Delete</button>
+      </form>
+    </div>
+  </div>
+  {% if t.body %}
+  <details>
+    <summary class="muted" style="cursor:pointer; font-size:.85rem">Preview terms</summary>
+    <div class="card" style="margin-top:8px; background:#faf8f4">
+      <pre style="white-space:pre-wrap; font-family:inherit; margin:0">{{ t.body }}</pre>
+    </div>
+  </details>
+  {% else %}
+  <p class="muted" style="font-size:.85rem; margin:0">No terms yet — this template is empty.</p>
+  {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<p class="muted" style="margin-top:18px">No templates yet — save one above to reuse it later.</p>
+{% endif %}
+{% endblock %}

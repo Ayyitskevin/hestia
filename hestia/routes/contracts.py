@@ -10,8 +10,12 @@ from ..auth import context_from_session
 from ..contracts import (
     contract_public_url,
     create_contract,
+    delete_contract_template,
     get_contract,
+    get_contract_template,
+    list_contract_templates,
     list_contracts,
+    save_contract_template,
     send_contract,
     void_contract,
 )
@@ -41,15 +45,55 @@ def contracts_list(request: Request):
 
 
 @router.get("/new")
-def contract_new(request: Request, project_id: int | None = None, client_id: int | None = None):
+def contract_new(request: Request, project_id: int | None = None, client_id: int | None = None,
+                 template_id: int | None = None):
     with db_conn(request) as conn:
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         clients = list_clients(conn, auth.tenant["id"])
         projects = list_projects(conn, auth.tenant["id"])
+        templates = list_contract_templates(conn, auth.tenant["id"])
+        prefill_body = ""
+        if template_id:                         # "start from template" pre-fills the body
+            tpl = get_contract_template(conn, auth.tenant["id"], template_id)
+            prefill_body = tpl["body"] if tpl else ""
     return render(request, "contracts/contract_new.html", auth=auth, clients=clients,
-                  projects=projects, preselect_project=project_id, preselect_client=client_id)
+                  projects=projects, preselect_project=project_id, preselect_client=client_id,
+                  templates=templates, prefill_body=prefill_body)
+
+
+# ── reusable contract templates (must precede /{contract_id} so "templates" wins) ──
+
+
+@router.get("/templates")
+def contract_templates_page(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        templates = list_contract_templates(conn, auth.tenant["id"])
+    return render(request, "contracts/contract_templates.html", auth=auth, templates=templates)
+
+
+@router.post("/templates")
+def contract_template_create(request: Request, name: str = Form(""), body: str = Form("")):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        save_contract_template(conn, tenant_id=auth.tenant["id"], name=name, body=body)
+    return RedirectResponse("/contracts/templates", status_code=303)
+
+
+@router.post("/templates/{template_id}/delete")
+def contract_template_delete(request: Request, template_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        delete_contract_template(conn, auth.tenant["id"], template_id)
+    return RedirectResponse("/contracts/templates", status_code=303)
 
 
 @router.post("")
