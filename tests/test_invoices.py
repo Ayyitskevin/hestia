@@ -3,7 +3,7 @@
 from conftest import login_owner, onboard_studio
 
 from hestia.crm import create_client, create_project
-from hestia.db import connect
+from hestia.db import connect, list_audit
 from hestia.invoices import (
     create_invoice,
     get_invoice,
@@ -56,6 +56,17 @@ def test_mark_paid_idempotent(conn, settings):
     assert get_invoice_by_token(conn, inv["token"])["status"] == "paid"
     # second settlement is a no-op (no double payment)
     assert mark_paid(conn, token=inv["token"], provider="mock", ref="r2") is False
+
+
+def test_mark_paid_settles_exactly_once(conn, settings):
+    """A duplicate callback never double-fires invoice.paid (audit/event once only).
+    The UPDATE is guarded by 'status != paid' + rowcount, not just the pre-read."""
+    t = _tenant(conn)
+    inv = create_invoice(conn, settings, tenant_id=t["id"], title="X", amount_cents=9900)
+    assert mark_paid(conn, token=inv["token"], provider="mock", ref="r1") is True
+    assert mark_paid(conn, token=inv["token"], provider="mock", ref="r2") is False
+    paid = [a for a in list_audit(conn, t["id"]) if a["action"] == "invoice.paid"]
+    assert len(paid) == 1                                       # settled, audited, emitted once
 
 
 def test_paid_cannot_be_voided(conn, settings):

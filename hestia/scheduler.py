@@ -372,9 +372,11 @@ def appointment_ics_url(settings: Settings, token: str) -> str:
 
 
 def _ics_escape(text: str) -> str:
-    """Escape a value for an iCalendar text field (RFC 5545 §3.3.11)."""
-    return (str(text).replace("\\", "\\\\").replace(";", "\\;")
-            .replace(",", "\\,").replace("\n", "\\n"))
+    """Escape a value for an iCalendar text field (RFC 5545 §3.3.11). Backslash first,
+    then fold any CR / CRLF to a single newline so an embedded carriage return in
+    owner-entered text can't inject extra calendar lines, then escape ; , and newline."""
+    s = str(text).replace("\\", "\\\\").replace("\r\n", "\n").replace("\r", "\n")
+    return s.replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
 
 def _vevent_lines(conn: sqlite3.Connection, appt: dict) -> list[str] | None:
