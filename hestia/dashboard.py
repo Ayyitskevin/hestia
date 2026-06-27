@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import sqlite3
 
+from .config import Settings
+from .email import notify
 from .invoices import accounts_receivable, money
 from .reports import monthly_pnl
 
@@ -135,3 +137,119 @@ def reconnect_due(conn: sqlite3.Connection, tenant_id: str, *,
         (tenant_id, f"-{int(quiet_days)} days", limit),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+# --- owner digest: the dashboard, delivered as a periodic email ----------------
+
+
+def owner_digest_recipient(conn: sqlite3.Connection, tenant_id: str) -> str:
+    """Where the owner digest goes: the studio's stated contact email, else the owner's
+    login. Empty string if neither exists (then no digest is sent)."""
+    row = conn.execute(
+        "SELECT contact_email FROM studio_profiles WHERE tenant_id = ?", (tenant_id,)
+    ).fetchone()
+    if row and (row["contact_email"] or "").strip():
+        return row["contact_email"].strip()
+    owner = conn.execute(
+        "SELECT email FROM users WHERE tenant_id = ? AND role = 'owner' ORDER BY id LIMIT 1",
+        (tenant_id,),
+    ).fetchone()
+    return (owner["email"] if owner else "").strip()
+
+
+def build_owner_digest(conn: sqlite3.Connection, tenant_id: str,
+                       settings: Settings) -> dict | None:
+    """Assemble the studio's 'what needs you' summary as a plain-text email. Returns
+    ``{"subject", "body"}``, or None when there's nothing worth sending (so an idle
+    studio is never pinged). Reuses the same aggregation as the dashboard."""
+    att = needs_attention(conn, tenant_id)
+    reconnect = reconnect_due(conn, tenant_id)
+    count = att["total"] + len(reconnect)
+    if count == 0:
+        return None
+    trow = conn.execute("SELECT name FROM tenants WHERE id = ?", (tenant_id,)).fetchone()
+    studio = (trow["name"] if trow else "") or "your studio"
+    base = settings.public_url.rstrip("/")
+    snap = money_snapshot(conn, tenant_id)
+
+    lines = [f"Here's what needs you at {studio}:", ""]
+
+    def section(emoji, label, items, render):
+        if items:
+            lines.append(f"{emoji} {label} ({len(items)})")
+            lines.extend(f" · {render(i)}" for i in items)
+            lines.append("")
+
+    section("\U0001f4e5", "New leads", att["leads"],
+            lambda x: x["name"] + (f" — {x['client_name']}" if x.get("client_name") else ""))
+    section("\U0001f4b8", "Unpaid invoices", att["unpaid"],
+            lambda x: f"{x['title']} — {x['amount_display']}" + (" (overdue)" if x.get("is_overdue") else ""))
+    section("\U0001f4c5", "Upcoming sessions", att["upcoming"],
+            lambda x: f"{x['title']} — {x['starts_at']}")
+    section("\U0001f4e6", "Ready to deliver", att["to_deliver"], lambda x: x["title"])
+    section("✍️", "Awaiting signature", att["awaiting_contract"],
+            lambda x: x["title"] + (f" — {x['client_name']}" if x.get("client_name") else ""))
+    section("\U0001f4cb", "Awaiting questionnaire", att["awaiting_questionnaire"],
+            lambda x: x["title"] + (f" — {x['client_name']}" if x.get("client_name") else ""))
+    section("\U0001f91d", "Reconnect", reconnect,
+            lambda x: f"{x['name']} — last booked {x['last_seen'][:10]}")
+
+    lines.append(f"\U0001f4b0 This month: revenue {snap['month']['revenue']}, "
+                 f"profit {snap['month']['profit']}; outstanding {snap['ar']['outstanding']}.")
+    lines.append("")
+    lines.append(f"Open your dashboard: {base}/dashboard")
+
+    noun = "thing needs" if count == 1 else "things need"
+    return {"subject": f"{studio}: {count} {noun} your attention", "body": "\n".join(lines)}
+
+
+def send_owner_digest_now(conn: sqlite3.Connection, settings: Settings,
+                          tenant_id: str) -> str | None:
+    """Send the digest to one studio's owner immediately (the manual 'email me this'
+    action). No-op (None) if there's no recipient or nothing to report."""
+    to = owner_digest_recipient(conn, tenant_id)
+    if not to:
+        return None
+    digest = build_owner_digest(conn, tenant_id, settings)
+    if not digest:
+        return None
+    return notify(conn, settings, to=to, subject=digest["subject"], body=digest["body"],
+                  tenant_id=tenant_id, signed=False)
+
+
+def _claim_digest(conn: sqlite3.Connection, tenant_id: str, cooldown_days: int) -> bool:
+    """Atomically stamp the digest as sent — gates the next one. True iff this call won
+    the claim (last_digest_at was null or older than the cooldown), so a second worker
+    pass in the same window sends nothing."""
+    cur = conn.execute(
+        "UPDATE tenants SET last_digest_at = datetime('now') "
+        "WHERE id = ? AND (last_digest_at IS NULL OR last_digest_at < datetime('now', ?))",
+        (tenant_id, f"-{int(cooldown_days)} days"),
+    )
+    return cur.rowcount > 0
+
+
+def send_owner_digests(conn: sqlite3.Connection, settings: Settings, *,
+                       cooldown_days: int = 7, limit: int = 500) -> int:
+    """Across all studios, email each owner their digest at most once per cooldown. A
+    tenant with nothing to report (or no recipient) is skipped without being claimed, so
+    it's revisited as soon as something comes up; one with content is claimed before the
+    send. Returns the number sent."""
+    rows = conn.execute(
+        "SELECT id FROM tenants "
+        "WHERE last_digest_at IS NULL OR last_digest_at < datetime('now', ?) "
+        "ORDER BY id LIMIT ?",
+        (f"-{int(cooldown_days)} days", limit),
+    ).fetchall()
+    sent = 0
+    for r in rows:
+        tid = r["id"]
+        to = owner_digest_recipient(conn, tid)
+        digest = build_owner_digest(conn, tid, settings) if to else None
+        if not digest:
+            continue                                  # nothing to say / nowhere to send
+        if _claim_digest(conn, tid, cooldown_days):   # claim before send
+            notify(conn, settings, to=to, subject=digest["subject"], body=digest["body"],
+                   tenant_id=tid, signed=False)
+            sent += 1
+    return sent

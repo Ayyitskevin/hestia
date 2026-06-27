@@ -16,7 +16,14 @@ from ..auth import (
 )
 from ..billing import plan_status
 from ..crm import list_clients, list_projects
-from ..dashboard import money_snapshot, needs_attention, reconnect_due, setup_checklist
+from ..dashboard import (
+    money_snapshot,
+    needs_attention,
+    reconnect_due,
+    send_owner_digest_now,
+    setup_checklist,
+)
+from ..db import audit
 from ..email import notify
 from ..galleries import list_galleries
 from ..pipeline import list_runs
@@ -209,3 +216,20 @@ def dashboard(request: Request):
     return render(request, "dashboard.html", auth=auth, tenant=tenant, flags=flags,
                   galleries=galleries, runs=runs, plan=plan, counts=counts, profile=profile,
                   attention=attention, snapshot=snapshot, setup=setup, reconnect=reconnect)
+
+
+@router.post("/dashboard/digest")
+def dashboard_digest_now(request: Request):
+    """Send the owner this studio's digest right now (the 'email me this' button) — the
+    same summary the worker mails weekly, on demand and ignoring the cooldown."""
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = context_from_session(conn, request)
+        if not auth or auth.is_admin or not auth.tenant:
+            return RedirectResponse("/login", status_code=303)
+        result = send_owner_digest_now(conn, settings, auth.tenant["id"])
+        if result is not None:
+            audit(conn, actor="owner", action="digest.sent", tenant_id=auth.tenant["id"],
+                  detail="owner digest emailed")
+            conn.commit()
+    return RedirectResponse("/dashboard", status_code=303)
