@@ -16,7 +16,7 @@ from ..auth import (
 )
 from ..billing import plan_status
 from ..crm import list_clients, list_projects
-from ..dashboard import money_snapshot, needs_attention
+from ..dashboard import money_snapshot, needs_attention, setup_checklist
 from ..email import notify
 from ..galleries import list_galleries
 from ..pipeline import list_runs
@@ -204,6 +204,7 @@ def dashboard(request: Request):
         profile = get_profile(conn, tenant["id"])
         attention = needs_attention(conn, tenant["id"])
         snapshot = money_snapshot(conn, tenant["id"])
+        setup = setup_checklist(conn, tenant["id"], published=profile["published"])
     return render(request, "dashboard.html", auth=auth, tenant=tenant, flags=flags,
                   galleries=galleries, runs=runs, plan=plan, counts=counts, profile=profile,
-                  attention=attention, snapshot=snapshot)
+                  attention=attention, snapshot=snapshot, setup=setup)

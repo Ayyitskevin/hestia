@@ -90,3 +90,30 @@ def money_snapshot(conn: sqlite3.Connection, tenant_id: str) -> dict:
     month = monthly_pnl(conn, tenant_id, months=1)[0]   # current month, with displays
     ar = accounts_receivable(conn, tenant_id)
     return {"month": month, "ar": ar}
+
+
+def _has_any(conn: sqlite3.Connection, tenant_id: str, table: str) -> bool:
+    """Whether the tenant owns at least one row in ``table`` (table name is a fixed
+    literal from the caller, never user input)."""
+    return conn.execute(
+        f"SELECT 1 FROM {table} WHERE tenant_id = ? LIMIT 1", (tenant_id,)
+    ).fetchone() is not None
+
+
+def setup_checklist(conn: sqlite3.Connection, tenant_id: str, *, published: bool) -> dict:
+    """A new studio's activation steps — the first actions that turn an empty account
+    into a working studio. Each step links to its action; once every step is done the
+    dashboard stops showing the checklist, so an established studio never sees it."""
+    steps = [
+        {"label": "Add your first client", "done": _has_any(conn, tenant_id, "clients"),
+         "href": "/clients/new"},
+        {"label": "Start a project", "done": _has_any(conn, tenant_id, "projects"),
+         "href": "/projects/new"},
+        {"label": "Create a gallery", "done": _has_any(conn, tenant_id, "galleries"),
+         "href": "/galleries/new"},
+        {"label": "Send an invoice", "done": _has_any(conn, tenant_id, "invoices"),
+         "href": "/invoices/new"},
+        {"label": "Publish your studio site", "done": bool(published), "href": "/settings/site"},
+    ]
+    done = sum(1 for s in steps if s["done"])
+    return {"steps": steps, "done": done, "total": len(steps), "complete": done == len(steps)}
