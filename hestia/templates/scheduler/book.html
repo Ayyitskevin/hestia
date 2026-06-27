@@ -20,6 +20,7 @@
           <div class="alert ok">✓ You're booked for <strong>{{ appt.starts_at }}</strong>.</div>
           <p class="muted">{% if appt.location %}Location: {{ appt.location }}. {% endif %}We've emailed
             you a confirmation and will send a reminder before your {{ appt.kind_label|lower }}. See you then!</p>
+          <div><a class="btn secondary" href="/book/{{ appt.token }}/calendar.ics">📅 Add to calendar</a></div>
         </div>
       {% else %}
         <div class="card stack">
