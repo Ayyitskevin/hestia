@@ -22,6 +22,7 @@
 
 {% if appt.status == 'confirmed' %}
 <div class="alert ok">✓ Confirmed for <strong>{{ appt.starts_at }}</strong>{% if appt.location %} · {{ appt.location }}{% endif %}. A confirmation was sent; a reminder is queued.</div>
+<div style="margin:-4px 0 16px"><a class="btn ghost" href="/schedule/{{ appt.id }}/calendar.ics">📅 Add to calendar</a></div>
 {% endif %}
 
 {% if appt.status == 'proposed' %}

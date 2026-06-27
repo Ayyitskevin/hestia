@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from ..auth import context_from_session
 from ..crm import list_clients, list_projects
@@ -11,6 +11,7 @@ from ..scheduler import (
     APPOINTMENT_KINDS,
     KIND_LABELS,
     agenda,
+    appointment_ics,
     appointment_public_url,
     cancel_appointment,
     confirm_appointment,
@@ -90,6 +91,21 @@ def appointment_detail(request: Request, appt_id: int):
     book_url = appointment_public_url(settings_of(request), appt["token"])
     return render(request, "scheduler/appointment_detail.html", auth=auth, appt=appt,
                   book_url=book_url)
+
+
+@router.get("/{appt_id}/calendar.ics")
+def appointment_calendar(request: Request, appt_id: int):
+    """Download the confirmed session as an .ics for the owner's own calendar."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        appt = get_appointment(conn, auth.tenant["id"], appt_id)
+        ics = appointment_ics(conn, appt) if appt else None
+    if not ics:
+        return RedirectResponse(f"/schedule/{appt_id}", status_code=303)
+    return Response(content=ics, media_type="text/calendar",
+                    headers={"Content-Disposition": 'attachment; filename="session.ics"'})
 
 
 @router.post("/{appt_id}/confirm")

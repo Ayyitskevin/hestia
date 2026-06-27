@@ -284,9 +284,61 @@ def _notify(settings: Settings, payload: dict) -> None:
         body = f"Hi {who},\n\n{opener} on {when}."
         if appt["location"]:
             body += f"\nLocation: {appt['location']}"
+        body += f"\n\nAdd to your calendar: {appointment_ics_url(settings, appt['token'])}"
         body += "\n\nSee you then!"
         notify(conn, settings, to=to, subject=subject, body=body, tenant_id=appt["tenant_id"])
 
 
 def appointment_public_url(settings: Settings, token: str) -> str:
     return f"{settings.public_url.rstrip('/')}/book/{token}"
+
+
+def appointment_ics_url(settings: Settings, token: str) -> str:
+    return f"{settings.public_url.rstrip('/')}/book/{token}/calendar.ics"
+
+
+def _ics_escape(text: str) -> str:
+    """Escape a value for an iCalendar text field (RFC 5545 §3.3.11)."""
+    return (str(text).replace("\\", "\\\\").replace(";", "\\;")
+            .replace(",", "\\,").replace("\n", "\\n"))
+
+
+def appointment_ics(conn: sqlite3.Connection, appt: dict) -> str | None:
+    """An iCalendar (.ics) VEVENT for a confirmed appointment, or None when its
+    free-text ``starts_at`` can't be parsed into a calendar timestamp. The event
+    time is floating (no zone) — exactly the local time the studio typed — while
+    DTSTAMP is the UTC build time. Duration comes from the appointment."""
+    if appt.get("status") != "confirmed":
+        return None
+    starts_at = (appt.get("starts_at") or "").strip()
+    if not starts_at:
+        return None
+    minutes = max(1, int(appt.get("duration_minutes") or 60))
+    row = conn.execute(
+        "SELECT strftime('%Y%m%dT%H%M%S', datetime(?))    AS dtstart, "
+        "       strftime('%Y%m%dT%H%M%S', datetime(?, ?)) AS dtend, "
+        "       strftime('%Y%m%dT%H%M%SZ', 'now')         AS dtstamp",
+        (starts_at, starts_at, f"+{minutes} minutes"),
+    ).fetchone()
+    if not row or not row["dtstart"]:
+        return None                                        # unparseable time → no event
+    desc = []
+    if appt.get("kind_label"):
+        desc.append(appt["kind_label"])
+    if appt.get("client_name"):
+        desc.append(f"with {appt['client_name']}")
+    lines = [
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Hestia//Scheduler//EN",
+        "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT",
+        f"UID:hestia-appt-{appt['id']}@hestia",
+        f"DTSTAMP:{row['dtstamp']}",
+        f"DTSTART:{row['dtstart']}",
+        f"DTEND:{row['dtend'] or row['dtstart']}",
+        f"SUMMARY:{_ics_escape(appt.get('title') or 'Session')}",
+    ]
+    if appt.get("location"):
+        lines.append(f"LOCATION:{_ics_escape(appt['location'])}")
+    if desc:
+        lines.append(f"DESCRIPTION:{_ics_escape(' · '.join(desc))}")
+    lines += ["END:VEVENT", "END:VCALENDAR"]
+    return "\r\n".join(lines) + "\r\n"
