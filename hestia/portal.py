@@ -22,7 +22,7 @@ from .delivery import delivery_url
 from .invoices import invoice_public_url, list_invoices
 from .payment_plans import get_payment_plan, list_payment_plans
 from .questionnaires import list_questionnaires
-from .scheduler import list_appointments
+from .scheduler import appointment_ics_url, list_appointments
 from .tenants import get_tenant
 from .testimonials import pending_testimonial, testimonial_public_url
 
@@ -106,6 +106,8 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
                     if a["status"] in ("proposed", "confirmed")]
     for a in appointments:
         a["book_url"] = f"{settings.public_url.rstrip('/')}/book/{a['token']}"
+        # a confirmed session can be added to the client's own calendar
+        a["calendar_url"] = appointment_ics_url(settings, a["token"]) if a["status"] == "confirmed" else None
 
     pending = pending_testimonial(conn, tenant_id, client["id"])
     review_url = testimonial_public_url(settings, pending["token"]) if pending else None
