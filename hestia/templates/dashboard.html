@@ -16,6 +16,22 @@
   </div>
 </div>
 
+{% if not setup.complete %}
+<div class="card stack" style="margin-bottom:18px">
+  <h3>Get started <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ setup.done }}/{{ setup.total }} done</span></h3>
+  <p class="muted">A few steps to get your studio running. This disappears once you're set up.</p>
+  <div class="stack" style="gap:6px">
+    {% for s in setup.steps %}
+    <div style="display:flex; align-items:center; gap:9px">
+      <span style="{{ 'color:var(--accent, #2a7)' if s.done else '' }}">{{ '✓' if s.done else '○' }}</span>
+      {% if s.done %}<span class="muted" style="text-decoration:line-through">{{ s.label }}</span>
+      {% else %}<a href="{{ s.href }}">{{ s.label }}</a>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div class="health-strip" style="margin-bottom:18px">
   <a class="health-item" href="/clients"><span class="svc">{{ counts.clients }}</span> <span class="url">clients</span></a>
   <a class="health-item" href="/projects"><span class="svc">{{ counts.projects }}</span> <span class="url">projects</span></a>

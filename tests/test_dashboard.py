@@ -4,7 +4,7 @@ from conftest import login_owner, onboard_studio
 
 from hestia.contracts import create_contract, send_contract
 from hestia.crm import create_client, create_project
-from hestia.dashboard import money_snapshot, needs_attention
+from hestia.dashboard import money_snapshot, needs_attention, setup_checklist
 from hestia.db import connect
 from hestia.delivery import enable_delivery
 from hestia.galleries import create_gallery, publish_gallery
@@ -169,6 +169,45 @@ def test_money_snapshot_is_tenant_scoped(conn, settings):
     conn.commit()
     snap = money_snapshot(conn, a["id"])                         # A sees none of B's money
     assert snap["month"]["revenue_cents"] == 0 and snap["ar"]["outstanding_cents"] == 0
+
+
+def test_setup_checklist_tracks_activation(conn, settings):
+    t = create_tenant(conn, name="New Studio", shoot_type="wedding")
+    fresh = setup_checklist(conn, t["id"], published=False)
+    assert fresh["done"] == 0 and fresh["complete"] is False
+    assert [s["done"] for s in fresh["steps"]] == [False] * 5
+
+    c = create_client(conn, tenant_id=t["id"], name="Cli")
+    create_project(conn, tenant_id=t["id"], name="P", client_id=c["id"], shoot_type="wedding",
+                   status="lead")
+    create_gallery(conn, tenant_id=t["id"], title="G")
+    create_invoice(conn, settings, tenant_id=t["id"], title="Inv", amount_cents=1000)
+    conn.commit()
+
+    done = setup_checklist(conn, t["id"], published=True)        # all four + published
+    assert done["done"] == 5 and done["complete"] is True
+
+
+def test_dashboard_shows_get_started_for_fresh_studio(client):
+    login_owner(client, onboard_studio(client, name="Fresh", email="fresh@example.com"))
+    assert "Get started" in client.get("/dashboard").text
+
+
+def test_dashboard_hides_get_started_once_set_up(client, app):
+    login_owner(client, onboard_studio(client, name="Setup", email="setup@example.com"))
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Cli")
+        create_project(conn, tenant_id=tid, name="P", client_id=c["id"], shoot_type="wedding",
+                       status="lead")
+        create_gallery(conn, tenant_id=tid, title="G")
+        create_invoice(conn, app.state.settings, tenant_id=tid, title="Inv", amount_cents=1000)
+        conn.commit()
+    finally:
+        conn.close()
+    client.post("/settings/site", data={"headline": "Hi", "published": "1"})  # last step
+    assert "Get started" not in client.get("/dashboard").text
 
 
 def test_dashboard_page_shows_money_card(client, app):
