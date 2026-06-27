@@ -212,6 +212,22 @@ def _remind_overdue(db_path: str | Path, settings: Settings) -> int:
         conn.close()
 
 
+def _remind_pending_documents(db_path: str | Path, settings: Settings) -> int:
+    """Worker-cadence wrapper: nudge clients sitting on an unsigned contract or an
+    unfilled questionnaire, each on its own per-document cooldown — mirrors the
+    overdue-invoice sweep. Deferred imports keep the jobs↔modules edge one-way."""
+    from .contracts import send_unsigned_reminders
+    from .db import connect
+    from .questionnaires import send_incomplete_reminders
+    conn = connect(db_path)
+    try:
+        n = send_unsigned_reminders(conn, settings) + send_incomplete_reminders(conn, settings)
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
 def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_sleep: float = 0.5,
                reclaim_interval: float = 60.0, remind_interval: float = 3600.0) -> None:
     """Background loop: drain the queue, periodically reclaim orphaned jobs, and
@@ -236,6 +252,10 @@ def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_slee
         if time.monotonic() - last_remind >= remind_interval:
             try:
                 _remind_overdue(db_path, settings)
+            except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
+                pass
+            try:
+                _remind_pending_documents(db_path, settings)
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
                 pass
             last_remind = time.monotonic()
