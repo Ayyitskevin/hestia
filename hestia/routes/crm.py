@@ -32,6 +32,7 @@ from ..db import audit
 from ..invoices import list_invoices, money
 from ..payment_plans import list_payment_plans
 from ..portal import enable_portal, portal_url, regenerate_portal_token
+from ..project_tasks import add_task, delete_task, list_tasks, task_progress, toggle_task
 from ..questionnaires import list_questionnaires
 from ..referral_rewards import credit_balance, list_credits, redeem_credit
 from ..referrals import referral_code_for, referral_link
@@ -265,12 +266,15 @@ def project_detail(request: Request, project_id: int):
         appointments = list_appointments(conn, auth.tenant["id"], project_id=project_id)
         packs = list_packs(conn, auth.tenant["id"], project_id=project_id)
         recipes = recipes_for(project["shoot_type"])
+        tasks = list_tasks(conn, auth.tenant["id"], project_id)
+        progress = task_progress(conn, auth.tenant["id"], project_id)
         referred_by = get_client(conn, auth.tenant["id"], project["referred_by_client_id"]) \
             if project.get("referred_by_client_id") else None
     return render(request, "crm/project_detail.html", auth=auth, project=project,
                   galleries=galleries, invoices=invoices, plans=plans, contracts=contracts,
                   questionnaires=questionnaires, appointments=appointments, packs=packs,
-                  recipes=recipes, statuses=PROJECT_STATUSES, referred_by=referred_by)
+                  recipes=recipes, statuses=PROJECT_STATUSES, referred_by=referred_by,
+                  tasks=tasks, task_progress=progress)
 
 
 @router.post("/projects/{project_id}/status")
@@ -280,4 +284,35 @@ def project_status(request: Request, project_id: int, status: str = Form(...)):
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_project_status(conn, auth.tenant["id"], project_id, status)
+    return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/projects/{project_id}/tasks")
+def project_task_add(request: Request, project_id: int, label: str = Form("")):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if get_project(conn, auth.tenant["id"], project_id):   # only on a project you own
+            add_task(conn, tenant_id=auth.tenant["id"], project_id=project_id, label=label)
+    return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/projects/{project_id}/tasks/{task_id}/toggle")
+def project_task_toggle(request: Request, project_id: int, task_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        toggle_task(conn, auth.tenant["id"], task_id)
+    return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/projects/{project_id}/tasks/{task_id}/delete")
+def project_task_delete(request: Request, project_id: int, task_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        delete_task(conn, auth.tenant["id"], task_id)
     return RedirectResponse(f"/projects/{project_id}", status_code=303)

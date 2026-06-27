@@ -35,6 +35,30 @@
   </div>
 
   <div class="card stack">
+    <h3>Checklist{% if task_progress.total %} <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ task_progress.done }}/{{ task_progress.total }} done</span>{% endif %}</h3>
+    {% for t in tasks %}
+    <div style="display:flex; align-items:center; gap:8px">
+      <form method="post" action="/projects/{{ project.id }}/tasks/{{ t.id }}/toggle" style="margin:0">
+        {% include "_csrf.html" %}
+        <button class="btn ghost" type="submit" title="Toggle done" style="padding:2px 9px">{{ '✓' if t.done else '○' }}</button>
+      </form>
+      <span class="{{ 'muted' if t.done else '' }}" style="flex:1{% if t.done %}; text-decoration:line-through{% endif %}">{{ t.label }}</span>
+      <form method="post" action="/projects/{{ project.id }}/tasks/{{ t.id }}/delete" style="margin:0">
+        {% include "_csrf.html" %}
+        <button class="btn ghost" type="submit" title="Delete" style="padding:2px 9px">✕</button>
+      </form>
+    </div>
+    {% else %}
+    <p class="muted">No tasks yet — track your deliverables so nothing slips.</p>
+    {% endfor %}
+    <form method="post" action="/projects/{{ project.id }}/tasks" style="display:flex; gap:8px; margin-top:6px">
+      {% include "_csrf.html" %}
+      <input type="text" name="label" placeholder="Add a task — e.g. send contract" style="flex:1">
+      <button class="btn secondary" type="submit">Add</button>
+    </form>
+  </div>
+
+  <div class="card stack">
     <h3>Galleries</h3>
     {% if galleries %}
       <table>
