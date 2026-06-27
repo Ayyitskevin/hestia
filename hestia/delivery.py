@@ -62,6 +62,28 @@ def get_gallery_by_delivery_token(conn: sqlite3.Connection, token: str) -> dict 
     return dict(row) if row else None
 
 
+def set_delivery_expiry(conn: sqlite3.Connection, tenant_id: str, gallery_id: int,
+                        expires_at: str) -> None:
+    """Set (ISO date) or clear (empty) the delivery link's expiry. The link stays
+    live through that date and 410s after; clearing makes it never expire again."""
+    conn.execute(
+        "UPDATE galleries SET delivery_expires_at = ? WHERE id = ? AND tenant_id = ?",
+        ((expires_at or "").strip() or None, gallery_id, tenant_id),
+    )
+
+
+def delivery_expired(conn: sqlite3.Connection, gallery: dict) -> bool:
+    """True once the gallery's delivery link is past its expiry date — available
+    through the date itself, gone the day after. A free-text/unparseable or absent
+    date never expires (the link keeps working), matching the reminder scheduler's
+    forgiving date handling."""
+    exp = (gallery.get("delivery_expires_at") or "").strip()
+    if not exp:
+        return False
+    row = conn.execute("SELECT date(?) AS d, date('now') AS today", (exp,)).fetchone()
+    return bool(row["d"]) and row["d"] < row["today"]
+
+
 def delivery_url(settings: Settings, token: str) -> str:
     return f"{settings.public_url.rstrip('/')}/d/{token}"
 

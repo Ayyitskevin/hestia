@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Link expired — {{ tenant.name if tenant else 'Gallery' }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name if tenant else '' }}</div>
+      <h1>{{ gallery.title }}</h1>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="padding-top:32px">
+      <div class="card stack">
+        <h3>⌛ This download link has expired</h3>
+        <p class="muted">{% if gallery.delivery_expires_at %}This gallery was available to download through {{ gallery.delivery_expires_at[:10] }}. {% endif %}Reach out to {{ tenant.name if tenant else 'your photographer' }} and they'll send you a fresh link.</p>
+      </div>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">Delivered with 🔥 by {{ tenant.name if tenant else 'Hestia' }} on Hestia</div></footer>
+</body>
+</html>
