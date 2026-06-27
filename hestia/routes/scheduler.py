@@ -13,13 +13,16 @@ from ..scheduler import (
     agenda,
     appointment_ics,
     appointment_public_url,
+    calendar_feed_url,
     cancel_appointment,
     complete_appointment,
     confirm_appointment,
     create_appointment,
+    ensure_calendar_token,
     get_appointment,
     list_appointments,
     mark_no_show,
+    regenerate_calendar_token,
     schedule_ics,
 )
 from .deps import db_conn, render, settings_of
@@ -42,8 +45,20 @@ def schedule_list(request: Request):
             return RedirectResponse("/login", status_code=303)
         appointments = list_appointments(conn, auth.tenant["id"])
         upcoming = agenda(conn, auth.tenant["id"])
+        token = ensure_calendar_token(conn, auth.tenant["id"])   # mint on first view
+    feed_url = calendar_feed_url(settings_of(request), token)
     return render(request, "scheduler/schedule.html", auth=auth, appointments=appointments,
-                  agenda=upcoming)
+                  agenda=upcoming, feed_url=feed_url)
+
+
+@router.post("/calendar/regenerate")     # literal path before /{appt_id} so it wins
+def schedule_calendar_regenerate(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        regenerate_calendar_token(conn, auth.tenant["id"])
+    return RedirectResponse("/schedule", status_code=303)
 
 
 @router.get("/new")

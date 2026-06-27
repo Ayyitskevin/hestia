@@ -11,11 +11,27 @@ from ..scheduler import (
     book_appointment,
     cancel_by_token,
     get_appointment_by_token,
+    get_tenant_by_calendar_token,
+    schedule_ics,
 )
 from ..tenants import get_tenant
 from .deps import db_conn, render, settings_of
 
 router = APIRouter()
+
+
+@router.get("/calendar/{token}.ics")
+def studio_calendar_feed(request: Request, token: str):
+    """Public, token-authorized .ics feed of a studio's sessions — the URL a calendar
+    app subscribes to (no login, since the app can't carry a session). Unknown token →
+    404; a valid one returns a live, always-parseable calendar (possibly empty)."""
+    with db_conn(request) as conn:
+        tenant = get_tenant_by_calendar_token(conn, token)
+        if not tenant:
+            return Response(status_code=404)
+        ics = schedule_ics(conn, tenant["id"], days=365)
+    return Response(content=ics, media_type="text/calendar",
+                    headers={"Content-Disposition": 'inline; filename="studio.ics"'})
 
 
 @router.get("/book/{token}")

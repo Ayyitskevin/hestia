@@ -431,6 +431,38 @@ def appointment_ics(conn: sqlite3.Connection, appt: dict) -> str | None:
     return _wrap_calendar([block]) if block else None
 
 
+def ensure_calendar_token(conn: sqlite3.Connection, tenant_id: str) -> str:
+    """The studio's calendar-feed token, minting one on first use. Stable thereafter so
+    a calendar app that's already subscribed keeps working."""
+    row = conn.execute("SELECT calendar_token FROM tenants WHERE id = ?", (tenant_id,)).fetchone()
+    tok = (row["calendar_token"] if row else None) or ""
+    if tok:
+        return tok
+    tok = new_session_token()
+    conn.execute("UPDATE tenants SET calendar_token = ? WHERE id = ?", (tok, tenant_id))
+    return tok
+
+
+def regenerate_calendar_token(conn: sqlite3.Connection, tenant_id: str) -> str:
+    """Mint a fresh token, revoking the old feed URL (any existing subscriptions break)."""
+    tok = new_session_token()
+    conn.execute("UPDATE tenants SET calendar_token = ? WHERE id = ?", (tok, tenant_id))
+    return tok
+
+
+def get_tenant_by_calendar_token(conn: sqlite3.Connection, token: str) -> dict | None:
+    if not token or not token.strip():
+        return None
+    row = conn.execute(
+        "SELECT * FROM tenants WHERE calendar_token = ?", (token.strip(),)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def calendar_feed_url(settings: Settings, token: str) -> str:
+    return f"{settings.public_url.rstrip('/')}/calendar/{token}.ics"
+
+
 def schedule_ics(conn: sqlite3.Connection, tenant_id: str, *, days: int = 120) -> str:
     """A subscribe-able calendar of the studio's confirmed sessions — recent and
     upcoming within the window. Tenant-scoped (client join tenant-matched); sessions
