@@ -111,9 +111,20 @@ def notify(conn: sqlite3.Connection, settings: Settings, *, to: str, subject: st
     return build_emailer(settings).send(conn, msg)
 
 
-def list_emails(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 50) -> list[dict]:
-    rows = conn.execute(
-        "SELECT * FROM emails WHERE tenant_id = ? ORDER BY id DESC LIMIT ?",
-        (tenant_id, limit),
-    ).fetchall()
+def list_emails(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 50,
+                to_addr: str | None = None) -> list[dict]:
+    """Recent emails for a tenant, newest first. With ``to_addr``, the result is scoped to
+    one recipient BEFORE the limit — so a client's history isn't truncated by tenant-wide
+    volume (matched by address, case-insensitive)."""
+    if to_addr and to_addr.strip():
+        rows = conn.execute(
+            "SELECT * FROM emails WHERE tenant_id = ? AND lower(to_addr) = lower(?) "
+            "ORDER BY id DESC LIMIT ?",
+            (tenant_id, to_addr.strip(), limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM emails WHERE tenant_id = ? ORDER BY id DESC LIMIT ?",
+            (tenant_id, limit),
+        ).fetchall()
     return [dict(r) for r in rows]

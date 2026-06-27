@@ -183,10 +183,10 @@ def client_detail(request: Request, client_id: int):
         ref_code = referral_code_for(conn, auth.tenant["id"], client_id)
         balance = credit_balance(conn, auth.tenant["id"], client_id)
         credits = list_credits(conn, auth.tenant["id"], client_id)
-        # Messages we've sent this client (matched by recipient) — the in-app record.
-        addr = (client.get("email") or "").strip().lower()
-        messages = [e for e in list_emails(conn, auth.tenant["id"])
-                    if (e.get("to_addr") or "").strip().lower() == addr] if addr else []
+        # Messages we've sent this client (recipient-scoped so the per-client history
+        # isn't truncated by tenant-wide email volume) — the in-app record.
+        addr = (client.get("email") or "").strip()
+        messages = list_emails(conn, auth.tenant["id"], to_addr=addr) if addr else []
     settings = settings_of(request)
     portal_link = portal_url(settings, client["portal_token"]) \
         if client.get("portal_token") else None

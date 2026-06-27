@@ -213,11 +213,19 @@ def send_owner_digest_now(conn: sqlite3.Connection, settings: Settings,
     digest = build_owner_digest(conn, tenant_id, settings)
     if not digest:
         return None
-    result = notify(conn, settings, to=to, subject=digest["subject"], body=digest["body"],
-                    tenant_id=tenant_id, signed=False)
-    # stamp the cooldown so the weekly sweep won't mail a near-duplicate this week
-    conn.execute("UPDATE tenants SET last_digest_at = datetime('now') WHERE id = ?", (tenant_id,))
-    return result
+    # Claim-before-send: an atomic stamp with a short window. A double-click (or retry)
+    # within the window loses the claim (rowcount 0) and sends nothing — so the owner
+    # never gets two copies. The stamp also gates the weekly sweep for the cooldown. A
+    # deliberate manual resend after the window still works.
+    cur = conn.execute(
+        "UPDATE tenants SET last_digest_at = datetime('now') "
+        "WHERE id = ? AND (last_digest_at IS NULL OR last_digest_at < datetime('now', '-1 minute'))",
+        (tenant_id,),
+    )
+    if cur.rowcount == 0:
+        return None
+    return notify(conn, settings, to=to, subject=digest["subject"], body=digest["body"],
+                  tenant_id=tenant_id, signed=False)
 
 
 def set_digest_enabled(conn: sqlite3.Connection, tenant_id: str, enabled: bool) -> None:
