@@ -227,6 +227,48 @@ def cancel_appointment(conn: sqlite3.Connection, tenant_id: str, appt_id: int) -
     )
 
 
+def cancel_by_token(conn: sqlite3.Connection, settings: Settings, token: str) -> bool:
+    """Client self-cancel via their booking link. Moves a proposed/confirmed session
+    to canceled (once, guarded by the status set) and alerts the studio that the time
+    has freed up. Idempotent — a second submit or a re-opened link is a no-op."""
+    appt = get_appointment_by_token(conn, token)
+    if not appt or appt["status"] not in ("proposed", "confirmed"):
+        return False
+    cur = conn.execute(
+        "UPDATE appointments SET status = 'canceled', updated_at = datetime('now') "
+        "WHERE id = ? AND status IN ('proposed', 'confirmed')",
+        (appt["id"],),
+    )
+    if cur.rowcount == 0:
+        return False
+    tenant_id = appt["tenant_id"]
+    audit(conn, actor="client", action="appointment.canceled_by_client", tenant_id=tenant_id,
+          detail=f"{appt['title']} · {appt.get('starts_at') or ''}".strip(" ·"))
+    emit_event(conn, tenant_id=tenant_id, event="appointment.canceled",
+               context={"client_id": appt.get("client_id"), "project_id": appt.get("project_id"),
+                        "title": appt["title"]})
+    _alert_cancellation(conn, settings, tenant_id, appt)
+    return True
+
+
+def _alert_cancellation(conn: sqlite3.Connection, settings: Settings, tenant_id: str,
+                        appt: dict) -> None:
+    """Tell the studio owner a client canceled, so the freed time gets noticed."""
+    row = conn.execute(
+        "SELECT email FROM users WHERE tenant_id = ? AND role = 'owner' ORDER BY id LIMIT 1",
+        (tenant_id,),
+    ).fetchone()
+    to = row["email"] if row else ""
+    if not to:
+        return
+    who = appt.get("client_name") or "A client"
+    when = appt.get("starts_at") or "their session"
+    notify(conn, settings, to=to, signed=False,        # owner-facing alert → unsigned
+           subject=f"Canceled: {appt['title']}",
+           body=f"{who} canceled their {appt['title']} ({when}). That time is now open again.",
+           tenant_id=tenant_id)
+
+
 def _on_confirmed(conn: sqlite3.Connection, tenant_id: str, appt: dict) -> None:
     """Side effects of a confirmed booking: confirmation email, reminder, event."""
     enqueue(conn, kind="scheduler.notify", tenant_id=tenant_id,

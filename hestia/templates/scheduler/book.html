@@ -21,6 +21,10 @@
           <p class="muted">{% if appt.location %}Location: {{ appt.location }}. {% endif %}We've emailed
             you a confirmation and will send a reminder before your {{ appt.kind_label|lower }}. See you then!</p>
           <div><a class="btn secondary" href="/book/{{ appt.token }}/calendar.ics">📅 Add to calendar</a></div>
+          <form method="post" action="/book/{{ appt.token }}/cancel" style="margin-top:2px"
+                onsubmit="return confirm('Cancel this session? This frees the time for someone else.')">
+            <button class="btn ghost" type="submit">Need to cancel?</button>
+          </form>
         </div>
       {% else %}
         <div class="card stack">
