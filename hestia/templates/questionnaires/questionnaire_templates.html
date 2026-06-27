@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Questionnaire templates — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Questionnaire templates</h1>
+  <a class="btn secondary" href="/questionnaires">← Questionnaires</a>
+</div>
+<p class="muted">Save the question sets you reuse — your standard wedding intake, newborn prep,
+  or senior-session prep — and start a new questionnaire from one in a click. The new
+  questionnaire is an independent copy, so editing it never changes the template.</p>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>New template</h3>
+  <form method="post" action="/questionnaires/templates">
+    {% include "_csrf.html" %}
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" placeholder="Wedding intake" required>
+    <label for="prompts">Questions <span class="muted">(one per line)</span></label>
+    <textarea id="prompts" name="prompts" rows="10"
+      placeholder="What's the date and venue?&#10;Who are the key people we should photograph?&#10;Describe the vibe you're going for.&#10;What's your rough timeline for the day?"></textarea>
+    <div class="form-actions"><button class="btn" type="submit">Save template</button></div>
+  </form>
+</div>
+
+{% if templates %}
+{% for t in templates %}
+<div class="card stack" style="margin-top:18px">
+  <div class="page-title" style="margin:0">
+    <h3 style="margin:0">{{ t.name }}
+      <span class="muted" style="font-size:.8rem; font-weight:normal">· {{ t.prompt_count }} question{{ '' if t.prompt_count == 1 else 's' }}</span></h3>
+    <div style="display:flex; gap:8px">
+      <a class="btn secondary" href="/questionnaires/new?template_id={{ t.id }}">Use</a>
+      <form method="post" action="/questionnaires/templates/{{ t.id }}/delete"
+            onsubmit="return confirm('Delete this template? Questionnaires already created from it are unaffected.')">
+        {% include "_csrf.html" %}<button class="btn ghost" type="submit">Delete</button>
+      </form>
+    </div>
+  </div>
+  {% if t.prompts %}
+  <details>
+    <summary class="muted" style="cursor:pointer; font-size:.85rem">Preview questions</summary>
+    <div class="card" style="margin-top:8px; background:#faf8f4">
+      <pre style="white-space:pre-wrap; font-family:inherit; margin:0">{{ t.prompts }}</pre>
+    </div>
+  </details>
+  {% else %}
+  <p class="muted" style="font-size:.85rem; margin:0">No questions yet — this template is empty.</p>
+  {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<p class="muted" style="margin-top:18px">No templates yet — save one above to reuse it later.</p>
+{% endif %}
+{% endblock %}

@@ -12,9 +12,13 @@ from ..db import audit
 from ..email import notify
 from ..questionnaires import (
     create_questionnaire,
+    delete_questionnaire_template,
     get_questionnaire,
+    get_questionnaire_template,
+    list_questionnaire_templates,
     list_questionnaires,
     questionnaire_public_url,
+    save_questionnaire_template,
     send_questionnaire,
     void_questionnaire,
 )
@@ -43,15 +47,55 @@ def questionnaires_list(request: Request):
 
 @router.get("/new")
 def questionnaire_new(request: Request, project_id: int | None = None,
-                      client_id: int | None = None):
+                      client_id: int | None = None, template_id: int | None = None):
     with db_conn(request) as conn:
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         clients = list_clients(conn, auth.tenant["id"])
         projects = list_projects(conn, auth.tenant["id"])
+        templates = list_questionnaire_templates(conn, auth.tenant["id"])
+        prefill_prompts = ""
+        if template_id:                         # "start from template" pre-fills the questions
+            tpl = get_questionnaire_template(conn, auth.tenant["id"], template_id)
+            prefill_prompts = tpl["prompts"] if tpl else ""
     return render(request, "questionnaires/questionnaire_new.html", auth=auth, clients=clients,
-                  projects=projects, preselect_project=project_id, preselect_client=client_id)
+                  projects=projects, preselect_project=project_id, preselect_client=client_id,
+                  templates=templates, prefill_prompts=prefill_prompts)
+
+
+# ── reusable question-set templates (must precede /{qid} so "templates" wins) ──
+
+
+@router.get("/templates")
+def questionnaire_templates_page(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        templates = list_questionnaire_templates(conn, auth.tenant["id"])
+    return render(request, "questionnaires/questionnaire_templates.html", auth=auth,
+                  templates=templates)
+
+
+@router.post("/templates")
+def questionnaire_template_create(request: Request, name: str = Form(""), prompts: str = Form("")):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        save_questionnaire_template(conn, tenant_id=auth.tenant["id"], name=name, prompts=prompts)
+    return RedirectResponse("/questionnaires/templates", status_code=303)
+
+
+@router.post("/templates/{template_id}/delete")
+def questionnaire_template_delete(request: Request, template_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        delete_questionnaire_template(conn, auth.tenant["id"], template_id)
+    return RedirectResponse("/questionnaires/templates", status_code=303)
 
 
 @router.post("")
