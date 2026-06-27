@@ -98,7 +98,7 @@ def signup_submit(request: Request, name: str = Form(...), email: str = Form(...
                            password=password, role="owner", verified=0)
         token = create_verification(conn, settings, user_id=user["id"])
         link = f"{settings.public_url.rstrip('/')}/verify/{token}"
-        notify(conn, settings, to=email_norm, tenant_id=tenant["id"],
+        notify(conn, settings, to=email_norm, tenant_id=tenant["id"], signed=False,
                subject="Verify your email to activate your Hestia studio",
                body=(f"Welcome to Hestia!\n\nConfirm your email to activate "
                      f"{tenant['name']}:\n{link}\n\nThis link expires in 2 days. "
@@ -132,7 +132,7 @@ def forgot_submit(request: Request, email: str = Form(...)):
         if user and user["tenant_id"]:
             token = create_reset(conn, settings, user_id=user["id"])
             link = f"{settings.public_url.rstrip('/')}/reset/{token}"
-            notify(conn, settings, to=user["email"], tenant_id=user["tenant_id"],
+            notify(conn, settings, to=user["email"], tenant_id=user["tenant_id"], signed=False,
                    subject="Reset your Hestia password",
                    body=(f"A password reset was requested for your account.\n\n"
                          f"Reset it here (the link expires in 1 hour):\n{link}\n\n"

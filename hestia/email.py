@@ -85,11 +85,28 @@ def build_emailer(settings: Settings):
     return MockEmailer()
 
 
+def _with_signature(conn: sqlite3.Connection, tenant_id: str, body: str) -> str:
+    """Append the studio's email signature to a client-facing body, if it has one.
+    No signature set → body unchanged, so existing mail is untouched."""
+    row = conn.execute(
+        "SELECT email_signature FROM tenants WHERE id = ?", (tenant_id,)
+    ).fetchone()
+    sig = ((row["email_signature"] if row else "") or "").strip()
+    return f"{body.rstrip()}\n\n—\n{sig}" if sig else body
+
+
 def notify(conn: sqlite3.Connection, settings: Settings, *, to: str, subject: str,
-           body: str, tenant_id: str | None = None) -> str | None:
-    """Record/send one message. No-op (returns None) when there's no recipient."""
+           body: str, tenant_id: str | None = None, signed: bool = True) -> str | None:
+    """Record/send one message. No-op (returns None) when there's no recipient.
+
+    Client-facing mail is signed with the studio's signature (``signed=True``, the
+    default). Pass ``signed=False`` for platform/owner mail — signup verification,
+    password resets, lead alerts — which shouldn't carry the studio's client-facing
+    sign-off."""
     if not to or not to.strip():
         return None
+    if signed and tenant_id:
+        body = _with_signature(conn, tenant_id, body)
     msg = EmailMessage(to=to.strip(), subject=subject, body=body, tenant_id=tenant_id)
     return build_emailer(settings).send(conn, msg)
 
