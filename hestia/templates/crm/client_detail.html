@@ -8,7 +8,10 @@
       {{ client.email or "no email" }}{% if client.phone %} · {{ client.phone }}{% endif %}
     </span>
   </div>
-  <a class="btn" href="/projects/new?client_id={{ client.id }}">+ New project</a>
+  <div style="display:flex; gap:8px">
+    {% if client.email %}<a class="btn secondary" href="/clients/{{ client.id }}/email">✉ Email client</a>{% endif %}
+    <a class="btn" href="/projects/new?client_id={{ client.id }}">+ New project</a>
+  </div>
 </div>
 
 {% if client.notes %}<div class="card" style="margin-bottom:18px"><p class="muted">{{ client.notes }}</p></div>{% endif %}
@@ -83,6 +86,25 @@
           </form>
           {% else %}<span class="muted">—</span>{% endif %}
         </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if messages %}
+<div class="card stack" style="margin-bottom:18px">
+  <h3>Messages</h3>
+  <p class="muted" style="font-size:.85rem">Emails Hestia has sent {{ client.name }}.</p>
+  <table>
+    <thead><tr><th>Subject</th><th>Sent</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for m in messages %}
+      <tr>
+        <td>{{ m.subject or "—" }}</td>
+        <td class="muted">{{ m.created_at }}</td>
+        <td><span class="pill {{ 'on' if m.status in ('sent', 'recorded') else 'off' }}">{{ m.status }}</span></td>
       </tr>
       {% endfor %}
     </tbody>

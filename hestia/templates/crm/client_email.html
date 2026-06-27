@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Email {{ client.name }} — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Email {{ client.name }}</h1>
+  <a class="btn secondary" href="/clients/{{ client.id }}">← Back</a>
+</div>
+<p class="muted">To <strong>{{ client.email }}</strong>. Pre-filled from your
+  <a href="/settings/messages">Reply to an inquiry</a> template — edit it as you like. Your
+  signature is added automatically.</p>
+
+<div class="card stack">
+  <form method="post" action="/clients/{{ client.id }}/email">
+    {% include "_csrf.html" %}
+    <label for="subject">Subject</label>
+    <input type="text" id="subject" name="subject" value="{{ subject }}" required>
+    <label for="body">Message</label>
+    <textarea id="body" name="body" rows="12">{{ body }}</textarea>
+    <div class="form-actions">
+      <button class="btn" type="submit">Send email</button>
+      <a class="btn ghost" href="/clients/{{ client.id }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

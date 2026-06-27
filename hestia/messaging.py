@@ -16,6 +16,14 @@ import sqlite3
 
 # kind -> default template + the variables it may use (the editor shows these as hints).
 TEMPLATES: dict[str, dict] = {
+    "inquiry_reply": {
+        "label": "Reply to an inquiry",
+        "subject": "Thanks for reaching out to {studio}!",
+        "body": ("Hi {client},\n\nThank you so much for your inquiry — I'd love to hear more "
+                 "about what you have in mind, and I'd be glad to put together the details for "
+                 "you.\n\nWhat's the best way to reach you for a quick chat?\n\nWarmly,\n{studio}"),
+        "variables": ["client", "studio"],
+    },
     "appointment_confirm": {
         "label": "Session confirmed",
         "subject": "Confirmed: {title} on {when}",
