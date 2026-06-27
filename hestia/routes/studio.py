@@ -17,6 +17,7 @@ from ..tenants import (
     can_use_style_profile,
     get_tenant,
     get_tenant_by_slug,
+    set_email_signature,
     set_tax_rate,
     set_vision_style,
 )
@@ -78,7 +79,7 @@ def public_inquire(request: Request, slug: str, name: str = Form(...), email: st
         attribute_referral(conn, tenant["id"], project["id"], ref)
         # Alert the studio that a lead came in (mock records it; smtp also sends).
         inbox = _studio_inbox(conn, tenant["id"], profile)
-        notify(conn, settings_of(request), to=inbox, tenant_id=tenant["id"],
+        notify(conn, settings_of(request), to=inbox, tenant_id=tenant["id"], signed=False,
                subject=f"New {shoot_type} inquiry from {name or email or 'website'}",
                body=(f"{name or 'Someone'} just inquired via your studio site.\n\n"
                      f"Email: {email or '—'}\nShoot type: {shoot_type}\n"
@@ -139,6 +140,16 @@ def tax_settings_save(request: Request, tax_rate: str = Form("0")):
         except (TypeError, ValueError):
             bps = 0
         set_tax_rate(conn, auth.tenant["id"], bps)
+    return RedirectResponse("/settings/site", status_code=303)
+
+
+@router.post("/settings/signature")
+def signature_save(request: Request, email_signature: str = Form("")):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        set_email_signature(conn, auth.tenant["id"], email_signature)
     return RedirectResponse("/settings/site", status_code=303)
 
 

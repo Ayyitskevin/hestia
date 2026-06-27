@@ -44,6 +44,19 @@
 </div>
 
 <div class="card stack" style="margin-top:18px">
+  <h3>Email signature</h3>
+  <p class="muted">Signed onto every client email Hestia sends for you — confirmations,
+    reminders, invoices, gallery links, questionnaires. Your name, studio, phone, site.
+    Account mail (sign-in, password resets, lead alerts) stays plain. Leave blank for none.</p>
+  <form method="post" action="/settings/signature">
+    {% include "_csrf.html" %}
+    <textarea name="email_signature" rows="4"
+      placeholder="Warm regards,&#10;{{ tenant.name }}&#10;(555) 123-4567 · {{ settings.public_url }}/studio/{{ tenant.slug }}">{{ tenant.email_signature }}</textarea>
+    <div class="form-actions"><button class="btn" type="submit">Save signature</button></div>
+  </form>
+</div>
+
+<div class="card stack" style="margin-top:18px">
   <h3>AI style profile</h3>
   {% if can_style %}
     <p class="muted">Describe the look you cull and sell toward — your culling and hero picks

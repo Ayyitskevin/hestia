@@ -100,6 +100,13 @@ def set_vision_style(conn: sqlite3.Connection, tenant_id: str, style: str) -> No
     )
 
 
+def set_email_signature(conn: sqlite3.Connection, tenant_id: str, signature: str) -> None:
+    """Set the studio's email signature — free text appended to client-facing mail."""
+    conn.execute(
+        "UPDATE tenants SET email_signature = ? WHERE id = ?", (signature.strip()[:600], tenant_id)
+    )
+
+
 # ── Users ───────────────────────────────────────────────────────────────────
 
 
