@@ -331,6 +331,7 @@ def _schedule_reminder(conn: sqlite3.Connection, tenant_id: str, appt: dict) -> 
 @register("scheduler.notify")
 def _notify(settings: Settings, payload: dict) -> None:
     """Send a confirmation or reminder email for an appointment, if still on."""
+    from . import messaging
     from .crm import get_client
     from .db import get_db
     from .tenants import get_tenant
@@ -346,21 +347,17 @@ def _notify(settings: Settings, payload: dict) -> None:
         if not to:
             return
         tenant = get_tenant(conn, appt["tenant_id"])
-        studio = (tenant or {}).get("name", "your photographer")
-        who = (client or {}).get("name") or "there"
-        when = appt["starts_at"]
-        if kind == "reminder":
-            subject = f"Reminder: {appt['title']} on {when}"
-            opener = f"A friendly reminder that your {appt['title'].lower()} with {studio} is coming up"
-        else:
-            subject = f"Confirmed: {appt['title']} on {when}"
-            opener = f"Your {appt['title'].lower()} with {studio} is confirmed"
-        body = f"Hi {who},\n\n{opener} on {when}."
-        if appt["location"]:
-            body += f"\nLocation: {appt['location']}"
-        body += f"\n\nAdd to your calendar: {appointment_ics_url(settings, appt['token'])}"
-        body += "\n\nSee you then!"
-        notify(conn, settings, to=to, subject=subject, body=body, tenant_id=appt["tenant_id"])
+        ctx = {
+            "client": (client or {}).get("name") or "there",
+            "studio": (tenant or {}).get("name", "your photographer"),
+            "title": appt["title"], "when": appt["starts_at"],
+            "location": f"\nLocation: {appt['location']}" if appt["location"] else "",
+            "calendar_url": appointment_ics_url(settings, appt["token"]),
+        }
+        tpl_kind = "appointment_reminder" if kind == "reminder" else "appointment_confirm"
+        msg = messaging.render(conn, appt["tenant_id"], tpl_kind, ctx)
+        notify(conn, settings, to=to, subject=msg["subject"], body=msg["body"],
+               tenant_id=appt["tenant_id"])
 
 
 def appointment_public_url(settings: Settings, token: str) -> str:

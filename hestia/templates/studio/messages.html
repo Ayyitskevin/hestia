@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Email templates — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Email templates</h1>
+  <a class="btn secondary" href="/settings/site">← Settings</a>
+</div>
+<p class="muted">Customize the emails Hestia sends your clients. Drop the
+  <span class="mono">{ }</span> variables anywhere — they're filled in per message. Your
+  signature is added automatically. Leave a template at its default until you want to change it.</p>
+
+{% for t in templates %}
+<div class="card stack" style="margin-top:18px">
+  <h3>{{ t.label }}
+    {% if t.customized %}<span class="pill on" style="font-size:.6rem; vertical-align:middle">customized</span>
+    {% else %}<span class="pill off" style="font-size:.6rem; vertical-align:middle">default</span>{% endif %}</h3>
+  <p class="muted" style="font-size:.85rem">Variables:
+    {% for v in t.variables %}<span class="mono">{{ '{' ~ v ~ '}' }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+  <form method="post" action="/settings/messages/{{ t.kind }}">
+    {% include "_csrf.html" %}
+    <label for="subj-{{ t.kind }}">Subject</label>
+    <input type="text" id="subj-{{ t.kind }}" name="subject" value="{{ t.subject }}">
+    <label for="body-{{ t.kind }}">Body</label>
+    <textarea id="body-{{ t.kind }}" name="body" rows="7">{{ t.body }}</textarea>
+    <div class="form-actions"><button class="btn" type="submit">Save</button></div>
+  </form>
+  {% if t.customized %}
+  <form method="post" action="/settings/messages/{{ t.kind }}" style="margin-top:-6px">
+    {% include "_csrf.html" %}
+    <input type="hidden" name="subject" value=""><input type="hidden" name="body" value="">
+    <button class="btn ghost" type="submit">Reset to default</button>
+  </form>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}
