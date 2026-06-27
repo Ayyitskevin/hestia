@@ -148,6 +148,10 @@
 <div class="card stack" style="margin-top:18px">
   <h3>Client proofing · {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }}</h3>
   <p class="muted">The frames your client loved (♥ in the grid below) and their notes — the signal for the album and print picks.</p>
+  {% if favorites %}
+  <div><a class="btn secondary" href="/galleries/{{ gallery.id }}/selects.txt">⬇ Download selects (.txt)</a>
+    <span class="muted" style="font-size:.85rem">— filename list for Lightroom / your editor</span></div>
+  {% endif %}
   {% if comments %}
     <table>
       <thead><tr><th>Frame</th><th>From</th><th>Note</th></tr></thead>
