@@ -9,6 +9,7 @@ from fastapi.responses import RedirectResponse
 
 from .. import messaging
 from ..auth import context_from_session
+from ..dashboard import set_digest_enabled
 from ..db import list_audit
 from ..email import list_emails, notify
 from ..ratelimit import enforce
@@ -126,6 +127,17 @@ def site_settings_save(request: Request, headline: str = Form(""), about: str = 
             return RedirectResponse("/login", status_code=303)
         upsert_profile(conn, tenant_id=auth.tenant["id"], headline=headline, about=about,
                        contact_email=contact_email, published=bool(published))
+    return RedirectResponse("/settings/site", status_code=303)
+
+
+@router.post("/settings/digest")
+def digest_settings_save(request: Request, digest_enabled: str = Form("")):
+    """Toggle the weekly owner digest. An unchecked box submits nothing → disabled."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        set_digest_enabled(conn, auth.tenant["id"], bool(digest_enabled))
     return RedirectResponse("/settings/site", status_code=303)
 
 

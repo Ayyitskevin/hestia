@@ -213,8 +213,17 @@ def send_owner_digest_now(conn: sqlite3.Connection, settings: Settings,
     digest = build_owner_digest(conn, tenant_id, settings)
     if not digest:
         return None
-    return notify(conn, settings, to=to, subject=digest["subject"], body=digest["body"],
-                  tenant_id=tenant_id, signed=False)
+    result = notify(conn, settings, to=to, subject=digest["subject"], body=digest["body"],
+                    tenant_id=tenant_id, signed=False)
+    # stamp the cooldown so the weekly sweep won't mail a near-duplicate this week
+    conn.execute("UPDATE tenants SET last_digest_at = datetime('now') WHERE id = ?", (tenant_id,))
+    return result
+
+
+def set_digest_enabled(conn: sqlite3.Connection, tenant_id: str, enabled: bool) -> None:
+    """Turn the weekly owner digest on or off for a studio."""
+    conn.execute("UPDATE tenants SET digest_enabled = ? WHERE id = ?",
+                 (1 if enabled else 0, tenant_id))
 
 
 def _claim_digest(conn: sqlite3.Connection, tenant_id: str, cooldown_days: int) -> bool:
@@ -237,7 +246,8 @@ def send_owner_digests(conn: sqlite3.Connection, settings: Settings, *,
     send. Returns the number sent."""
     rows = conn.execute(
         "SELECT id FROM tenants "
-        "WHERE last_digest_at IS NULL OR last_digest_at < datetime('now', ?) "
+        "WHERE (last_digest_at IS NULL OR last_digest_at < datetime('now', ?)) "
+        "  AND COALESCE(digest_enabled, 1) = 1 "       # honor the owner's opt-out
         "ORDER BY id LIMIT ?",
         (f"-{int(cooldown_days)} days", limit),
     ).fetchall()
