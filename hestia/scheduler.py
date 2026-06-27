@@ -377,13 +377,9 @@ def _ics_escape(text: str) -> str:
             .replace(",", "\\,").replace("\n", "\\n"))
 
 
-def appointment_ics(conn: sqlite3.Connection, appt: dict) -> str | None:
-    """An iCalendar (.ics) VEVENT for a confirmed appointment, or None when its
-    free-text ``starts_at`` can't be parsed into a calendar timestamp. The event
-    time is floating (no zone) — exactly the local time the studio typed — while
-    DTSTAMP is the UTC build time. Duration comes from the appointment."""
-    if appt.get("status") != "confirmed":
-        return None
+def _vevent_lines(conn: sqlite3.Connection, appt: dict) -> list[str] | None:
+    """The VEVENT block for one appointment, or None when its free-text ``starts_at``
+    won't parse. Floating local time (as typed); DTEND from duration; DTSTAMP UTC."""
     starts_at = (appt.get("starts_at") or "").strip()
     if not starts_at:
         return None
@@ -402,8 +398,7 @@ def appointment_ics(conn: sqlite3.Connection, appt: dict) -> str | None:
     if appt.get("client_name"):
         desc.append(f"with {appt['client_name']}")
     lines = [
-        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Hestia//Scheduler//EN",
-        "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT",
+        "BEGIN:VEVENT",
         f"UID:hestia-appt-{appt['id']}@hestia",
         f"DTSTAMP:{row['dtstamp']}",
         f"DTSTART:{row['dtstart']}",
@@ -414,5 +409,49 @@ def appointment_ics(conn: sqlite3.Connection, appt: dict) -> str | None:
         lines.append(f"LOCATION:{_ics_escape(appt['location'])}")
     if desc:
         lines.append(f"DESCRIPTION:{_ics_escape(' · '.join(desc))}")
-    lines += ["END:VEVENT", "END:VCALENDAR"]
+    lines.append("END:VEVENT")
+    return lines
+
+
+def _wrap_calendar(event_blocks: list[list[str]]) -> str:
+    """Wrap zero or more VEVENT blocks in a VCALENDAR (CRLF-terminated per RFC 5545)."""
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Hestia//Scheduler//EN",
+             "CALSCALE:GREGORIAN", "METHOD:PUBLISH"]
+    for block in event_blocks:
+        lines += block
+    lines.append("END:VCALENDAR")
     return "\r\n".join(lines) + "\r\n"
+
+
+def appointment_ics(conn: sqlite3.Connection, appt: dict) -> str | None:
+    """An iCalendar (.ics) for a single confirmed appointment, or None when it's not
+    confirmed or its time can't be placed on a calendar."""
+    if appt.get("status") != "confirmed":
+        return None
+    block = _vevent_lines(conn, appt)
+    return _wrap_calendar([block]) if block else None
+
+
+def schedule_ics(conn: sqlite3.Connection, tenant_id: str, *, days: int = 120) -> str:
+    """A subscribe-able calendar of the studio's confirmed sessions — recent and
+    upcoming within the window. Tenant-scoped (client join tenant-matched); sessions
+    with unparseable times are skipped. Always returns a valid (possibly empty) feed."""
+    rows = conn.execute(
+        "SELECT a.*, c.name AS client_name "
+        "  FROM appointments a "
+        "  LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id "
+        " WHERE a.tenant_id = ? AND a.status = 'confirmed' "
+        "   AND datetime(a.starts_at) IS NOT NULL "
+        "   AND datetime(a.starts_at) >= datetime('now', '-30 days') "
+        "   AND datetime(a.starts_at) <= datetime('now', ?) "
+        " ORDER BY datetime(a.starts_at)",
+        (tenant_id, f"+{int(days)} days"),
+    ).fetchall()
+    blocks = []
+    for r in rows:
+        a = dict(r)
+        a["kind_label"] = KIND_LABELS.get(a["kind"], a["kind"])
+        block = _vevent_lines(conn, a)
+        if block:
+            blocks.append(block)
+    return _wrap_calendar(blocks)
