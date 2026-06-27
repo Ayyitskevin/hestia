@@ -31,6 +31,15 @@ KIND_LABELS = {
     "other": "Other",
 }
 
+# proposed → confirmed → (completed | no_show), or canceled at any point before.
+STATUS_LABELS = {
+    "proposed": "Proposed",
+    "confirmed": "Confirmed",
+    "canceled": "Canceled",
+    "completed": "Completed",
+    "no_show": "No-show",
+}
+
 
 def create_appointment(
     conn: sqlite3.Connection, *, tenant_id: str, title: str, options: list[str],
@@ -81,6 +90,7 @@ def get_appointment(conn: sqlite3.Connection, tenant_id: str, appt_id: int) -> d
     a = dict(row)
     a["options"] = _options(conn, tenant_id, appt_id)
     a["kind_label"] = KIND_LABELS.get(a["kind"], a["kind"])
+    a["status_label"] = STATUS_LABELS.get(a["status"], a["status"])
     return a
 
 
@@ -100,6 +110,7 @@ def get_appointment_by_token(conn: sqlite3.Connection, token: str) -> dict | Non
     a = dict(row)
     a["options"] = _options(conn, a["tenant_id"], a["id"])
     a["kind_label"] = KIND_LABELS.get(a["kind"], a["kind"])
+    a["status_label"] = STATUS_LABELS.get(a["status"], a["status"])
     return a
 
 
@@ -135,6 +146,7 @@ def list_appointments(
     for r in conn.execute(sql, params).fetchall():
         a = dict(r)
         a["kind_label"] = KIND_LABELS.get(a["kind"], a["kind"])
+        a["status_label"] = STATUS_LABELS.get(a["status"], a["status"])
         out.append(a)
     return out
 
@@ -225,6 +237,26 @@ def cancel_appointment(conn: sqlite3.Connection, tenant_id: str, appt_id: int) -
         "WHERE id = ? AND tenant_id = ?",
         (appt_id, tenant_id),
     )
+
+
+def complete_appointment(conn: sqlite3.Connection, tenant_id: str, appt_id: int) -> bool:
+    """Close out a confirmed session as completed (once). True iff a row changed."""
+    cur = conn.execute(
+        "UPDATE appointments SET status = 'completed', updated_at = datetime('now') "
+        "WHERE id = ? AND tenant_id = ? AND status = 'confirmed'",
+        (appt_id, tenant_id),
+    )
+    return cur.rowcount > 0
+
+
+def mark_no_show(conn: sqlite3.Connection, tenant_id: str, appt_id: int) -> bool:
+    """Mark a confirmed session as a no-show (once). True iff a row changed."""
+    cur = conn.execute(
+        "UPDATE appointments SET status = 'no_show', updated_at = datetime('now') "
+        "WHERE id = ? AND tenant_id = ? AND status = 'confirmed'",
+        (appt_id, tenant_id),
+    )
+    return cur.rowcount > 0
 
 
 def cancel_by_token(conn: sqlite3.Connection, settings: Settings, token: str) -> bool:

@@ -8,17 +8,24 @@
       {{ appt.kind_label }}
       {% if appt.client_name %} · <a href="/clients/{{ appt.client_id }}">{{ appt.client_name }}</a>{% endif %}
       {% if appt.project_id %} · <a href="/projects/{{ appt.project_id }}">{{ appt.project_name }}</a>{% endif %}
-      {% if appt.status == 'canceled' %} · <span class="pill off">canceled</span>
-      {% else %} · <span class="pill {{ 'on' if appt.status == 'confirmed' else 'off' }}">{{ appt.status }}</span>{% endif %}
+      · <span class="pill {{ 'on' if appt.status in ('confirmed', 'completed') else 'off' }}">{{ appt.status_label }}</span>
     </span>
   </div>
   <div style="display:flex; gap:10px">
-    {% if appt.status != 'canceled' %}
+    {% if appt.status == 'confirmed' %}
+      <form method="post" action="/schedule/{{ appt.id }}/complete">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Mark complete</button></form>
+      <form method="post" action="/schedule/{{ appt.id }}/no-show"
+            onsubmit="return confirm('Mark this session as a no-show?')">{% include "_csrf.html" %}<button class="btn ghost" type="submit">No-show</button></form>
+    {% endif %}
+    {% if appt.status in ('proposed', 'confirmed') %}
       <form method="post" action="/schedule/{{ appt.id }}/cancel"
-            onsubmit="return confirm('Cancel this session?')">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Cancel</button></form>
+            onsubmit="return confirm('Cancel this session?')">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Cancel</button></form>
     {% endif %}
   </div>
 </div>
+
+{% if appt.status == 'completed' %}<p class="muted">✓ Marked completed.</p>{% endif %}
+{% if appt.status == 'no_show' %}<p class="muted">Recorded as a no-show — the client didn't attend.</p>{% endif %}
 
 {% if appt.status == 'confirmed' %}
 <div class="alert ok">✓ Confirmed for <strong>{{ appt.starts_at }}</strong>{% if appt.location %} · {{ appt.location }}{% endif %}. A confirmation was sent; a reminder is queued.</div>

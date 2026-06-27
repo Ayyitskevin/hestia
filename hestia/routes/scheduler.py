@@ -14,10 +14,12 @@ from ..scheduler import (
     appointment_ics,
     appointment_public_url,
     cancel_appointment,
+    complete_appointment,
     confirm_appointment,
     create_appointment,
     get_appointment,
     list_appointments,
+    mark_no_show,
 )
 from .deps import db_conn, render, settings_of
 
@@ -125,4 +127,24 @@ def appointment_cancel(request: Request, appt_id: int):
         if not auth:
             return RedirectResponse("/login", status_code=303)
         cancel_appointment(conn, auth.tenant["id"], appt_id)
+    return RedirectResponse(f"/schedule/{appt_id}", status_code=303)
+
+
+@router.post("/{appt_id}/complete")
+def appointment_complete(request: Request, appt_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        complete_appointment(conn, auth.tenant["id"], appt_id)
+    return RedirectResponse(f"/schedule/{appt_id}", status_code=303)
+
+
+@router.post("/{appt_id}/no-show")
+def appointment_no_show(request: Request, appt_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        mark_no_show(conn, auth.tenant["id"], appt_id)
     return RedirectResponse(f"/schedule/{appt_id}", status_code=303)

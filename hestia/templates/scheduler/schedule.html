@@ -33,10 +33,7 @@
         <td class="muted">{{ a.client_name or a.project_name or "—" }}</td>
         <td class="muted">{{ a.kind_label }}</td>
         <td class="muted">{{ a.starts_at or "—" }}</td>
-        <td>
-          {% if a.status == 'canceled' %}<span class="pill off">canceled</span>
-          {% else %}<span class="pill {{ 'on' if a.status == 'confirmed' else 'off' }}">{{ a.status }}</span>{% endif %}
-        </td>
+        <td><span class="pill {{ 'on' if a.status in ('confirmed', 'completed') else 'off' }}">{{ a.status_label }}</span></td>
       </tr>
       {% endfor %}
     </tbody>

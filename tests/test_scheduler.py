@@ -188,7 +188,7 @@ def test_http_book_flow(client):
     confirmed = client.get(f"/book/{token}")
     assert "booked" in confirmed.text.lower() and FUTURE in confirmed.text
     # owner detail now shows confirmed
-    assert "confirmed" in client.get(f"/schedule/{aid}").text
+    assert "Confirmed" in client.get(f"/schedule/{aid}").text
 
 
 def test_http_unknown_and_canceled_book_404(client):
