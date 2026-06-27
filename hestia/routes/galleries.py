@@ -10,7 +10,7 @@ from ..auth import context_from_session
 from ..campaigns import create_campaign, end_campaign, get_active_campaign
 from ..crm import assign_gallery_to_project, get_client, get_project, list_projects
 from ..db import audit
-from ..delivery import delivery_url, enable_delivery, regenerate_delivery_token
+from ..delivery import delivery_url, enable_delivery, regenerate_delivery_token, set_delivery_expiry
 from ..email import notify
 from ..fulfillment import list_fulfillments
 from ..galleries import (
@@ -162,6 +162,19 @@ def gallery_delivery_regenerate(request: Request, gallery_id: int):
         if token:
             audit(conn, actor="owner", action="gallery.delivery_rotated",
                   tenant_id=auth.tenant["id"], detail=f"gallery #{gallery_id}")
+    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
+
+
+@router.post("/{gallery_id}/delivery/expiry")
+def gallery_delivery_expiry(request: Request, gallery_id: int, expires_at: str = Form("")):
+    """Set or clear the download link's expiry date — clients can download through it."""
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        set_delivery_expiry(conn, auth.tenant["id"], gallery_id, expires_at)
+        audit(conn, actor="owner", action="gallery.delivery_expiry_set",
+              tenant_id=auth.tenant["id"], detail=f"gallery #{gallery_id} · {expires_at or 'cleared'}")
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
 

@@ -81,6 +81,15 @@
     <p class="muted">Your client's private download link — every high-res original,
       individually or as one zip. Share it however you like.</p>
     <a class="offer-url" href="{{ delivery_link }}" target="_blank">{{ delivery_link }}</a>
+    <form method="post" action="/galleries/{{ gallery.id }}/delivery/expiry" style="margin-top:10px">
+      {% include "_csrf.html" %}
+      <label for="expires_at" class="muted" style="font-size:.85rem">Link expires <span class="muted">(optional — clients can download through this date)</span></label>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:4px">
+        <input type="date" id="expires_at" name="expires_at" value="{{ gallery.delivery_expires_at or '' }}" style="width:auto">
+        <button class="btn ghost" type="submit">Save</button>
+      </div>
+      {% if gallery.delivery_expires_at %}<p class="muted" style="font-size:.8rem; margin-top:4px">Expires {{ gallery.delivery_expires_at[:10] }} — clear the date to keep the link open.</p>{% endif %}
+    </form>
     <form method="post" action="/galleries/{{ gallery.id }}/delivery/regenerate" style="margin-top:6px"
           onsubmit="return confirm('Regenerate the download link? The current link will stop working.')">
       {% include "_csrf.html" %}

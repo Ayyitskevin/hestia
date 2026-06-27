@@ -10,7 +10,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Request
 from fastapi.responses import Response, StreamingResponse
 
-from ..delivery import get_gallery_by_delivery_token, iter_zip
+from ..delivery import delivery_expired, get_gallery_by_delivery_token, iter_zip
 from ..galleries import (
     list_images,
     record_gallery_download,
@@ -18,6 +18,7 @@ from ..galleries import (
     safe_inline_type,
 )
 from ..ratelimit import enforce
+from ..tenants import get_tenant
 from .deps import db_conn, render, storage_of
 
 router = APIRouter()
@@ -39,6 +40,10 @@ def delivery_page(request: Request, token: str):
         gallery = get_gallery_by_delivery_token(conn, token)
         if not gallery:
             return render(request, "offer_missing.html", auth=None, status_code=404)
+        if delivery_expired(conn, gallery):
+            tenant = get_tenant(conn, gallery["tenant_id"])
+            return render(request, "delivery_expired.html", auth=None, gallery=gallery,
+                          tenant=tenant, status_code=410)
         images = list_images(conn, gallery["id"])
         record_gallery_view(conn, gallery["id"])          # the client opened their gallery
     total_bytes = sum(img.get("bytes") or 0 for img in images)
@@ -54,6 +59,8 @@ def delivery_zip(request: Request, token: str):
         gallery = get_gallery_by_delivery_token(conn, token)
         if not gallery:
             return Response(status_code=404)
+        if delivery_expired(conn, gallery):
+            return Response(status_code=410)              # link past its expiry date
         images = list_images(conn, gallery["id"])
         if images:
             record_gallery_download(conn, gallery["id"])  # whole-set zip download
@@ -73,6 +80,8 @@ def delivery_file(request: Request, token: str, image_id: int):
         gallery = get_gallery_by_delivery_token(conn, token)
         if not gallery:
             return Response(status_code=404)
+        if delivery_expired(conn, gallery):
+            return Response(status_code=410)              # link past its expiry date
         # scope the image to THIS gallery — a token can't reach another gallery's files
         img = conn.execute(
             "SELECT * FROM images WHERE id = ? AND gallery_id = ?",
@@ -100,6 +109,8 @@ def delivery_view(request: Request, token: str, image_id: int):
         gallery = get_gallery_by_delivery_token(conn, token)
         if not gallery:
             return Response(status_code=404)
+        if delivery_expired(conn, gallery):
+            return Response(status_code=410)              # link past its expiry date
         img = conn.execute(
             "SELECT * FROM images WHERE id = ? AND gallery_id = ?",
             (image_id, gallery["id"]),
