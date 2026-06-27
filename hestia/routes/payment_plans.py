@@ -12,6 +12,7 @@ import math
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
+from .. import messaging
 from ..auth import context_from_session
 from ..crm import list_clients, list_projects
 from ..db import audit
@@ -125,13 +126,12 @@ def plan_send(request: Request, plan_id: int):
                 + f"\n  {invoice_public_url(settings, i['token'])}"
                 for i in unpaid
             ]
-            notify(
-                conn, settings, to=to, tenant_id=auth.tenant["id"],
-                subject=f"{studio}: your payment schedule for {plan['title']}",
-                body=(f"Hi {plan.get('client_name') or 'there'},\n\n{studio} set up a payment "
-                      f"plan for {plan['title']} ({plan['total_display']} total).\n\n"
-                      + "\n\n".join(lines) + "\n\nThank you!"),
-            )
+            ctx = {"client": plan.get("client_name") or "there", "studio": studio,
+                   "title": plan["title"], "total": plan["total_display"],
+                   "schedule": "\n\n".join(lines)}
+            msg = messaging.render(conn, auth.tenant["id"], "payment_schedule", ctx)
+            notify(conn, settings, to=to, tenant_id=auth.tenant["id"],
+                   subject=msg["subject"], body=msg["body"])
         audit(conn, actor="owner", action="payment_plan.sent", tenant_id=auth.tenant["id"],
               detail=f"{plan['title']} · {len(unpaid)} installments")
         conn.commit()
