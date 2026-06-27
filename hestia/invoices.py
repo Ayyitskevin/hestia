@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 import sqlite3
 
+from . import messaging
 from .automations import emit_event
 from .config import Settings
 from .crypto import new_session_token
@@ -223,19 +224,20 @@ def send_invoice_reminder(conn: sqlite3.Connection, settings: Settings, invoice:
     if not to:
         return None
     trow = conn.execute("SELECT name FROM tenants WHERE id = ?", (invoice["tenant_id"],)).fetchone()
-    studio = trow["name"] if trow else "your photographer"
-    amount = invoice.get("amount_display") or money(invoice["amount_cents"], invoice.get("currency", "usd"))
-    pay_url = invoice_public_url(settings, invoice["token"])
-    title = invoice["title"]
-    if _is_overdue(invoice.get("due_date")):
-        subject = f'Reminder: invoice "{title}" is past due'
-        lead = f'your invoice from {studio} — "{title}" for {amount} — is now past due.'
-    else:
-        subject = f'Reminder: invoice "{title}" from {studio}'
-        lead = f'a friendly reminder about your invoice from {studio} — "{title}" for {amount}.'
-    body = (f"Hi {invoice.get('client_name') or 'there'},\n\n{lead}\n\n"
-            f"You can pay securely here:\n{pay_url}\n\nThank you!\n{studio}")
-    return notify(conn, settings, to=to, subject=subject, body=body, tenant_id=invoice["tenant_id"])
+    ctx = {
+        "client": invoice.get("client_name") or "there",
+        "studio": trow["name"] if trow else "your photographer",
+        "title": invoice["title"],
+        "amount": invoice.get("amount_display") or money(invoice["amount_cents"],
+                                                         invoice.get("currency", "usd")),
+        "pay_url": invoice_public_url(settings, invoice["token"]),
+    }
+    # past-due vs not-yet-due get their own template, so a manual nudge on a current
+    # invoice never falsely says "past due".
+    kind = "invoice_overdue" if _is_overdue(invoice.get("due_date")) else "invoice_reminder"
+    msg = messaging.render(conn, invoice["tenant_id"], kind, ctx)
+    return notify(conn, settings, to=to, subject=msg["subject"], body=msg["body"],
+                  tenant_id=invoice["tenant_id"])
 
 
 def record_invoice_reminder(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> bool:

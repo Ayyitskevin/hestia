@@ -37,6 +37,21 @@ TEMPLATES: dict[str, dict] = {
                  "Pay securely here:\n{pay_url}\n\nThank you!"),
         "variables": ["client", "studio", "title", "amount", "pay_url", "note"],
     },
+    "invoice_reminder": {
+        "label": "Invoice reminder (not yet due)",
+        "subject": 'Reminder: invoice "{title}" from {studio}',
+        "body": ("Hi {client},\n\na friendly reminder about your invoice from {studio} — "
+                 '"{title}" for {amount}.\n\nYou can pay securely here:\n{pay_url}\n\n'
+                 "Thank you!\n{studio}"),
+        "variables": ["client", "studio", "title", "amount", "pay_url"],
+    },
+    "invoice_overdue": {
+        "label": "Invoice reminder (past due)",
+        "subject": 'Reminder: invoice "{title}" is past due',
+        "body": ('Hi {client},\n\nyour invoice from {studio} — "{title}" for {amount} — is now '
+                 "past due.\n\nYou can pay securely here:\n{pay_url}\n\nThank you!\n{studio}"),
+        "variables": ["client", "studio", "title", "amount", "pay_url"],
+    },
     "contract_send": {
         "label": "Contract to sign",
         "subject": "{studio}: please review and sign — {title}",

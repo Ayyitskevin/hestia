@@ -223,3 +223,27 @@ def test_messages_page_renders_preview(client):
     page = client.get("/settings/messages")
     assert page.status_code == 200
     assert "Preview with sample data" in page.text and "Jordan Lee" in page.text
+
+
+# ── invoice reminder templates (slice 4) ─────────────────────────────────────
+
+
+def test_invoice_reminder_picks_template_by_due_status(conn, settings):
+    from hestia.invoices import create_invoice, get_invoice, send_invoice_reminder
+    t = create_tenant(conn, name="Bill", shoot_type="wedding")
+    c = create_client(conn, tenant_id=t["id"], name="Sam", email="sam@bill.com")
+    messaging.set_template(conn, t["id"], "invoice_reminder",
+                           subject="Heads up: {title}", body="Still owe {amount}: {pay_url}")
+    messaging.set_template(conn, t["id"], "invoice_overdue",
+                           subject="OVERDUE: {title}", body="Pay now {amount}: {pay_url}")
+    upcoming = create_invoice(conn, settings, tenant_id=t["id"], title="Soon", amount_cents=10000,
+                              client_id=c["id"], due_date="2999-01-01")    # not yet due
+    late = create_invoice(conn, settings, tenant_id=t["id"], title="Late", amount_cents=20000,
+                          client_id=c["id"], due_date="2000-01-01")        # past due
+    conn.commit()
+
+    send_invoice_reminder(conn, settings, get_invoice(conn, t["id"], upcoming["id"]))
+    send_invoice_reminder(conn, settings, get_invoice(conn, t["id"], late["id"]))
+    subjects = [m["subject"] for m in list_emails(conn, t["id"]) if m["to_addr"] == "sam@bill.com"]
+    assert "Heads up: Soon" in subjects        # not-yet-due → invoice_reminder
+    assert "OVERDUE: Late" in subjects         # past-due → invoice_overdue
