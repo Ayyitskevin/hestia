@@ -111,6 +111,23 @@
   {% endif %}
 </div>
 
+{% if reconnect %}
+<div class="card stack" style="margin-bottom:18px">
+  <h3>Reconnect <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ reconnect|length }}</span></h3>
+  <p class="muted">Past clients you haven't booked in a while. A quick hello keeps you top of mind
+    — and ahead of the next time they need a photographer.</p>
+  <div class="stack" style="gap:6px">
+    {% for c in reconnect %}
+    <div style="display:flex; align-items:center; gap:10px; justify-content:space-between">
+      <span>🤝 <a href="/clients/{{ c.id }}">{{ c.name }}</a>
+        <span class="muted">· last booked {{ c.last_seen[:10] }}</span></span>
+      <a class="btn ghost" href="/clients/{{ c.id }}/email">✉ Email</a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div class="grid cols-2">
   <div class="card stack">
     <h3>Recent galleries</h3>

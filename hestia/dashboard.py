@@ -117,3 +117,21 @@ def setup_checklist(conn: sqlite3.Connection, tenant_id: str, *, published: bool
     ]
     done = sum(1 for s in steps if s["done"])
     return {"steps": steps, "done": done, "total": len(steps), "complete": done == len(steps)}
+
+
+def reconnect_due(conn: sqlite3.Connection, tenant_id: str, *,
+                  limit: int = 6, quiet_days: int = 300) -> list[dict]:
+    """Past clients who've gone quiet — their most recent project is older than
+    ``quiet_days`` (≈10 months) and they have an email to reach. A gentle retention
+    nudge so the studio reaches out before the client books their next shoot elsewhere.
+    Only clients with at least one project qualify; oldest-quiet first. Tenant-scoped."""
+    rows = conn.execute(
+        "SELECT c.id, c.name, c.email, MAX(p.created_at) AS last_seen "
+        "FROM clients c JOIN projects p ON p.client_id = c.id AND p.tenant_id = c.tenant_id "
+        "WHERE c.tenant_id = ? AND TRIM(COALESCE(c.email, '')) <> '' "
+        "GROUP BY c.id "
+        "HAVING MAX(p.created_at) < datetime('now', ?) "  # quiet past the cutoff
+        "ORDER BY last_seen ASC LIMIT ?",
+        (tenant_id, f"-{int(quiet_days)} days", limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
