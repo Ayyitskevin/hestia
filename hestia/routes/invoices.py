@@ -19,6 +19,7 @@ from ..invoices import (
     invoice_public_url,
     list_invoices,
     record_invoice_reminder,
+    record_offline_payment,
     send_invoice,
     send_invoice_reminder,
     set_invoice_note,
@@ -158,6 +159,18 @@ def invoice_void(request: Request, invoice_id: int):
         if invoice:
             audit(conn, actor="owner", action="invoice.void", tenant_id=auth.tenant["id"],
                   detail=invoice["title"])
+    return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)
+
+
+@router.post("/{invoice_id}/record-payment")
+def invoice_record_payment(request: Request, invoice_id: int, method: str = Form("other")):
+    """Mark an invoice paid for money taken outside the pay link (cash, check, transfer).
+    Idempotent — a double submit settles once."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        record_offline_payment(conn, auth.tenant["id"], invoice_id, method=method)
     return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)
 
 

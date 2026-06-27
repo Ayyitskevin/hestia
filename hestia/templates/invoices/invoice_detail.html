@@ -17,6 +17,18 @@
       <form method="post" action="/invoices/{{ invoice.id }}/send">{% include "_csrf.html" %}<button class="btn" type="submit">Send</button></form>
     {% endif %}
     {% if invoice.status != 'paid' and invoice.status != 'void' %}
+      <form method="post" action="/invoices/{{ invoice.id }}/record-payment"
+            style="display:flex; gap:6px; align-items:center; margin:0"
+            onsubmit="return confirm('Mark this invoice paid? Records an offline payment.')">
+        {% include "_csrf.html" %}
+        <select name="method" aria-label="Payment method" style="width:auto">
+          <option value="cash">Cash</option>
+          <option value="check">Check</option>
+          <option value="bank transfer">Bank transfer</option>
+          <option value="other">Other</option>
+        </select>
+        <button class="btn" type="submit">Record payment</button>
+      </form>
       <form method="post" action="/invoices/{{ invoice.id }}/void">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Void</button></form>
     {% endif %}
   </div>
