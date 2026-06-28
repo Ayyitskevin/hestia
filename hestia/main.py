@@ -23,7 +23,7 @@ from . import __version__
 from .config import Settings, get_settings
 from .csrf import csrf_protect
 from .db import init_db
-from .features import SHOOT_TYPE_LABELS, SHOOT_TYPES
+from .features import LEAD_SOURCES, SHOOT_TYPE_LABELS, SHOOT_TYPES
 from .jobs import run_worker
 from .obs import access_log, configure_logging, new_request_id
 from .ratelimit import RateLimiter
@@ -76,6 +76,7 @@ def _build_templates() -> Jinja2Templates:
         app_version=__version__,
         shoot_types=SHOOT_TYPES,
         shoot_type_labels=SHOOT_TYPE_LABELS,
+        lead_sources=LEAD_SOURCES,
     )
     return templates
 

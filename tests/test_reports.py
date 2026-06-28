@@ -13,6 +13,7 @@ from hestia.reports import (
     ar_aging,
     booking_funnel,
     expense_breakdown,
+    lead_sources,
     monthly_pnl,
     tax_by_period,
 )
@@ -200,3 +201,31 @@ def test_http_reports_page_and_tax_export(client):
     assert page.status_code == 200 and "Booking funnel" in page.text
     csv = client.get("/finances/export/tax.csv")
     assert csv.status_code == 200 and "month,tax_collected" in csv.text
+
+
+# ── lead sources ───────────────────────────────────────────────────────────────
+
+
+def test_lead_sources_groups_and_converts(conn):
+    t = create_tenant(conn, name="Src", shoot_type="wedding")
+    create_project(conn, tenant_id=t["id"], name="I1", lead_source="Instagram", status="booked")
+    create_project(conn, tenant_id=t["id"], name="I2", lead_source="Instagram", status="delivered")
+    create_project(conn, tenant_id=t["id"], name="I3", lead_source="Instagram", status="lead")
+    create_project(conn, tenant_id=t["id"], name="G1", lead_source="Google search", status="lead")
+    create_project(conn, tenant_id=t["id"], name="M1", status="lead")        # no source → Unknown
+    conn.commit()
+    rep = lead_sources(conn, t["id"])
+    by = {r["source"]: r for r in rep["rows"]}
+    assert by["Instagram"]["leads"] == 3 and by["Instagram"]["booked"] == 2
+    assert by["Instagram"]["pct"] == round(100 * 2 / 3)
+    assert by["Google search"]["booked"] == 0 and by["Unknown"]["leads"] == 1
+    assert rep["total_leads"] == 5 and rep["total_booked"] == 2
+    assert rep["rows"][0]["source"] == "Instagram"                          # most leads first
+
+
+def test_lead_sources_tenant_scoped(conn):
+    t1 = create_tenant(conn, name="A", shoot_type="wedding")
+    t2 = create_tenant(conn, name="B", shoot_type="wedding")
+    create_project(conn, tenant_id=t1["id"], name="X", lead_source="Instagram", status="lead")
+    conn.commit()
+    assert lead_sources(conn, t2["id"])["total_leads"] == 0

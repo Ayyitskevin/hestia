@@ -165,3 +165,36 @@ def test_public_inquiry_foreign_package_id_ignored(client, app):
         assert "One-Only" not in notes                       # foreign package ignored
     finally:
         conn.close()
+
+
+# ── lead source on the inquiry ─────────────────────────────────────────────────
+
+
+def test_inquiry_records_lead_source(conn):
+    t = _tenant(conn)
+    p = create_inquiry(conn, tenant=t, name="Pat", email="p@x.com", shoot_type="wedding",
+                       lead_source="Instagram")
+    assert p["lead_source"] == "Instagram"
+
+
+def test_public_inquiry_captures_lead_source(client, app):
+    creds = onboard_studio(client, name="Src Studio", email="src@example.com")
+    login_owner(client, creds)
+    slug = slugify("Src Studio")
+    client.post("/settings/site", data={"headline": "x", "about": "y", "contact_email": "",
+                                        "published": "1"})
+    page = client.get(f"/studio/{slug}").text
+    assert "How did you hear about us?" in page                 # the public select renders
+
+    pub = CSRFClient(app)
+    pub.post(f"/studio/{slug}/inquire", data={"name": "Dana", "email": "d@x.com",
+                                              "shoot_type": "wedding", "lead_source": "Google search"})
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = _tid_of(conn, creds["email"])
+        row = conn.execute("SELECT lead_source FROM projects WHERE tenant_id=? ORDER BY id DESC LIMIT 1",
+                           (tid,)).fetchone()
+        assert row["lead_source"] == "Google search"
+    finally:
+        conn.close()
+    assert "Lead sources" in client.get("/finances/reports").text   # surfaces in the report

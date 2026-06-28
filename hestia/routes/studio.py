@@ -87,7 +87,8 @@ def public_reviews(request: Request, slug: str):
 @router.post("/studio/{slug}/inquire")
 def public_inquire(request: Request, slug: str, name: str = Form(...), email: str = Form(""),
                    message: str = Form(""), shoot_type: str = Form("other"),
-                   event_date: str = Form(""), ref: str = Form(""), package_id: str = Form("")):
+                   event_date: str = Form(""), ref: str = Form(""), package_id: str = Form(""),
+                   lead_source: str = Form("")):
     enforce(request, "inquiry")
     with db_conn(request) as conn:
         tenant = get_tenant_by_slug(conn, slug)
@@ -101,7 +102,8 @@ def public_inquire(request: Request, slug: str, name: str = Form(...), email: st
         pkg = get_package(conn, tenant["id"], int(package_id)) if package_id.strip().isdigit() else None
         full_message = f"Interested in: {pkg['name']}\n\n{message}".strip() if pkg else message
         project = create_inquiry(conn, tenant=tenant, name=name, email=email, message=full_message,
-                                 shoot_type=shoot_type, event_date=event_date)
+                                 shoot_type=shoot_type, event_date=event_date,
+                                 lead_source=lead_source)
         attribute_referral(conn, tenant["id"], project["id"], ref)
         # Alert the studio that a lead came in (mock records it; smtp also sends).
         inbox = _studio_inbox(conn, tenant["id"], profile)

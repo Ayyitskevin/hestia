@@ -171,6 +171,27 @@ def booking_funnel(conn: sqlite3.Connection, tenant_id: str) -> dict:
     }
 
 
+def lead_sources(conn: sqlite3.Connection, tenant_id: str) -> dict:
+    """Leads grouped by how they heard about the studio, with how many of each went on to
+    book — so the owner sees which channels actually convert. Projects with no recorded
+    source (manually added, or pre-dating the field) report as 'Unknown'. 'Booked' counts
+    any project past the lead stage; sorted by lead volume."""
+    rows = conn.execute(
+        "SELECT CASE WHEN TRIM(COALESCE(lead_source, '')) = '' THEN 'Unknown' "
+        "            ELSE lead_source END AS source, "
+        "       COUNT(*) AS leads, "
+        "       COALESCE(SUM(CASE WHEN status IN ('booked','shooting','delivered','archived') "
+        "                         THEN 1 ELSE 0 END), 0) AS booked "
+        "FROM projects WHERE tenant_id = ? GROUP BY source ORDER BY leads DESC, source",
+        (tenant_id,),
+    ).fetchall()
+    out = [{"source": r["source"], "leads": int(r["leads"]), "booked": int(r["booked"]),
+            "pct": round(100 * int(r["booked"]) / int(r["leads"])) if r["leads"] else 0}
+           for r in rows]
+    return {"rows": out, "total_leads": sum(o["leads"] for o in out),
+            "total_booked": sum(o["booked"] for o in out)}
+
+
 def expense_breakdown(conn: sqlite3.Connection, tenant_id: str) -> dict:
     """Expenses grouped by category, biggest first, each with its share of the total."""
     rows = conn.execute(

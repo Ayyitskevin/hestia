@@ -44,6 +44,11 @@
             {% endif %}
             <label for="event_date">Date <span class="muted">(optional)</span></label>
             <input type="text" id="event_date" name="event_date" placeholder="2026-09-12">
+            <label for="lead_source">How did you hear about us? <span class="muted">(optional)</span></label>
+            <select id="lead_source" name="lead_source">
+              <option value="">— choose one —</option>
+              {% for src in lead_sources %}<option value="{{ src }}">{{ src }}</option>{% endfor %}
+            </select>
             <label for="message">Message</label>
             <input type="text" id="message" name="message" placeholder="Tell us about your shoot…">
             <div class="form-actions"><button class="btn" type="submit">Send inquiry</button></div>

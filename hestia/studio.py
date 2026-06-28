@@ -56,6 +56,7 @@ def create_inquiry(
     message: str = "",
     shoot_type: str = "other",
     event_date: str = "",
+    lead_source: str = "",
 ) -> dict:
     """Turn a public inquiry into a CRM client + project lead. Returns the project."""
     st = normalize_shoot_type(shoot_type)
@@ -65,7 +66,7 @@ def create_inquiry(
         conn, tenant_id=tenant["id"],
         name=f"{st.title()} inquiry — {name.strip() or email or 'website'}",
         client_id=client["id"], shoot_type=st, status="lead",
-        event_date=event_date, notes=message,
+        event_date=event_date, notes=message, lead_source=lead_source,
     )
     audit(conn, actor="public", action="studio.inquiry", tenant_id=tenant["id"],
           detail=f"lead from {email or name}")

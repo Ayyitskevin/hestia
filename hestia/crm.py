@@ -182,16 +182,18 @@ def create_project(
     status: str = "lead",
     event_date: str = "",
     notes: str = "",
+    lead_source: str = "",
 ) -> dict:
     if status not in PROJECT_STATUSES:
         status = "lead"
     cur = conn.execute(
         """
-        INSERT INTO projects (tenant_id, client_id, name, shoot_type, status, event_date, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO projects (tenant_id, client_id, name, shoot_type, status, event_date,
+                              notes, lead_source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (tenant_id, client_id, name.strip(), normalize_shoot_type(shoot_type), status,
-         event_date.strip() or None, notes.strip()),
+         event_date.strip() or None, notes.strip(), (lead_source or "").strip()[:50]),
     )
     return get_project(conn, tenant_id, cur.lastrowid)
 
