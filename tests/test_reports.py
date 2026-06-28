@@ -1,18 +1,22 @@
 """Finance reports — A/R aging buckets and expense-by-category breakdown."""
 
 import datetime
+import io
 
 from conftest import login_owner, onboard_studio
 
 from hestia.crm import create_project
 from hestia.db import connect
 from hestia.finances import create_expense
+from hestia.galleries import add_image, create_gallery, publish_gallery
 from hestia.invoices import create_invoice, send_invoice
 from hestia.payment_plans import create_payment_plan, deposit_balance_installments
+from hestia.proofing import toggle_favorite
 from hestia.reports import (
     ar_aging,
     booking_funnel,
     expense_breakdown,
+    gallery_sales,
     lead_sources,
     monthly_pnl,
     tax_by_period,
@@ -229,3 +233,48 @@ def test_lead_sources_tenant_scoped(conn):
     create_project(conn, tenant_id=t1["id"], name="X", lead_source="Instagram", status="lead")
     conn.commit()
     assert lead_sources(conn, t2["id"])["total_leads"] == 0
+
+
+# ── gallery sales ──────────────────────────────────────────────────────────────
+
+
+def _order(conn, tenant_id, gallery_id, cents, status):
+    conn.execute("INSERT INTO orders (tenant_id, gallery_id, sku, name, amount_cents, status) "
+                 "VALUES (?, ?, 'favorites', 'Sale', ?, ?)", (tenant_id, gallery_id, cents, status))
+
+
+def test_gallery_sales_attributes_paid_orders(conn, storage):
+    t = create_tenant(conn, name="GS", shoot_type="wedding")
+    g1 = create_gallery(conn, tenant_id=t["id"], title="Sold")
+    g2 = create_gallery(conn, tenant_id=t["id"], title="Browsed")
+    publish_gallery(conn, t["id"], g1["id"])
+    publish_gallery(conn, t["id"], g2["id"])
+    img = add_image(conn, storage, tenant_id=t["id"], gallery_id=g1["id"], filename="a.jpg",
+                    fileobj=io.BytesIO(b"x"))
+    toggle_favorite(conn, tenant_id=t["id"], gallery_id=g1["id"], image_id=img["id"])
+    _order(conn, t["id"], g1["id"], 5000, "paid")
+    _order(conn, t["id"], g1["id"], 3000, "paid")
+    _order(conn, t["id"], g1["id"], 9999, "pending")       # pending excluded
+    conn.commit()
+
+    rep = gallery_sales(conn, t["id"])
+    by = {r["title"]: r for r in rep["rows"]}
+    assert by["Sold"]["orders"] == 2 and by["Sold"]["revenue_cents"] == 8000   # paid only, not doubled
+    assert by["Sold"]["favorites"] == 1
+    assert by["Browsed"]["orders"] == 0 and by["Browsed"]["revenue_cents"] == 0
+    assert rep["total_galleries"] == 2 and rep["converted"] == 1
+    assert rep["conversion_pct"] == 50 and rep["total_revenue_cents"] == 8000
+    assert rep["rows"][0]["title"] == "Sold"               # revenue desc
+
+
+def test_gallery_sales_excludes_draft_and_is_tenant_scoped(conn):
+    t1 = create_tenant(conn, name="A", shoot_type="wedding")
+    t2 = create_tenant(conn, name="B", shoot_type="wedding")
+    g = create_gallery(conn, tenant_id=t1["id"], title="Pub")
+    publish_gallery(conn, t1["id"], g["id"])
+    create_gallery(conn, tenant_id=t1["id"], title="Draft")    # not published → excluded
+    _order(conn, t1["id"], g["id"], 5000, "paid")
+    conn.commit()
+    assert gallery_sales(conn, t1["id"])["total_galleries"] == 1
+    rep2 = gallery_sales(conn, t2["id"])
+    assert rep2["total_galleries"] == 0 and rep2["total_revenue_cents"] == 0   # tenant scoped
