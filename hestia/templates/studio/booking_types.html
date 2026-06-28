@@ -41,7 +41,11 @@
         <input type="number" id="duration_minutes" name="duration_minutes" value="60" min="1" step="5"></div>
       <div><label for="price">Price ({{ settings.currency|upper }}) <span class="muted">(optional)</span></label>
         <input type="text" id="price" name="price" placeholder="0.00"></div>
+      <div><label for="deposit">Deposit <span class="muted">(optional)</span></label>
+        <input type="text" id="deposit" name="deposit" placeholder="0.00"></div>
     </div>
+    <p class="muted" style="font-size:.85rem; margin:0">A deposit asks the client to pay a retainer
+      to secure the booking — they're sent to pay it right after requesting.</p>
     <div class="form-actions"><button class="btn" type="submit">Add session type</button></div>
   </form>
 </div>
@@ -52,7 +56,7 @@
 {% if active %}
 <div class="card" style="margin-top:18px">
   <table>
-    <thead><tr><th>Session</th><th>Type</th><th>Length</th><th>Price</th><th></th></tr></thead>
+    <thead><tr><th>Session</th><th>Type</th><th>Length</th><th>Price</th><th>Deposit</th><th></th></tr></thead>
     <tbody>
       {% for t in active %}
       <tr>
@@ -60,6 +64,7 @@
         <td class="muted">{{ t.kind_label }}</td>
         <td class="muted">{{ t.duration_minutes }} min</td>
         <td class="muted">{{ t.price_display or '—' }}</td>
+        <td class="muted">{{ t.deposit_display or '—' }}</td>
         <td style="white-space:nowrap; text-align:right">
           <form method="post" action="/settings/booking-types/{{ t.id }}/toggle" style="display:inline">
             {% include "_csrf.html" %}

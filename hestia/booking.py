@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import sqlite3
 
+from .config import Settings
 from .crm import create_client, create_project
 from .db import audit
+from .invoices import create_invoice, get_invoice, send_invoice
 from .scheduler import APPOINTMENT_KINDS, create_appointment
 
 _MAX_DURATION = 24 * 60   # a single session is at most a day; clamp absurd input
@@ -30,6 +32,7 @@ def _clean_kind(kind: str) -> str:
 def create_booking_type(
     conn: sqlite3.Connection, *, tenant_id: str, title: str, description: str = "",
     kind: str = "consultation", duration_minutes: int = 60, price_cents: int = 0,
+    deposit_cents: int = 0,
 ) -> dict | None:
     """Add a bookable session type to the studio's menu. Returns None for a blank title."""
     title = (title or "").strip()
@@ -42,9 +45,10 @@ def create_booking_type(
     pos = (row["m"] if row else 0) + 1
     cur = conn.execute(
         "INSERT INTO booking_types (tenant_id, title, description, kind, duration_minutes, "
-        "price_cents, position) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "price_cents, deposit_cents, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (tenant_id, title[:200], (description or "").strip()[:2000], _clean_kind(kind),
-         min(_MAX_DURATION, max(1, int(duration_minutes or 0))), max(0, int(price_cents or 0)), pos),
+         min(_MAX_DURATION, max(1, int(duration_minutes or 0))), max(0, int(price_cents or 0)),
+         max(0, int(deposit_cents or 0)), pos),
     )
     return get_booking_type(conn, tenant_id, cur.lastrowid)
 
@@ -71,7 +75,7 @@ def list_booking_types(
 def update_booking_type(
     conn: sqlite3.Connection, tenant_id: str, type_id: int, *, title: str,
     description: str = "", kind: str = "consultation", duration_minutes: int = 60,
-    price_cents: int = 0,
+    price_cents: int = 0, deposit_cents: int = 0,
 ) -> bool:
     """Edit a session type in place. True iff a row of this tenant's changed; a blank
     title is rejected (returns False)."""
@@ -80,10 +84,11 @@ def update_booking_type(
         return False
     cur = conn.execute(
         "UPDATE booking_types SET title = ?, description = ?, kind = ?, duration_minutes = ?, "
-        "price_cents = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+        "price_cents = ?, deposit_cents = ?, updated_at = datetime('now') "
+        "WHERE id = ? AND tenant_id = ?",
         (title[:200], (description or "").strip()[:2000], _clean_kind(kind),
          min(_MAX_DURATION, max(1, int(duration_minutes or 0))), max(0, int(price_cents or 0)),
-         type_id, tenant_id),
+         max(0, int(deposit_cents or 0)), type_id, tenant_id),
     )
     return cur.rowcount == 1
 
@@ -104,13 +109,16 @@ def delete_booking_type(conn: sqlite3.Connection, tenant_id: str, type_id: int) 
 
 
 def request_booking(
-    conn: sqlite3.Connection, *, tenant: dict, booking_type: dict, name: str,
+    conn: sqlite3.Connection, settings: Settings, *, tenant: dict, booking_type: dict, name: str,
     email: str = "", requested_at: str = "", message: str = "", lead_source: str = "booking",
 ) -> dict:
     """A public visitor requests a session of one published type. Creates a CRM lead
     (client + project) and a PROPOSED appointment at the requested time for the owner to
-    confirm. Returns ``{"project": ..., "appointment": ...}``. No commit — the caller owns
-    the transaction (so the lead and its appointment land together, or not at all)."""
+    confirm; if the session type carries a deposit, also raises a deposit invoice (paid
+    through the existing /pay flow) to secure the booking. Returns
+    ``{"project", "appointment", "client", "invoice"}`` (invoice is None when no deposit).
+    No commit — the caller owns the transaction, so the lead, appointment, and deposit
+    invoice all land together or not at all."""
     tenant_id = tenant["id"]
     who = (name or "").strip() or (email or "").strip() or "Booking request"
     when = (requested_at or "").replace("T", " ").strip()   # accept datetime-local; store space-separated
@@ -129,6 +137,19 @@ def request_booking(
         client_id=client["id"], project_id=project["id"],
         duration_minutes=int(booking_type.get("duration_minutes") or 60),
     )
+    invoice = None
+    deposit_cents = max(0, int(booking_type.get("deposit_cents") or 0))
+    if deposit_cents > 0:
+        invoice = create_invoice(
+            conn, settings, tenant_id=tenant_id, title=f"Deposit — {booking_type['title']}",
+            amount_cents=deposit_cents, client_id=client["id"], project_id=project["id"],
+            note=("Deposit to secure your booking. Your session time will be confirmed "
+                  "by the studio."),
+        )
+        # Issue it (draft → sent) so an unpaid deposit shows up in A/R and on the client's
+        # statement — not just once it's paid. Payment works the same either way.
+        send_invoice(conn, tenant_id, invoice["id"])
+        invoice = get_invoice(conn, tenant_id, invoice["id"])
     audit(conn, actor="public", action="booking.requested", tenant_id=tenant_id,
           detail=f"{booking_type['title']} · {when or 'no time given'} · {email or who}")
-    return {"project": project, "appointment": appt, "client": client}
+    return {"project": project, "appointment": appt, "client": client, "invoice": invoice}

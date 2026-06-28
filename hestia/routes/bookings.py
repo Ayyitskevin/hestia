@@ -65,6 +65,7 @@ def booking_types_list(request: Request):
         types = list_booking_types(conn, auth.tenant["id"])
         for t in types:
             t["price_display"] = money(t["price_cents"], currency) if t["price_cents"] else ""
+            t["deposit_display"] = money(t["deposit_cents"], currency) if t["deposit_cents"] else ""
             t["kind_label"] = KIND_LABELS.get(t["kind"], t["kind"])
         profile = get_profile(conn, auth.tenant["id"])
     return render(request, "studio/booking_types.html", auth=auth, types=types,
@@ -75,14 +76,15 @@ def booking_types_list(request: Request):
 @router.post("/settings/booking-types")
 def booking_type_create(request: Request, title: str = Form(...), description: str = Form(""),
                         kind: str = Form("consultation"), duration_minutes: str = Form("60"),
-                        price: str = Form("0")):
+                        price: str = Form("0"), deposit: str = Form("0")):
     with db_conn(request) as conn:
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         dur = int(duration_minutes) if duration_minutes.strip().isdigit() else 60
         create_booking_type(conn, tenant_id=auth.tenant["id"], title=title, description=description,
-                            kind=kind, duration_minutes=dur, price_cents=_to_cents(price))
+                            kind=kind, duration_minutes=dur, price_cents=_to_cents(price),
+                            deposit_cents=_to_cents(deposit))
     return RedirectResponse("/settings/booking-types", status_code=303)
 
 
@@ -131,6 +133,7 @@ def public_book_page(request: Request, slug: str):
         types = list_booking_types(conn, tenant["id"], active_only=True)
         for t in types:
             t["price_display"] = money(t["price_cents"], currency) if t["price_cents"] else ""
+            t["deposit_display"] = money(t["deposit_cents"], currency) if t["deposit_cents"] else ""
     return render(request, "studio/book.html", auth=None, tenant=tenant, profile=profile, types=types)
 
 
@@ -139,33 +142,42 @@ def public_book_submit(request: Request, slug: str, booking_type_id: str = Form(
                        name: str = Form(""), email: str = Form(""), requested_at: str = Form(""),
                        message: str = Form("")):
     enforce(request, "inquiry")
+    settings = settings_of(request)
     with db_conn(request) as conn:
         tenant, profile = _published_tenant(conn, slug)
         if not tenant:
             return render(request, "offer_missing.html", auth=None, status_code=404)
-        currency = settings_of(request).currency
+        currency = settings.currency
         active = list_booking_types(conn, tenant["id"], active_only=True)
         chosen = next((t for t in active if str(t["id"]) == booking_type_id.strip()), None)
         # re-render the page with an error rather than 500 on a missing type / blank name
         if not chosen or not (name or "").strip():
             for t in active:
                 t["price_display"] = money(t["price_cents"], currency) if t["price_cents"] else ""
+                t["deposit_display"] = money(t["deposit_cents"], currency) if t["deposit_cents"] else ""
             err = "Please choose a session type." if not chosen else "Please tell us your name."
             return render(request, "studio/book.html", auth=None, tenant=tenant, profile=profile,
                           types=active, error=err, status_code=400)
-        request_booking(conn, tenant=tenant, booking_type=chosen, name=name, email=email,
-                        requested_at=requested_at, message=message)
+        result = request_booking(conn, settings, tenant=tenant, booking_type=chosen, name=name,
+                                 email=email, requested_at=requested_at, message=message)
         when = (requested_at or "").replace("T", " ").strip() or "no specific time given"
+        deposit_note = ("\nThey owe a deposit to secure it — a deposit invoice was created and "
+                        "they were sent to pay it.\n" if result["invoice"] else "")
         inbox = owner_digest_recipient(conn, tenant["id"])
         if inbox:
-            notify(conn, settings_of(request), to=inbox, tenant_id=tenant["id"], signed=False,
+            notify(conn, settings, to=inbox, tenant_id=tenant["id"], signed=False,
                    subject=f"New booking request: {chosen['title']}",
                    body=(f"{name.strip() or email or 'Someone'} requested a session via your "
                          f"booking page.\n\nSession: {chosen['title']}\nRequested time: {when}\n"
                          f"Email: {email or '—'}\n"
                          + (f"\nMessage:\n{message.strip()}\n" if (message or '').strip() else "")
+                         + deposit_note
                          + "\nThey're in your CRM as a new lead with a proposed session — open it "
                          "in your schedule to confirm the time."))
         conn.commit()
+        invoice = result["invoice"]
+    # A deposit is due → send the visitor straight to pay it; otherwise a simple thanks.
+    if invoice:
+        return RedirectResponse(f"/pay/{invoice['token']}", status_code=303)
     return render(request, "studio/book_thanks.html", auth=None, tenant=tenant,
                   booking_title=chosen["title"])
