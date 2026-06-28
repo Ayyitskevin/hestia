@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Checklist templates — Hestia{% endblock %}
+{% block content %}
+<div class="page-title"><h1>Checklist templates</h1></div>
+
+<div class="card stack">
+  <p class="muted">Set up your go-to deliverable checklist once per shoot type. When a project
+    books, Hestia copies the matching items onto its checklist automatically (you can also apply
+    it from any project). Use <strong>Any shoot type</strong> for items every project needs.</p>
+  <form method="post" action="/checklists" class="inline-grid-form">
+    {% include "_csrf.html" %}
+    <div style="grid-column:1 / 2">
+      <label for="label">Task</label>
+      <input type="text" id="label" name="label" placeholder="Send contract" required>
+    </div>
+    <div>
+      <label for="shoot_type">Applies to</label>
+      <select id="shoot_type" name="shoot_type">
+        {% for st in shoot_types %}<option value="{{ st }}">{{ labels.get(st, st) }}</option>{% endfor %}
+      </select>
+    </div>
+    <button class="btn" type="submit">Add item</button>
+  </form>
+</div>
+
+{% if grouped %}
+  {% for st, items in grouped.items() %}
+  <div class="card stack" style="margin-top:18px">
+    <h3>{{ labels.get(st, st) }}</h3>
+    {% for t in items %}
+    <div style="display:flex; align-items:center; gap:8px">
+      <span style="flex:1">{{ t.label }}</span>
+      <form method="post" action="/checklists/{{ t.id }}/delete" style="margin:0">
+        {% include "_csrf.html" %}
+        <button class="btn ghost" type="submit" title="Delete" style="padding:2px 9px">✕</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+{% else %}
+<p class="muted" style="margin-top:18px">No template items yet — add the deliverables you repeat
+  on every shoot (send contract, collect deposit, send questionnaire, deliver gallery, request review).</p>
+{% endif %}
+{% endblock %}
