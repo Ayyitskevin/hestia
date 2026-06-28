@@ -5,7 +5,7 @@ import io
 
 from conftest import login_owner, onboard_studio
 
-from hestia.crm import create_project
+from hestia.crm import create_client, create_project
 from hestia.db import connect
 from hestia.finances import create_expense
 from hestia.galleries import add_image, create_gallery, publish_gallery
@@ -20,6 +20,7 @@ from hestia.reports import (
     lead_sources,
     monthly_pnl,
     tax_by_period,
+    top_clients,
 )
 from hestia.tenants import create_tenant
 
@@ -278,3 +279,40 @@ def test_gallery_sales_excludes_draft_and_is_tenant_scoped(conn):
     assert gallery_sales(conn, t1["id"])["total_galleries"] == 1
     rep2 = gallery_sales(conn, t2["id"])
     assert rep2["total_galleries"] == 0 and rep2["total_revenue_cents"] == 0   # tenant scoped
+
+
+# ── top clients ────────────────────────────────────────────────────────────────
+
+
+def _paid_for(conn, settings, tenant_id, client_id, cents):
+    inv = create_invoice(conn, settings, tenant_id=tenant_id, title="I", amount_cents=cents,
+                         client_id=client_id)
+    conn.execute("UPDATE invoices SET status='paid' WHERE id=?", (inv["id"],))
+
+
+def test_top_clients_ranks_by_paid_revenue(conn, settings):
+    t = create_tenant(conn, name="TC", shoot_type="wedding")
+    big = create_client(conn, tenant_id=t["id"], name="Big")
+    small = create_client(conn, tenant_id=t["id"], name="Small")
+    create_client(conn, tenant_id=t["id"], name="Zero")          # no paid invoices → excluded
+    _paid_for(conn, settings, t["id"], big["id"], 50000)
+    _paid_for(conn, settings, t["id"], big["id"], 30000)
+    _paid_for(conn, settings, t["id"], small["id"], 10000)
+    create_invoice(conn, settings, tenant_id=t["id"], title="U", amount_cents=99999,
+                   client_id=small["id"])                        # unpaid → doesn't count
+    conn.commit()
+    rep = top_clients(conn, t["id"])
+    assert [r["name"] for r in rep["rows"]] == ["Big", "Small"]  # zero excluded, revenue desc
+    assert rep["rows"][0]["lifetime_cents"] == 80000
+    assert rep["count"] == 2 and rep["total_cents"] == 90000
+
+
+def test_top_clients_respects_limit_and_tenant(conn, settings):
+    t1 = create_tenant(conn, name="A", shoot_type="wedding")
+    t2 = create_tenant(conn, name="B", shoot_type="wedding")
+    for i in range(3):
+        c = create_client(conn, tenant_id=t1["id"], name=f"C{i}")
+        _paid_for(conn, settings, t1["id"], c["id"], (i + 1) * 1000)
+    conn.commit()
+    assert len(top_clients(conn, t1["id"], limit=2)["rows"]) == 2
+    assert top_clients(conn, t2["id"])["count"] == 0             # tenant scoped

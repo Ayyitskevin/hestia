@@ -171,6 +171,21 @@ def booking_funnel(conn: sqlite3.Connection, tenant_id: str) -> dict:
     }
 
 
+def top_clients(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 10) -> dict:
+    """The studio's highest-value clients by collected (paid) revenue — for retention/VIP
+    focus. Reuses the same lifetime figure as the client list (sum of paid invoice subtotals,
+    tax excluded, matching the revenue elsewhere). Returns the top ``limit`` high-to-low plus
+    the count of revenue clients and their combined total. Tenant-scoped, read-only."""
+    from .crm import list_clients  # lazy: keeps the reports↔crm edge one-way
+
+    earners = [c for c in list_clients(conn, tenant_id) if int(c["lifetime_cents"]) > 0]
+    rows = [{"id": c["id"], "name": c["name"], "projects": int(c["project_count"]),
+             "lifetime_cents": int(c["lifetime_cents"]), "lifetime": c["lifetime_display"]}
+            for c in earners[:limit]]
+    total = sum(int(c["lifetime_cents"]) for c in earners)
+    return {"rows": rows, "count": len(earners), "total_cents": total, "total": money(total)}
+
+
 def gallery_sales(conn: sqlite3.Connection, tenant_id: str) -> dict:
     """Per published gallery: views, client favorites, and paid print/album orders with
     revenue — so the studio sees which deliveries actually convert to sales. Plus the

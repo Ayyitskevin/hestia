@@ -53,6 +53,26 @@
 </div>
 {% endif %}
 
+{% if clients.rows %}
+<div class="card stack" style="margin-top:18px">
+  <h3>Top clients</h3>
+  <p class="muted">Your highest-value clients by collected revenue — {{ clients.count }} paying
+    client{{ '' if clients.count == 1 else 's' }}, {{ clients.total }} all-time.</p>
+  <table>
+    <thead><tr><th>Client</th><th>Projects</th><th>Revenue</th></tr></thead>
+    <tbody>
+      {% for c in clients.rows %}
+      <tr>
+        <td><a href="/clients/{{ c.id }}">{{ c.name }}</a></td>
+        <td class="muted">{{ c.projects }}</td>
+        <td>{{ c.lifetime }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {% if galleries.total_galleries %}
 <div class="card stack" style="margin-top:18px">
   <h3>Gallery sales</h3>
