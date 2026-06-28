@@ -74,6 +74,25 @@ def test_templates_are_tenant_scoped(conn):
         == messaging.TEMPLATES["invoice_send"]["subject"]       # B sees the default
 
 
+def test_general_template_choices_are_compose_safe():
+    """Only templates fully rendered from {client}/{studio} are offered to the manual
+    composer — so a chosen draft never carries a raw {token} the studio must hunt down."""
+    choices = messaging.general_template_choices()
+    kinds = {c["kind"] for c in choices}
+    assert {"inquiry_reply", "broadcast"} <= kinds              # the general-purpose ones
+    assert "invoice_send" not in kinds and "contract_send" not in kinds  # flow-specific excluded
+    for c in choices:                                          # every offered kind is compose-safe
+        assert set(messaging.TEMPLATES[c["kind"]]["variables"]) <= {"client", "studio"}
+        assert c["label"]                                     # carries a human label for the picker
+
+
+def test_is_general_template_guards_kinds():
+    assert messaging.is_general_template("inquiry_reply")
+    assert messaging.is_general_template("broadcast")
+    assert not messaging.is_general_template("invoice_send")   # needs pay_url/amount
+    assert not messaging.is_general_template("nope")           # unknown kind
+
+
 # ── wired emails ─────────────────────────────────────────────────────────────
 
 

@@ -65,3 +65,35 @@ def test_foreign_client_redirects(client):
     assert client.get("/clients/99999/email").status_code in (200, 303)
     assert client.post("/clients/99999/email",
                        data={"subject": "x", "body": "y"}).status_code in (200, 303)
+
+
+def test_compose_offers_template_picker(client):
+    """The composer lets the studio start from any of its general-purpose templates."""
+    creds = onboard_studio(client, name="Lumen Studio", email="ce6@example.com")
+    login_owner(client, creds)
+    cid = _make_client(client, "Jordan Lee", "jordan@example.com")
+    page = client.get(f"/clients/{cid}/email").text
+    assert "Start from" in page and 'name="template"' in page
+    assert "Announcement / broadcast" in page            # a second general template is offered
+
+
+def test_compose_loads_selected_template(client):
+    """Choosing a template re-renders the draft from it, filled with the client/studio."""
+    creds = onboard_studio(client, name="Lumen Studio", email="ce7@example.com")
+    login_owner(client, creds)
+    cid = _make_client(client, "Jordan Lee", "jordan@example.com")
+    page = client.get(f"/clients/{cid}/email?template=broadcast").text
+    assert "I wanted to share a quick update" in page    # the broadcast body, not the inquiry one
+    assert "Hi Jordan Lee," in page                      # rendered with the client's name
+
+
+def test_compose_rejects_flow_specific_or_unknown_template(client):
+    """A flow-specific (invoice/contract) or bogus template falls back to the inquiry
+    reply — never rendered, so no raw {pay_url}/{amount} token leaks into the draft."""
+    creds = onboard_studio(client, name="Lumen Studio", email="ce8@example.com")
+    login_owner(client, creds)
+    cid = _make_client(client, "Jordan Lee", "jordan@example.com")
+    for bad in ("invoice_send", "contract_send", "definitely-not-a-kind"):
+        page = client.get(f"/clients/{cid}/email?template={bad}").text
+        assert "{pay_url}" not in page and "{amount}" not in page and "{sign_url}" not in page
+        assert "Hi Jordan Lee," in page                  # fell back to the inquiry-reply default

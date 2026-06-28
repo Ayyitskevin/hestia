@@ -6,9 +6,25 @@
   <h1>Email {{ client.name }}</h1>
   <a class="btn secondary" href="/clients/{{ client.id }}">← Back</a>
 </div>
-<p class="muted">To <strong>{{ client.email }}</strong>. Pre-filled from your
-  <a href="/settings/messages">Reply to an inquiry</a> template — edit it as you like. Your
-  signature is added automatically.</p>
+<p class="muted">To <strong>{{ client.email }}</strong>. Start from one of your saved
+  <a href="/settings/messages">email templates</a> — edit it as you like. Your signature is
+  added automatically.</p>
+
+{% if templates | length > 1 %}
+<div class="card stack">
+  <form method="get" action="/clients/{{ client.id }}/email"
+        style="display:flex; gap:10px; align-items:center">
+    <label for="template" style="margin:0">Start from</label>
+    <select id="template" name="template" style="flex:1">
+      {% for t in templates %}
+      <option value="{{ t.kind }}" {{ 'selected' if t.kind == selected else '' }}>{{ t.label }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn secondary" type="submit">Load</button>
+  </form>
+  <p class="muted" style="font-size:.85rem; margin:0">Loading a template replaces the draft below.</p>
+</div>
+{% endif %}
 
 <div class="card stack">
   <form method="post" action="/clients/{{ client.id }}/email">

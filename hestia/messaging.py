@@ -146,6 +146,28 @@ TEMPLATES: dict[str, dict] = {
     },
 }
 
+# Templates offerable in the ad-hoc client-email composer: those whose variables are
+# fully supplied by a basic manual compose (just the client + studio names), so the
+# rendered draft never leaves a raw {token} the studio would have to notice and delete.
+# Flow-specific templates (invoice, contract, gallery…) carry URLs/amounts that only a
+# dedicated send flow can fill, so they're not offered here.
+_COMPOSE_VARS = {"client", "studio"}
+
+
+def general_template_choices() -> list[dict]:
+    """`{kind, label}` for each template suitable for the manual client-email composer,
+    in TEMPLATES order. A template qualifies when every variable it uses is one the
+    composer can supply, so picking it yields a fully-rendered draft."""
+    return [{"kind": kind, "label": d["label"]} for kind, d in TEMPLATES.items()
+            if set(d["variables"]) <= _COMPOSE_VARS]
+
+
+def is_general_template(kind: str) -> bool:
+    """Whether ``kind`` is one the manual composer may render (guards the picker's input)."""
+    d = TEMPLATES.get(kind)
+    return d is not None and set(d["variables"]) <= _COMPOSE_VARS
+
+
 _VAR = re.compile(r"\{(\w+)\}")
 
 
