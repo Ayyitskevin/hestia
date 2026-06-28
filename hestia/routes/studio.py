@@ -12,6 +12,8 @@ from ..auth import context_from_session
 from ..dashboard import set_digest_enabled
 from ..db import list_audit
 from ..email import list_emails, notify
+from ..invoices import money
+from ..packages import get_package, list_packages
 from ..ratelimit import enforce
 from ..referrals import attribute_referral
 from ..studio import create_inquiry, get_profile, upsert_profile
@@ -60,8 +62,12 @@ def public_site(request: Request, slug: str, ref: str = ""):
         if not profile["published"]:
             return render(request, "studio/coming_soon.html", auth=None, tenant=tenant)
         testimonials = featured_testimonials(conn, tenant["id"])
+        currency = settings_of(request).currency
+        packages = list_packages(conn, tenant["id"], active_only=True)
+        for p in packages:
+            p["price_display"] = money(p["price_cents"], currency)
     return render(request, "studio/site.html", auth=None, tenant=tenant, profile=profile,
-                  testimonials=testimonials, ref=ref)
+                  testimonials=testimonials, ref=ref, packages=packages)
 
 
 @router.get("/studio/{slug}/reviews")
@@ -81,7 +87,7 @@ def public_reviews(request: Request, slug: str):
 @router.post("/studio/{slug}/inquire")
 def public_inquire(request: Request, slug: str, name: str = Form(...), email: str = Form(""),
                    message: str = Form(""), shoot_type: str = Form("other"),
-                   event_date: str = Form(""), ref: str = Form("")):
+                   event_date: str = Form(""), ref: str = Form(""), package_id: str = Form("")):
     enforce(request, "inquiry")
     with db_conn(request) as conn:
         tenant = get_tenant_by_slug(conn, slug)
@@ -90,7 +96,11 @@ def public_inquire(request: Request, slug: str, name: str = Form(...), email: st
         profile = get_profile(conn, tenant["id"])
         if not profile["published"]:
             return render(request, "studio/coming_soon.html", auth=None, tenant=tenant)
-        project = create_inquiry(conn, tenant=tenant, name=name, email=email, message=message,
+        # If they picked a package, fold its name into the lead so the studio sees
+        # the intent. Tenant-scoped lookup — a stray/foreign id is simply ignored.
+        pkg = get_package(conn, tenant["id"], int(package_id)) if package_id.strip().isdigit() else None
+        full_message = f"Interested in: {pkg['name']}\n\n{message}".strip() if pkg else message
+        project = create_inquiry(conn, tenant=tenant, name=name, email=email, message=full_message,
                                  shoot_type=shoot_type, event_date=event_date)
         attribute_referral(conn, tenant["id"], project["id"], ref)
         # Alert the studio that a lead came in (mock records it; smtp also sends).
@@ -99,7 +109,9 @@ def public_inquire(request: Request, slug: str, name: str = Form(...), email: st
                subject=f"New {shoot_type} inquiry from {name or email or 'website'}",
                body=(f"{name or 'Someone'} just inquired via your studio site.\n\n"
                      f"Email: {email or '—'}\nShoot type: {shoot_type}\n"
-                     f"Event date: {event_date or '—'}\n\nMessage:\n{message or '(none)'}\n\n"
+                     f"Event date: {event_date or '—'}\n"
+                     + (f"Interested in: {pkg['name']}\n" if pkg else "")
+                     + f"\nMessage:\n{message or '(none)'}\n\n"
                      f"They're already in your CRM as a new lead."))
         conn.commit()
     return render(request, "studio/thanks.html", auth=None, tenant=tenant)

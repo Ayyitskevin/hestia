@@ -1,10 +1,25 @@
 """Public studio site — profile, and the inquiry → CRM lead loop."""
 
-from conftest import login_owner, onboard_studio
+from conftest import CSRFClient, login_owner, onboard_studio
 
 from hestia.crm import list_clients, list_projects
+from hestia.db import connect
+from hestia.packages import list_packages
 from hestia.studio import create_inquiry, get_profile, upsert_profile
 from hestia.tenants import create_tenant, slugify
+
+
+def _tid_of(conn, email):
+    return conn.execute(
+        "SELECT t.id FROM tenants t JOIN users u ON u.tenant_id = t.id WHERE u.email = ?",
+        (email,),
+    ).fetchone()["id"]
+
+
+def _latest_notes(conn, tenant_id):
+    return conn.execute(
+        "SELECT notes FROM projects WHERE tenant_id = ? ORDER BY id DESC LIMIT 1", (tenant_id,)
+    ).fetchone()["notes"]
 
 
 def _tenant(conn, name="Site Studio"):
@@ -78,3 +93,75 @@ def test_public_inquiry_becomes_lead(client):
 
     # the lead shows up in the studio's CRM
     assert "Sam Visitor" in client.get("/clients").text
+
+
+# ── Packages on the public site ───────────────────────────────────────────────
+
+
+def test_public_site_shows_packages(client):
+    creds = onboard_studio(client, name="Menu Studio", email="menu@example.com")
+    login_owner(client, creds)
+    slug = slugify("Menu Studio")
+    client.post("/settings/site", data={"headline": "x", "about": "y", "contact_email": "",
+                                        "published": "1"})
+    client.post("/packages", data={"name": "Gold Wedding", "description": "Full day coverage",
+                                   "price": "5000", "deposit": "1500"})
+    page = client.get(f"/studio/{slug}").text
+    assert "Gold Wedding" in page and "$5,000.00" in page    # public pricing section
+    assert "Interested in a package?" in page                # inquiry-form picker
+
+
+def test_public_inquiry_with_package_folds_into_lead(client, app):
+    creds = onboard_studio(client, name="Fold Studio", email="fold@example.com")
+    login_owner(client, creds)
+    slug = slugify("Fold Studio")
+    client.post("/settings/site", data={"headline": "x", "about": "y", "contact_email": "",
+                                        "published": "1"})
+    client.post("/packages", data={"name": "Elopement", "price": "2000"})
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = _tid_of(conn, creds["email"])
+        pid = list_packages(conn, tid)[0]["id"]
+    finally:
+        conn.close()
+
+    pub = CSRFClient(app)  # fresh, unauthenticated visitor
+    r = pub.post(f"/studio/{slug}/inquire", data={"name": "Dana", "email": "dana@example.com",
+                                                  "message": "Sept elopement", "shoot_type": "wedding",
+                                                  "package_id": str(pid)})
+    assert r.status_code == 200
+    conn = connect(app.state.settings.db_path)
+    try:
+        notes = _latest_notes(conn, tid)
+        assert "Interested in: Elopement" in notes and "Sept elopement" in notes
+    finally:
+        conn.close()
+
+
+def test_public_inquiry_foreign_package_id_ignored(client, app):
+    # a package_id from another tenant must not leak into this studio's lead
+    a = onboard_studio(client, name="Studio One", email="one@example.com")
+    login_owner(client, a)
+    client.post("/packages", data={"name": "One-Only", "price": "999"})
+    conn = connect(app.state.settings.db_path)
+    try:
+        a_pid = list_packages(conn, _tid_of(conn, a["email"]))[0]["id"]
+    finally:
+        conn.close()
+
+    b_client = CSRFClient(app)
+    b = onboard_studio(b_client, name="Studio Two", email="two@example.com")
+    login_owner(b_client, b)
+    b_client.post("/settings/site", data={"headline": "x", "about": "y", "contact_email": "",
+                                          "published": "1"})
+    slug = slugify("Studio Two")
+
+    pub = CSRFClient(app)
+    pub.post(f"/studio/{slug}/inquire", data={"name": "Vic", "email": "vic@example.com",
+                                              "message": "hello", "package_id": str(a_pid)})
+    conn = connect(app.state.settings.db_path)
+    try:
+        notes = _latest_notes(conn, _tid_of(conn, b["email"]))
+        assert "One-Only" not in notes                       # foreign package ignored
+    finally:
+        conn.close()
