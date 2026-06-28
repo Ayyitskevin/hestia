@@ -93,6 +93,29 @@ def invoice_items(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> 
     return out
 
 
+def duplicate_invoice(conn: sqlite3.Connection, settings: Settings, tenant_id: str,
+                      invoice_id: int) -> dict | None:
+    """Clone an invoice into a fresh draft — same title, amounts, tax, client/project,
+    note, and line items — with a new token and no payment state. For repeat/retainer
+    billing. Returns the new invoice, or None if the source isn't this tenant's. The
+    clone is standalone (never a plan installment)."""
+    src = get_invoice(conn, tenant_id, invoice_id)
+    if not src:
+        return None
+    new = create_invoice(
+        conn, settings, tenant_id=tenant_id, title=src["title"],
+        amount_cents=int(src["amount_cents"]), client_id=src.get("client_id"),
+        project_id=src.get("project_id"), tax_cents=int(src.get("tax_cents") or 0),
+        note=src.get("note") or "",
+    )
+    items = invoice_items(conn, tenant_id, invoice_id)
+    if items:
+        add_invoice_items(conn, tenant_id, new["id"],
+                          [(it["description"], it["amount_cents"]) for it in items])
+        new = get_invoice(conn, tenant_id, new["id"])
+    return new
+
+
 def tax_for(amount_cents: int, rate_bps: int) -> int:
     """Sales tax in cents for a subtotal at a basis-point rate (850 = 8.50%)."""
     return round(max(0, int(amount_cents)) * max(0, int(rate_bps)) / 10000)

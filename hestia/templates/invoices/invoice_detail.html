@@ -31,6 +31,7 @@
       </form>
       <form method="post" action="/invoices/{{ invoice.id }}/void">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Void</button></form>
     {% endif %}
+    <form method="post" action="/invoices/{{ invoice.id }}/duplicate" style="margin:0">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Duplicate</button></form>
   </div>
 </div>
 
