@@ -169,3 +169,37 @@ def test_http_cross_tenant_package_id_ignored_on_prefill(client, app):
     login_owner(b_client, b)
     prefilled = b_client.get(f"/invoices/new?package_id={a_pid}").text
     assert "A-only" not in prefilled              # cross-tenant package is invisible
+    # ...and likewise for the payment-plan builder
+    assert "A-only" not in b_client.get(f"/payment-plans/new?package_id={a_pid}").text
+
+
+def test_http_use_package_as_payment_plan(client, app):
+    creds = onboard_studio(client, name="Plan Studio", email="plan@example.com")
+    login_owner(client, creds)
+    client.post("/packages", data={"name": "Wedding Collection", "price": "4,000.00",
+                                   "deposit": "1000"})
+    conn = connect(app.state.settings.db_path)
+    try:
+        pid = list_packages(conn, _tid(conn, creds["email"]))[0]["id"]
+    finally:
+        conn.close()
+
+    # the plan builder offers the package and prefills total + deposit from it
+    page = client.get("/payment-plans/new").text
+    assert "Wedding Collection" in page and "Start from a package" in page
+    prefilled = client.get(f"/payment-plans/new?package_id={pid}").text
+    assert ('value="Wedding Collection"' in prefilled
+            and 'value="4000.00"' in prefilled and 'value="1000.00"' in prefilled)
+
+    # creating the plan from those values yields a deposit + balance schedule
+    r = client.post("/payment-plans", data={"title": "Wedding Collection", "total": "4000.00",
+                                            "deposit": "1000.00"})
+    assert r.status_code in (200, 303)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = _tid(conn, creds["email"])
+        amounts = sorted(row["amount_cents"] for row in conn.execute(
+            "SELECT amount_cents FROM invoices WHERE tenant_id = ? AND plan_id IS NOT NULL", (tid,)))
+        assert amounts == [100000, 300000]        # deposit 1000 + balance 3000
+    finally:
+        conn.close()

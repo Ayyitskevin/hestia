@@ -6,16 +6,32 @@
   <h1>New payment plan</h1>
   <p class="muted">Split a booking into a deposit (due now) and a balance (due by the event date).
     Each becomes its own pay link your client can settle independently.</p>
+  {% if packages %}
+  <div class="stack" style="margin-bottom:6px">
+    <strong>Start from a package</strong>
+    <p class="muted" style="font-size:.85rem; margin:0">Pull one of your service packages in as the
+      total and deposit — you can still edit everything.</p>
+    <div style="display:flex; flex-wrap:wrap; gap:8px">
+      {% for pk in packages %}
+        <a class="btn ghost" href="/payment-plans/new?package_id={{ pk.id }}{% if preselect_client %}&client_id={{ preselect_client }}{% endif %}{% if preselect_project %}&project_id={{ preselect_project }}{% endif %}">{{ pk.name }} · {{ pk.price_display }}</a>
+      {% endfor %}
+    </div>
+    <a class="muted" href="/packages" style="font-size:.85rem">Manage packages →</a>
+  </div>
+  {% endif %}
   <form method="post" action="/payment-plans">
     {% include "_csrf.html" %}
     <label for="title">Title</label>
-    <input type="text" id="title" name="title" placeholder="Wedding photography" required autofocus>
+    <input type="text" id="title" name="title" placeholder="Wedding photography"
+           value="{{ prefill.title if prefill else '' }}" required autofocus>
 
     <label for="total">Total ({{ settings.currency|upper }})</label>
-    <input type="text" id="total" name="total" placeholder="4000.00" required>
+    <input type="text" id="total" name="total" placeholder="4000.00"
+           value="{{ prefill.total if prefill else '' }}" required>
 
     <label for="deposit">Deposit due now ({{ settings.currency|upper }})</label>
-    <input type="text" id="deposit" name="deposit" placeholder="1000.00" required>
+    <input type="text" id="deposit" name="deposit" placeholder="1000.00"
+           value="{{ prefill.deposit if prefill else '' }}" required>
 
     <label for="balance_due_date">Balance due date <span class="muted">(optional)</span></label>
     <input type="text" id="balance_due_date" name="balance_due_date" placeholder="2026-08-15">

@@ -44,6 +44,7 @@
         <td class="muted">{{ p.deposit_display or '—' }}</td>
         <td style="white-space:nowrap; text-align:right">
           <a class="btn ghost" href="/invoices/new?package_id={{ p.id }}">Use on invoice</a>
+          <a class="btn ghost" href="/payment-plans/new?package_id={{ p.id }}">Use as plan</a>
           <form method="post" action="/packages/{{ p.id }}/archive" style="display:inline">
             {% include "_csrf.html" %}
             <button class="btn ghost" type="submit">Archive</button>
