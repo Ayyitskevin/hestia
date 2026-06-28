@@ -67,12 +67,13 @@ def set_invoice_note(conn: sqlite3.Connection, tenant_id: str, invoice_id: int, 
 def add_invoice_items(conn: sqlite3.Connection, tenant_id: str, invoice_id: int,
                       items: list[tuple[str, int]]) -> None:
     """Attach line items (description, amount_cents) to an invoice, in order. The caller
-    sets the invoice's amount_cents to their sum — these rows are the display breakdown."""
+    sets the invoice's amount_cents to their sum — these rows are the display breakdown.
+    Amounts may be negative (a discount line); the caller floors the subtotal at zero."""
     for pos, (desc, cents) in enumerate(items, start=1):
         conn.execute(
             "INSERT INTO invoice_items (invoice_id, tenant_id, description, amount_cents, position) "
             "VALUES (?, ?, ?, ?, ?)",
-            (invoice_id, tenant_id, (desc or "").strip()[:300], max(0, int(cents)), pos),
+            (invoice_id, tenant_id, (desc or "").strip()[:300], int(cents), pos),
         )
 
 
