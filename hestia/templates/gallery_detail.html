@@ -114,6 +114,8 @@
     <div class="health-item"><span class="svc">{{ favorites|length }}</span> <span class="url">favorite{{ '' if favorites|length == 1 else 's' }}</span></div>
     <div class="health-item"><span class="svc">{{ '✓' if gallery.last_viewed_at else '—' }}</span>
       <span class="url">{% if gallery.last_viewed_at %}last seen {{ gallery.last_viewed_at[:10] }}{% else %}not opened yet{% endif %}</span></div>
+    <div class="health-item"><span class="svc">{{ '✓' if gallery.selections_submitted_at else '—' }}</span>
+      <span class="url">{% if gallery.selections_submitted_at %}selections in {{ gallery.selections_submitted_at[:10] }}{% else %}awaiting selections{% endif %}</span></div>
   </div>
 </div>
 
