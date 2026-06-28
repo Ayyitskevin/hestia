@@ -20,7 +20,12 @@ from .config import Settings
 from .crm import create_client, create_project
 from .db import audit
 from .invoices import create_invoice, get_invoice, send_invoice
-from .scheduler import APPOINTMENT_KINDS, create_appointment
+from .scheduler import (
+    APPOINTMENT_KINDS,
+    confirm_appointment,
+    create_appointment,
+    get_appointment,
+)
 
 _MAX_DURATION = 24 * 60   # a single session is at most a day; clamp absurd input
 
@@ -111,11 +116,14 @@ def delete_booking_type(conn: sqlite3.Connection, tenant_id: str, type_id: int) 
 def request_booking(
     conn: sqlite3.Connection, settings: Settings, *, tenant: dict, booking_type: dict, name: str,
     email: str = "", requested_at: str = "", message: str = "", lead_source: str = "booking",
+    confirm: bool = False,
 ) -> dict:
-    """A public visitor requests a session of one published type. Creates a CRM lead
-    (client + project) and a PROPOSED appointment at the requested time for the owner to
-    confirm; if the session type carries a deposit, also raises a deposit invoice (paid
-    through the existing /pay flow) to secure the booking. Returns
+    """A public visitor books/requests a session of one published type. Creates a CRM lead
+    (client + project) and an appointment at the requested time. When ``confirm`` is set
+    (the visitor picked a real open availability slot), the appointment is confirmed on the
+    spot — firing the usual confirmation email + reminder; otherwise it's left PROPOSED for
+    the owner to confirm. If the session type carries a deposit, also raises a deposit
+    invoice (paid through the existing /pay flow) to secure the booking. Returns
     ``{"project", "appointment", "client", "invoice"}`` (invoice is None when no deposit).
     No commit — the caller owns the transaction, so the lead, appointment, and deposit
     invoice all land together or not at all."""
@@ -123,7 +131,7 @@ def request_booking(
     who = (name or "").strip() or (email or "").strip() or "Booking request"
     when = (requested_at or "").replace("T", " ").strip()   # accept datetime-local; store space-separated
     client = create_client(conn, tenant_id=tenant_id, name=who, email=email)
-    notes = (f"Requested: {booking_type['title']}"
+    notes = (f"{'Booked' if confirm else 'Requested'}: {booking_type['title']}"
              + (f" · {when}" if when else "")
              + (f"\n\n{message.strip()}" if (message or "").strip() else ""))
     project = create_project(
@@ -137,6 +145,9 @@ def request_booking(
         client_id=client["id"], project_id=project["id"],
         duration_minutes=int(booking_type.get("duration_minutes") or 60),
     )
+    if confirm and when:                                # picked a real open slot → confirm it now
+        confirm_appointment(conn, tenant_id, appt["id"], when)
+        appt = get_appointment(conn, tenant_id, appt["id"])
     invoice = None
     deposit_cents = max(0, int(booking_type.get("deposit_cents") or 0))
     if deposit_cents > 0:
@@ -150,6 +161,6 @@ def request_booking(
         # statement — not just once it's paid. Payment works the same either way.
         send_invoice(conn, tenant_id, invoice["id"])
         invoice = get_invoice(conn, tenant_id, invoice["id"])
-    audit(conn, actor="public", action="booking.requested", tenant_id=tenant_id,
-          detail=f"{booking_type['title']} · {when or 'no time given'} · {email or who}")
+    audit(conn, actor="public", action="booking.confirmed" if (confirm and when) else "booking.requested",
+          tenant_id=tenant_id, detail=f"{booking_type['title']} · {when or 'no time given'} · {email or who}")
     return {"project": project, "appointment": appt, "client": client, "invoice": invoice}

@@ -14,6 +14,16 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
+from ..availability import (
+    WEEKDAYS,
+    add_window,
+    available_slots,
+    delete_window,
+    has_availability,
+    hhmm_to_minutes,
+    is_slot_open,
+    list_windows,
+)
 from ..booking import (
     create_booking_type,
     delete_booking_type,
@@ -68,9 +78,11 @@ def booking_types_list(request: Request):
             t["deposit_display"] = money(t["deposit_cents"], currency) if t["deposit_cents"] else ""
             t["kind_label"] = KIND_LABELS.get(t["kind"], t["kind"])
         profile = get_profile(conn, auth.tenant["id"])
+        windows = list_windows(conn, auth.tenant["id"])
     return render(request, "studio/booking_types.html", auth=auth, types=types,
                   kinds=_kind_choices(), published=bool(profile["published"]),
-                  slug=auth.tenant.get("slug", ""))
+                  slug=auth.tenant.get("slug", ""), windows=windows,
+                  weekdays=list(enumerate(WEEKDAYS)))
 
 
 @router.post("/settings/booking-types")
@@ -108,6 +120,33 @@ def booking_type_delete(request: Request, type_id: int):
     return RedirectResponse("/settings/booking-types", status_code=303)
 
 
+@router.post("/settings/availability")
+def availability_add(request: Request, weekday: str = Form(""), start: str = Form(""),
+                     end: str = Form("")):
+    """Add a weekly open-hours window. A malformed weekday/time is a no-op (add_window
+    validates), so a bad submit just redirects back without a row."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        wd = int(weekday) if weekday.strip().isdigit() else -1
+        start_min, end_min = hhmm_to_minutes(start), hhmm_to_minutes(end)
+        if 0 <= wd <= 6 and start_min is not None and end_min is not None:
+            add_window(conn, tenant_id=auth.tenant["id"], weekday=wd,
+                       start_minute=start_min, end_minute=end_min)
+    return RedirectResponse("/settings/booking-types", status_code=303)
+
+
+@router.post("/settings/availability/{window_id}/delete")
+def availability_delete(request: Request, window_id: int):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        delete_window(conn, auth.tenant["id"], window_id)
+    return RedirectResponse("/settings/booking-types", status_code=303)
+
+
 # ── Public: the "book me" page ────────────────────────────────────────────────
 
 
@@ -120,8 +159,19 @@ def _published_tenant(conn, slug: str):
     return (tenant, profile) if profile["published"] else (None, None)
 
 
+def _hydrate(types: list[dict], currency: str) -> list[dict]:
+    for t in types:
+        t["price_display"] = money(t["price_cents"], currency) if t["price_cents"] else ""
+        t["deposit_display"] = money(t["deposit_cents"], currency) if t["deposit_cents"] else ""
+    return types
+
+
 @router.get("/studio/{slug}/book")
-def public_book_page(request: Request, slug: str):
+def public_book_page(request: Request, slug: str, type: str = ""):
+    """Two steps on one route: with no ?type, show the session-type picker; with a valid
+    ?type, show that session's booking form — real open slots when the studio has set
+    availability, otherwise a free-text time request."""
+    currency = settings_of(request).currency
     with db_conn(request) as conn:
         tenant, profile = _published_tenant(conn, slug)
         if not tenant:
@@ -129,55 +179,77 @@ def public_book_page(request: Request, slug: str):
             if t:
                 return render(request, "studio/coming_soon.html", auth=None, tenant=t)
             return render(request, "offer_missing.html", auth=None, status_code=404)
-        currency = settings_of(request).currency
-        types = list_booking_types(conn, tenant["id"], active_only=True)
-        for t in types:
-            t["price_display"] = money(t["price_cents"], currency) if t["price_cents"] else ""
-            t["deposit_display"] = money(t["deposit_cents"], currency) if t["deposit_cents"] else ""
-    return render(request, "studio/book.html", auth=None, tenant=tenant, profile=profile, types=types)
+        types = _hydrate(list_booking_types(conn, tenant["id"], active_only=True), currency)
+        chosen = next((t for t in types if str(t["id"]) == type.strip()), None) if type.strip() else None
+        use_slots = bool(chosen and has_availability(conn, tenant["id"]))
+        slots = (available_slots(conn, tenant["id"], duration_minutes=chosen["duration_minutes"])
+                 if use_slots else [])
+    return render(request, "studio/book.html", auth=None, tenant=tenant, profile=profile,
+                  types=types, chosen=chosen, slots=slots, use_slots=use_slots)
 
 
 @router.post("/studio/{slug}/book")
 def public_book_submit(request: Request, slug: str, booking_type_id: str = Form(""),
                        name: str = Form(""), email: str = Form(""), requested_at: str = Form(""),
-                       message: str = Form("")):
+                       slot: str = Form(""), message: str = Form("")):
     enforce(request, "inquiry")
     settings = settings_of(request)
     with db_conn(request) as conn:
+        # Take SQLite's write lock up front so the availability re-check (is_slot_open) and the
+        # confirming insert are atomic against another concurrent booking — without this, two
+        # requests could both pass the check before either commits and double-book one slot.
+        conn.execute("BEGIN IMMEDIATE")
         tenant, profile = _published_tenant(conn, slug)
         if not tenant:
             return render(request, "offer_missing.html", auth=None, status_code=404)
-        currency = settings.currency
-        active = list_booking_types(conn, tenant["id"], active_only=True)
+        active = _hydrate(list_booking_types(conn, tenant["id"], active_only=True), settings.currency)
         chosen = next((t for t in active if str(t["id"]) == booking_type_id.strip()), None)
-        # re-render the page with an error rather than 500 on a missing type / blank name
-        if not chosen or not (name or "").strip():
-            for t in active:
-                t["price_display"] = money(t["price_cents"], currency) if t["price_cents"] else ""
-                t["deposit_display"] = money(t["deposit_cents"], currency) if t["deposit_cents"] else ""
-            err = "Please choose a session type." if not chosen else "Please tell us your name."
+
+        def _re_render(err: str):
+            use_slots = bool(chosen and has_availability(conn, tenant["id"]))
+            slots = (available_slots(conn, tenant["id"], duration_minutes=chosen["duration_minutes"])
+                     if use_slots else [])
             return render(request, "studio/book.html", auth=None, tenant=tenant, profile=profile,
-                          types=active, error=err, status_code=400)
+                          types=active, chosen=chosen, slots=slots, use_slots=use_slots,
+                          error=err, status_code=400)
+
+        if not chosen:
+            return _re_render("Please choose a session type.")
+        if not (name or "").strip():
+            return _re_render("Please tell us your name.")
+
+        avail = has_availability(conn, tenant["id"])
+        confirm, when_field = False, requested_at
+        if avail:
+            # availability is on → the visitor must pick a real, still-open slot (re-checked
+            # here so a slot taken since page-load can't be double-booked)
+            if not slot.strip() or not is_slot_open(
+                    conn, tenant["id"], duration_minutes=chosen["duration_minutes"], slot=slot):
+                return _re_render("That time is no longer available — please pick another slot.")
+            confirm, when_field = True, slot
+
         result = request_booking(conn, settings, tenant=tenant, booking_type=chosen, name=name,
-                                 email=email, requested_at=requested_at, message=message)
-        when = (requested_at or "").replace("T", " ").strip() or "no specific time given"
-        deposit_note = ("\nThey owe a deposit to secure it — a deposit invoice was created and "
-                        "they were sent to pay it.\n" if result["invoice"] else "")
+                                 email=email, requested_at=when_field, message=message, confirm=confirm)
+        when = (when_field or "").replace("T", " ").strip() or "no specific time given"
+        deposit_note = ("\nA deposit is due to secure it — a deposit invoice was created and they "
+                        "were sent to pay it.\n" if result["invoice"] else "")
+        lead_line = ("\nIt's confirmed on your calendar — they're in your CRM as a new lead.\n"
+                     if confirm else
+                     "\nThey're in your CRM as a new lead with a proposed session — open it in "
+                     "your schedule to confirm the time.\n")
         inbox = owner_digest_recipient(conn, tenant["id"])
         if inbox:
             notify(conn, settings, to=inbox, tenant_id=tenant["id"], signed=False,
-                   subject=f"New booking request: {chosen['title']}",
-                   body=(f"{name.strip() or email or 'Someone'} requested a session via your "
-                         f"booking page.\n\nSession: {chosen['title']}\nRequested time: {when}\n"
-                         f"Email: {email or '—'}\n"
+                   subject=(f"New booking: {chosen['title']}" if confirm
+                            else f"New booking request: {chosen['title']}"),
+                   body=(f"{name.strip() or email or 'Someone'} booked a session via your booking "
+                         f"page.\n\nSession: {chosen['title']}\nTime: {when}\nEmail: {email or '—'}\n"
                          + (f"\nMessage:\n{message.strip()}\n" if (message or '').strip() else "")
-                         + deposit_note
-                         + "\nThey're in your CRM as a new lead with a proposed session — open it "
-                         "in your schedule to confirm the time."))
+                         + deposit_note + lead_line))
         conn.commit()
         invoice = result["invoice"]
     # A deposit is due → send the visitor straight to pay it; otherwise a simple thanks.
     if invoice:
         return RedirectResponse(f"/pay/{invoice['token']}", status_code=303)
     return render(request, "studio/book_thanks.html", auth=None, tenant=tenant,
-                  booking_title=chosen["title"])
+                  booking_title=chosen["title"], confirmed=confirm)

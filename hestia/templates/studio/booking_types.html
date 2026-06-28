@@ -107,4 +107,44 @@
   </table>
 </div>
 {% endif %}
+
+<div class="card stack" style="margin-top:28px">
+  <h3>Weekly availability</h3>
+  <p class="muted" style="font-size:.9rem; margin:0">Set your open hours and clients pick a real
+    open slot that books instantly (stepped by each session's length, skipping times you're already
+    booked). With no hours set, clients just request a time and you confirm it.</p>
+
+  {% if windows %}
+  <table>
+    <tbody>
+      {% for w in windows %}
+      <tr>
+        <td>{{ w.weekday_label }}</td>
+        <td class="muted">{{ w.start_label }} – {{ w.end_label }}</td>
+        <td style="text-align:right">
+          <form method="post" action="/settings/availability/{{ w.id }}/delete" style="display:inline">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit" title="Remove">✕</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No open hours set — clients request a time you confirm.</p>
+  {% endif %}
+
+  <form method="post" action="/settings/availability"
+        style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px">
+    {% include "_csrf.html" %}
+    <select name="weekday" aria-label="Weekday">
+      {% for i, label in weekdays %}<option value="{{ i }}">{{ label }}</option>{% endfor %}
+    </select>
+    <input type="time" name="start" aria-label="Start time" required>
+    <span class="muted">to</span>
+    <input type="time" name="end" aria-label="End time" required>
+    <button class="btn secondary" type="submit">Add hours</button>
+  </form>
+</div>
 {% endblock %}

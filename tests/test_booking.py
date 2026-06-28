@@ -191,8 +191,17 @@ def test_public_book_page_gated_on_publish(client, app):
     # unpublished → coming soon, no booking form
     assert "coming soon" in client.get(f"/studio/{slug}/book").text.lower()
     _publish(client)
-    page = client.get(f"/studio/{slug}/book").text
-    assert "Mini session" in page and "Request this session" in page
+    # step 1: the type picker lists the session
+    picker = client.get(f"/studio/{slug}/book").text
+    assert "Mini session" in picker and "Choose a session" in picker
+    conn = connect(app.state.settings.db_path)
+    try:
+        bt_id = list_booking_types(conn, _tid_of(conn, creds["email"]))[0]["id"]
+    finally:
+        conn.close()
+    # step 2: with no availability set, the type page offers a free-text request
+    form = client.get(f"/studio/{slug}/book?type={bt_id}").text
+    assert "Request this session" in form
     # the public site cross-links to it once a type exists
     assert "See available sessions" in client.get(f"/studio/{slug}").text
 

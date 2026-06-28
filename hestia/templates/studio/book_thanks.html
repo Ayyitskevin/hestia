@@ -9,10 +9,16 @@
 <body class="client">
   <main>
     <div class="wrap narrow" style="text-align:center; padding-top:80px">
-      <div style="font-size:3rem">📅</div>
+      <div style="font-size:3rem">{{ '✅' if confirmed else '📅' }}</div>
+      {% if confirmed %}
+      <h1>You're booked!</h1>
+      <p class="muted">Your <strong>{{ booking_title }}</strong> with {{ tenant.name }} is confirmed —
+        a confirmation is on its way to your inbox.</p>
+      {% else %}
       <h1>Request received</h1>
       <p class="muted">Thanks! We've got your request for <strong>{{ booking_title }}</strong> —
         {{ tenant.name }} will confirm the time by email shortly.</p>
+      {% endif %}
       <p><a class="btn ghost" href="/studio/{{ tenant.slug }}">← Back</a></p>
     </div>
   </main>
