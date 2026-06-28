@@ -68,6 +68,15 @@ TEMPLATES: dict[str, dict] = {
                  "past due.\n\nYou can pay securely here:\n{pay_url}\n\nThank you!\n{studio}"),
         "variables": ["client", "studio", "title", "amount", "pay_url"],
     },
+    "invoice_final_notice": {
+        "label": "Invoice — final notice (last in the dunning ladder)",
+        "subject": 'Final notice: invoice "{title}" is overdue',
+        "body": ('Hi {client},\n\nthis is a final reminder that your invoice from {studio} — '
+                 '"{title}" for {amount} — remains unpaid and is now well past due.\n\n'
+                 "Please settle it here at your earliest convenience:\n{pay_url}\n\n"
+                 "If you've already paid, thank you — please disregard this note.\n{studio}"),
+        "variables": ["client", "studio", "title", "amount", "pay_url"],
+    },
     "invoice_receipt": {
         "label": "Payment receipt",
         "subject": "Receipt: {title} — paid",
