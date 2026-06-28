@@ -188,6 +188,24 @@
         {% else %}<p class="muted">Your galleries will appear here once they're published.</p>{% endif %}
       </div>
 
+      {% if files %}
+      <div class="card stack">
+        <h3>Files</h3>
+        <p class="muted">Documents {{ tenant.name }} shared with you.</p>
+        <table>
+          <tbody>
+            {% for f in files %}
+            <tr>
+              <td>{{ f.filename }}</td>
+              <td class="muted">{% if f.bytes %}{{ f.bytes | filesizeformat }}{% endif %}</td>
+              <td style="text-align:right"><a class="btn secondary" href="{{ f.download_url }}">⬇ Download</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
       {% if review_url %}
       <div class="card stack" style="border-color:#cfe2cb; background:var(--sage-soft)">
         <h3>Share your experience</h3>
