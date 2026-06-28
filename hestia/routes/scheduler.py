@@ -18,6 +18,7 @@ from ..scheduler import (
     complete_appointment,
     confirm_appointment,
     create_appointment,
+    create_block,
     ensure_calendar_token,
     get_appointment,
     list_appointments,
@@ -58,6 +59,29 @@ def schedule_calendar_regenerate(request: Request):
         if not auth:
             return RedirectResponse("/login", status_code=303)
         regenerate_calendar_token(conn, auth.tenant["id"])
+    return RedirectResponse("/schedule", status_code=303)
+
+
+@router.get("/block")                     # literal path before /{appt_id}
+def block_new(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+    return render(request, "scheduler/block_new.html", auth=auth)
+
+
+@router.post("/block")
+def block_create(request: Request, title: str = Form(""), starts_at: str = Form(""),
+                 duration_minutes: str = Form("60"), notes: str = Form("")):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if starts_at.strip():             # nothing to place on the calendar without a time
+            dur = int(duration_minutes) if duration_minutes.strip().isdigit() else 60
+            create_block(conn, tenant_id=auth.tenant["id"], title=title,
+                         starts_at=starts_at, duration_minutes=dur, notes=notes)
     return RedirectResponse("/schedule", status_code=303)
 
 
