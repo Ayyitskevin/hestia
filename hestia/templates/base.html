@@ -25,6 +25,10 @@
           <a href="/admin/system">System</a>
           <a href="/admin/logout">Sign out</a>
         {% elif auth and auth.tenant %}
+          <form method="get" action="/search" role="search" style="display:inline-flex; margin-right:4px">
+            <input type="search" name="q" placeholder="Search…" aria-label="Search clients and projects"
+                   style="width:130px; padding:4px 8px">
+          </form>
           <a href="/dashboard">Dashboard</a>
           <a href="/clients">Clients</a>
           <a href="/projects">Projects</a>

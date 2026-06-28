@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Search — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Search{% if q %} · <span class="muted">{{ q }}</span>{% endif %}</h1>
+</div>
+
+<form method="get" action="/search" role="search" style="margin-bottom:18px">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search clients & projects…"
+         autofocus style="max-width:360px">
+  <button class="btn" type="submit">Search</button>
+</form>
+
+{% if not q %}
+<p class="muted">Type a name or email to find a client or project.</p>
+{% elif not clients and not projects %}
+<p class="muted">No clients or projects match “{{ q }}”.</p>
+{% else %}
+
+{% if clients %}
+<div class="card stack" style="margin-bottom:18px">
+  <h3>Clients · {{ clients|length }}</h3>
+  <table>
+    <tbody>
+      {% for c in clients %}
+      <tr>
+        <td><a href="/clients/{{ c.id }}">{{ c.name }}</a></td>
+        <td class="muted">{{ c.email or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if projects %}
+<div class="card stack">
+  <h3>Projects · {{ projects|length }}</h3>
+  <table>
+    <tbody>
+      {% for p in projects %}
+      <tr>
+        <td><a href="/projects/{{ p.id }}">{{ p.name }}</a></td>
+        <td class="muted">{{ p.client_name or "—" }}</td>
+        <td><span class="pill {{ 'on' if p.status not in ('lead', 'archived') else 'off' }}">{{ p.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

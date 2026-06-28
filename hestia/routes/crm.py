@@ -27,6 +27,7 @@ from ..crm import (
     list_projects,
     project_pipeline,
     remove_client_tag,
+    search_crm,
     set_project_status,
     tags_for_client,
 )
@@ -50,6 +51,20 @@ def _user(request: Request, conn):
     if not auth or not auth.tenant:
         return None
     return auth
+
+
+# ── Search ──────────────────────────────────────────────────────────────────
+
+
+@router.get("/search")
+def search(request: Request, q: str = ""):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        results = search_crm(conn, auth.tenant["id"], q)
+    return render(request, "crm/search.html", auth=auth, q=q.strip(),
+                  clients=results["clients"], projects=results["projects"])
 
 
 # ── Clients ─────────────────────────────────────────────────────────────────

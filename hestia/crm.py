@@ -50,6 +50,32 @@ def _norm_tag(tag: str) -> str:
     return " ".join((tag or "").strip().lower().split())[:40]
 
 
+def _like_escape(s: str) -> str:
+    """Escape LIKE wildcards so a literal % or _ in the query isn't treated as a pattern."""
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def search_crm(conn: sqlite3.Connection, tenant_id: str, query: str, *, limit: int = 20) -> dict:
+    """Free-text search across the studio's clients (name/email) and projects (name).
+    Tenant-scoped; case-insensitive substring; empty query returns nothing."""
+    q = (query or "").strip()
+    if not q:
+        return {"clients": [], "projects": []}
+    like = f"%{_like_escape(q)}%"
+    clients = [dict(r) for r in conn.execute(
+        "SELECT id, name, email FROM clients WHERE tenant_id = ? "
+        "AND (name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\') ORDER BY name LIMIT ?",
+        (tenant_id, like, like, limit),
+    )]
+    projects = [dict(r) for r in conn.execute(
+        "SELECT p.id, p.name, p.status, c.name AS client_name FROM projects p "
+        "LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = p.tenant_id "
+        "WHERE p.tenant_id = ? AND p.name LIKE ? ESCAPE '\\' ORDER BY p.created_at DESC LIMIT ?",
+        (tenant_id, like, limit),
+    )]
+    return {"clients": clients, "projects": projects}
+
+
 def list_clients(conn: sqlite3.Connection, tenant_id: str, *, tag: str | None = None) -> list[dict]:
     sql = (
         "SELECT c.*, COUNT(DISTINCT p.id) AS project_count, "
