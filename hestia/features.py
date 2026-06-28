@@ -30,6 +30,13 @@ SHOOT_TYPE_LABELS = {
     "other": "Other / Mixed",
 }
 
+# "How did you hear about us?" options on the public inquiry form, for lead-source
+# attribution. Stored as the chosen label; an unset/manual lead reports as "Unknown".
+LEAD_SOURCES = (
+    "Instagram", "Google search", "Referral", "Venue or vendor",
+    "Friend or family", "Wedding directory", "Other",
+)
+
 
 @dataclass(frozen=True)
 class FeatureFlags:

@@ -32,6 +32,27 @@
   {% endif %}
 </div>
 
+{% if sources.total_leads %}
+<div class="card stack" style="margin-top:18px">
+  <h3>Lead sources</h3>
+  <p class="muted">Where your leads come from and how many booked — so you know which channels
+    are worth your time. Set from "How did you hear about us?" on your inquiry form.</p>
+  <table>
+    <thead><tr><th>Source</th><th>Leads</th><th>Booked</th><th>Conversion</th></tr></thead>
+    <tbody>
+      {% for s in sources.rows %}
+      <tr>
+        <td>{{ s.source }}</td>
+        <td class="muted">{{ s.leads }}</td>
+        <td class="muted">{{ s.booked }}</td>
+        <td><span class="pill {{ 'on' if s.pct >= 50 else 'off' }}">{{ s.pct }}%</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {% if tax.cents %}
 <div class="card stack" style="margin-top:18px">
   <h3>Sales tax collected · {{ tax.display }}</h3>
