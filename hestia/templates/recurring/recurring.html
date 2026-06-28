@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Recurring invoices — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Recurring invoices</h1>
+  <a class="btn" href="/recurring/new">+ New recurring invoice</a>
+</div>
+
+{% if profiles %}
+<div class="card">
+  <table>
+    <thead><tr><th>Invoice</th><th>Client</th><th>Amount</th><th>Every</th><th>Next</th><th></th></tr></thead>
+    <tbody>
+      {% for p in profiles %}
+      <tr>
+        <td>{{ p.title }}{% if p.invoice_count %} <span class="muted">· {{ p.invoice_count }} sent</span>{% endif %}</td>
+        <td class="muted">{{ p.client_name or "—" }}</td>
+        <td>{{ p.amount_display }}</td>
+        <td class="muted">{{ p.cadence_label }}</td>
+        <td>
+          {% if p.active %}{{ p.next_run_at }}{% else %}<span class="pill off">paused</span>{% endif %}
+        </td>
+        <td style="text-align:right">
+          {% if p.active %}
+          <form method="post" action="/recurring/{{ p.id }}/pause" style="display:inline">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit">Pause</button>
+          </form>
+          {% else %}
+          <form method="post" action="/recurring/{{ p.id }}/resume" style="display:inline">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit">Resume</button>
+          </form>
+          {% endif %}
+          <form method="post" action="/recurring/{{ p.id }}/delete" style="display:inline"
+                onsubmit="return confirm('Delete this recurring invoice? Already-sent invoices are kept.')">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">Each profile bills automatically on its cadence — Hestia generates the
+    invoice and emails the client their pay link. Pause one to stop future invoices
+    (already-sent invoices are unaffected).</p>
+</div>
+{% else %}
+<div class="card stack">
+  <p class="muted">No recurring invoices yet — set up retainer or subscription billing once
+    and Hestia sends each invoice on schedule (weekly, monthly, or yearly).</p>
+  <a class="btn" href="/recurring/new">Create your first recurring invoice</a>
+</div>
+{% endif %}
+{% endblock %}
