@@ -116,6 +116,10 @@
 
       <div class="card stack">
         <h3>Payments</h3>
+        {% if statement.billed_cents %}
+        <p class="muted">{{ statement.paid }} paid of {{ statement.billed }}{% if statement.outstanding_cents %}
+          · <strong>{{ statement.outstanding }} outstanding</strong>{% else %} · all settled ✓{% endif %}</p>
+        {% endif %}
         {% if plans %}
           {% for pl in plans %}
           <div class="portal-plan">

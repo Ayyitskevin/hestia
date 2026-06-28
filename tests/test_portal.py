@@ -256,3 +256,38 @@ def test_http_portal_links_receipts_for_paid_items(client, app):
     assert "View receipt" in page                          # paid standalone invoice
     assert f"/pay/{inv_tok}/receipt" in page
     assert page.count("/receipt") >= 2                      # invoice + paid installment both link a receipt
+
+
+def test_portal_shows_balance_summary(conn, settings):
+    from hestia.invoices import send_invoice
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Bal")
+    paid = create_invoice(conn, settings, tenant_id=t["id"], title="Deposit", amount_cents=20000,
+                          client_id=c["id"])
+    conn.execute("UPDATE invoices SET status='paid', paid_at=datetime('now') WHERE id=?", (paid["id"],))
+    owed = create_invoice(conn, settings, tenant_id=t["id"], title="Balance", amount_cents=30000,
+                          client_id=c["id"])
+    send_invoice(conn, t["id"], owed["id"])                       # issued, unpaid
+    conn.commit()
+    data = assemble_portal(conn, settings,
+                           get_client_by_portal_token(conn, enable_portal(conn, t["id"], c["id"])))
+    s = data["statement"]
+    assert s["billed_cents"] == 50000 and s["paid_cents"] == 20000 and s["outstanding_cents"] == 30000
+
+
+def test_http_portal_renders_balance(client, app):
+    login_owner(client, onboard_studio(client, email="bal@example.com"))
+    conn = connect(app.state.settings.db_path)
+    try:
+        from hestia.invoices import send_invoice
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Bal")
+        owed = create_invoice(conn, app.state.settings, tenant_id=tid, title="Balance",
+                              amount_cents=30000, client_id=c["id"])
+        send_invoice(conn, tid, owed["id"])
+        tok = enable_portal(conn, tid, c["id"])
+        conn.commit()
+    finally:
+        conn.close()
+    page = client.get(f"/portal/{tok}").text
+    assert "outstanding" in page and "$300.00" in page

@@ -19,7 +19,7 @@ from .contracts import contract_public_url, list_contracts
 from .crm import galleries_for_client, get_client, list_projects
 from .crypto import new_session_token
 from .delivery import delivery_url
-from .invoices import invoice_public_url, list_invoices
+from .invoices import client_statement, invoice_public_url, list_invoices
 from .payment_plans import get_payment_plan, list_payment_plans
 from .questionnaires import list_questionnaires
 from .scheduler import appointment_ics_url, list_appointments
@@ -122,4 +122,6 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
         "questionnaires": questionnaires,
         "appointments": appointments,
         "review_url": review_url,
+        # billed / paid / outstanding across all the client's issued invoices + installments
+        "statement": client_statement(conn, tenant_id, client["id"]),
     }
