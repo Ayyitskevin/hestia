@@ -64,6 +64,20 @@ def public_site(request: Request, slug: str, ref: str = ""):
                   testimonials=testimonials, ref=ref)
 
 
+@router.get("/studio/{slug}/reviews")
+def public_reviews(request: Request, slug: str):
+    """A shareable, public page of all the studio's featured reviews."""
+    with db_conn(request) as conn:
+        tenant = get_tenant_by_slug(conn, slug)
+        if not tenant:
+            return render(request, "offer_missing.html", auth=None, status_code=404)
+        profile = get_profile(conn, tenant["id"])
+        if not profile["published"]:
+            return render(request, "studio/coming_soon.html", auth=None, tenant=tenant)
+        testimonials = featured_testimonials(conn, tenant["id"], limit=200)
+    return render(request, "studio/reviews.html", auth=None, tenant=tenant, testimonials=testimonials)
+
+
 @router.post("/studio/{slug}/inquire")
 def public_inquire(request: Request, slug: str, name: str = Form(...), email: str = Form(""),
                    message: str = Form(""), shoot_type: str = Form("other"),
