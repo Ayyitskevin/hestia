@@ -17,7 +17,8 @@ from ..auth import context_from_session
 from ..crm import list_clients, list_projects
 from ..db import audit
 from ..email import notify
-from ..invoices import invoice_public_url, send_invoice
+from ..invoices import invoice_public_url, money, send_invoice
+from ..packages import get_package, list_packages
 from ..payment_plans import (
     create_payment_plan,
     deposit_balance_installments,
@@ -58,15 +59,32 @@ def plans_list(request: Request):
 
 
 @router.get("/new")
-def plan_new(request: Request, project_id: int | None = None, client_id: int | None = None):
+def plan_new(request: Request, project_id: int | None = None, client_id: int | None = None,
+             package_id: int | None = None):
     with db_conn(request) as conn:
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
-        clients = list_clients(conn, auth.tenant["id"])
-        projects = list_projects(conn, auth.tenant["id"])
+        tid = auth.tenant["id"]
+        clients = list_clients(conn, tid)
+        projects = list_projects(conn, tid)
+        currency = settings_of(request).currency
+        # selecting a package reloads this form pre-filled (total = price, deposit = its deposit)
+        packages = list_packages(conn, tid, active_only=True)
+        for p in packages:
+            p["price_display"] = money(p["price_cents"], currency)
+        prefill = None
+        if package_id:
+            pkg = get_package(conn, tid, package_id)
+            if pkg:
+                prefill = {
+                    "title": pkg["name"],
+                    "total": f"{pkg['price_cents'] / 100:.2f}",
+                    "deposit": f"{pkg['deposit_cents'] / 100:.2f}" if pkg["deposit_cents"] else "",
+                }
     return render(request, "payment_plans/plan_new.html", auth=auth, clients=clients,
-                  projects=projects, preselect_project=project_id, preselect_client=client_id)
+                  projects=projects, preselect_project=project_id, preselect_client=client_id,
+                  packages=packages, prefill=prefill)
 
 
 @router.post("")
