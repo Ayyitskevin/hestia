@@ -22,6 +22,7 @@
           <div class="alert ok">✓ Paid — thank you!</div>
           <div><a class="btn secondary" href="/pay/{{ invoice.token }}/receipt">View receipt</a></div>
         {% else %}
+          {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
           {% if items %}
           <div class="stack" style="gap:2px; margin-bottom:6px">
             {% for it in items %}
@@ -29,12 +30,22 @@
             {% endfor %}
           </div>
           {% endif %}
+          {% if invoice.discount_cents %}
+          <p class="muted" style="display:flex;justify-content:space-between;margin:0"><span>Subtotal</span><span>{{ invoice.original_amount_display }}</span></p>
+          <p style="display:flex;justify-content:space-between;margin:0"><span>Discount ({{ invoice.discount_code }})</span><span>−{{ invoice.discount_display }}</span></p>
+          {% endif %}
           {% if invoice.tax_cents %}
-          <p class="muted" style="display:flex;justify-content:space-between;margin:0"><span>Subtotal</span><span>{{ invoice.amount_display }}</span></p>
+          <p class="muted" style="display:flex;justify-content:space-between;margin:0"><span>{{ 'Subtotal after discount' if invoice.discount_cents else 'Subtotal' }}</span><span>{{ invoice.amount_display }}</span></p>
           <p class="muted" style="display:flex;justify-content:space-between;margin:0"><span>Tax</span><span>{{ invoice.tax_display }}</span></p>
+          {% endif %}
           <p style="display:flex;justify-content:space-between;margin:4px 0"><strong>Total due</strong><strong>{{ invoice.total_display }}</strong></p>
-          {% else %}
-          <p class="muted">Amount due: <strong>{{ invoice.total_display }}</strong></p>
+
+          {% if not invoice.discount_cents %}
+          <form method="post" action="/pay/{{ invoice.token }}/discount"
+                style="display:flex; gap:8px; align-items:center">
+            <input type="text" name="code" placeholder="Discount code" aria-label="Discount code" style="flex:1">
+            <button class="btn ghost" type="submit">Apply</button>
+          </form>
           {% endif %}
           <form method="post" action="/pay/{{ invoice.token }}/checkout">
             <button class="btn" type="submit">Pay {{ invoice.total_display }}</button>
