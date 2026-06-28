@@ -231,3 +231,28 @@ def test_http_portal_renders_calendar_link_and_note(client, app):
     page = client.get(f"/portal/{tok}")
     assert page.status_code == 200
     assert "Add to calendar" in page.text and "Venmo also accepted" in page.text
+
+
+def test_http_portal_links_receipts_for_paid_items(client, app):
+    """A paid invoice and a paid plan installment each link to their printable receipt."""
+    login_owner(client, onboard_studio(client, email="rcpt@example.com"))
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Paid Client")
+        inv = create_invoice(conn, app.state.settings, tenant_id=tid, title="Deposit",
+                             amount_cents=5000, client_id=c["id"])
+        conn.execute("UPDATE invoices SET status='paid', paid_at=datetime('now') WHERE id=?", (inv["id"],))
+        create_payment_plan(conn, app.state.settings, tenant_id=tid, title="Wedding", client_id=c["id"],
+                            installments=deposit_balance_installments(total_cents=400000, deposit_cents=100000))
+        conn.execute("UPDATE invoices SET status='paid', paid_at=datetime('now') "
+                     "WHERE tenant_id=? AND plan_id IS NOT NULL AND amount_cents=100000", (tid,))
+        tok = enable_portal(conn, tid, c["id"])
+        conn.commit()
+        inv_tok = inv["token"]
+    finally:
+        conn.close()
+    page = client.get(f"/portal/{tok}").text
+    assert "View receipt" in page                          # paid standalone invoice
+    assert f"/pay/{inv_tok}/receipt" in page
+    assert page.count("/receipt") >= 2                      # invoice + paid installment both link a receipt
