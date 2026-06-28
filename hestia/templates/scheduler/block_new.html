@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Block off time — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>Block off time</h1>
+  <p class="muted">Mark yourself busy — vacation, an edit day, a personal commitment. It shows on
+    your schedule and your calendar subscription, so you can see it at a glance.</p>
+  <form method="post" action="/schedule/block">
+    {% include "_csrf.html" %}
+    <label for="title">What</label>
+    <input type="text" id="title" name="title" placeholder="Editing day" autofocus>
+    <label for="starts_at">When</label>
+    <input type="datetime-local" id="starts_at" name="starts_at" required>
+    <label for="duration_minutes">Duration <span class="muted">(minutes)</span></label>
+    <input type="text" id="duration_minutes" name="duration_minutes" value="60" inputmode="numeric">
+    <label for="notes">Notes <span class="muted">(optional)</span></label>
+    <textarea id="notes" name="notes" rows="2"></textarea>
+    <div class="form-actions">
+      <button class="btn" type="submit">Block it off</button>
+      <a class="btn ghost" href="/schedule">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

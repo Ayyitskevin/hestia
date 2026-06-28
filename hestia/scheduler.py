@@ -29,6 +29,8 @@ KIND_LABELS = {
     "shoot": "Shoot",
     "call": "Call",
     "other": "Other",
+    # not a bookable kind — set only by create_block (personal/busy time)
+    "blocked": "Blocked",
 }
 
 # proposed → confirmed → (completed | no_show), or canceled at any point before.
@@ -63,6 +65,22 @@ def create_appointment(
             (appt_id, tenant_id, seq, starts_at),
         )
     return get_appointment(conn, tenant_id, appt_id)
+
+
+def create_block(conn: sqlite3.Connection, *, tenant_id: str, title: str, starts_at: str,
+                 duration_minutes: int = 60, notes: str = "") -> dict:
+    """Block off personal/busy time — a confirmed calendar entry with no client and no
+    public booking. It shows on the schedule, the agenda, and the subscribe-able feed so
+    the studio can see it; visibility only (it doesn't auto-prevent a client from booking
+    an overlapping proposed time)."""
+    token = new_session_token()[:28]
+    when = starts_at.replace("T", " ").strip()      # accept datetime-local; store space-separated
+    cur = conn.execute(
+        "INSERT INTO appointments (tenant_id, title, kind, status, starts_at, duration_minutes, "
+        "token, notes) VALUES (?, ?, 'blocked', 'confirmed', ?, ?, ?, ?)",
+        (tenant_id, title.strip() or "Busy", when, max(0, int(duration_minutes)), token, notes.strip()),
+    )
+    return get_appointment(conn, tenant_id, cur.lastrowid)
 
 
 def _options(conn: sqlite3.Connection, tenant_id: str, appt_id: int) -> list[dict]:
