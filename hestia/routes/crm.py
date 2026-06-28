@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
@@ -38,12 +39,18 @@ from ..email import list_emails, notify
 from ..invoices import client_statement, list_invoices, money
 from ..payment_plans import list_payment_plans
 from ..portal import enable_portal, portal_url, regenerate_portal_token
+from ..project_files import (
+    add_project_file,
+    delete_project_file,
+    get_project_file,
+    list_project_files,
+)
 from ..project_tasks import add_task, delete_task, list_tasks, task_progress, toggle_task
 from ..questionnaires import list_questionnaires
 from ..referral_rewards import credit_balance, list_credits, redeem_credit
 from ..referrals import referral_code_for, referral_link
 from ..scheduler import list_appointments
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, storage_of
 
 router = APIRouter()
 
@@ -493,13 +500,14 @@ def project_detail(request: Request, project_id: int):
         recipes = recipes_for(project["shoot_type"])
         tasks = list_tasks(conn, auth.tenant["id"], project_id)
         progress = task_progress(conn, auth.tenant["id"], project_id)
+        files = list_project_files(conn, auth.tenant["id"], project_id)
         referred_by = get_client(conn, auth.tenant["id"], project["referred_by_client_id"]) \
             if project.get("referred_by_client_id") else None
     return render(request, "crm/project_detail.html", auth=auth, project=project,
                   galleries=galleries, invoices=invoices, plans=plans, contracts=contracts,
                   questionnaires=questionnaires, appointments=appointments, packs=packs,
                   recipes=recipes, statuses=PROJECT_STATUSES, referred_by=referred_by,
-                  tasks=tasks, task_progress=progress)
+                  tasks=tasks, task_progress=progress, files=files)
 
 
 @router.post("/projects/{project_id}/status")
@@ -540,6 +548,54 @@ def project_task_delete(request: Request, project_id: int, task_id: int):
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_task(conn, auth.tenant["id"], task_id)
+    return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/projects/{project_id}/files")
+async def project_file_upload(request: Request, project_id: int, file: UploadFile = File(...)):
+    """Attach a reference file to a project (owner-only)."""
+    storage = storage_of(request)
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if file.filename:
+            add_project_file(conn, storage, tenant_id=auth.tenant["id"], project_id=project_id,
+                             filename=file.filename, fileobj=file.file,
+                             content_type=file.content_type or "application/octet-stream")
+    return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+
+@router.get("/projects/{project_id}/files/{file_id}")
+def project_file_download(request: Request, project_id: int, file_id: int):
+    """Download an attached file — always as an attachment (never rendered inline on our
+    origin), and only one this studio owns."""
+    storage = storage_of(request)
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        f = get_project_file(conn, auth.tenant["id"], file_id)
+        if not f or f["project_id"] != project_id:
+            return RedirectResponse(f"/projects/{project_id}", status_code=303)
+    try:
+        data = storage.open(f["storage_key"])
+    except FileNotFoundError:
+        return Response(status_code=404)
+    ascii_name = re.sub(r'[\r\n"\\/]+', "", f.get("filename") or "").strip()
+    ascii_name = ascii_name.encode("ascii", "ignore").decode().strip() or f"file-{file_id}"
+    return Response(content=data, media_type=f["content_type"] or "application/octet-stream",
+                    headers={"Content-Disposition": f'attachment; filename="{ascii_name}"'})
+
+
+@router.post("/projects/{project_id}/files/{file_id}/delete")
+def project_file_delete(request: Request, project_id: int, file_id: int):
+    storage = storage_of(request)
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        delete_project_file(conn, storage, auth.tenant["id"], file_id)
     return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
 
