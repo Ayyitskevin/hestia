@@ -4,13 +4,28 @@
 {% block content %}
 <div class="card stack">
   <h1>New invoice</h1>
+  {% if packages %}
+  <div class="stack" style="margin-bottom:6px">
+    <strong>Start from a package</strong>
+    <p class="muted" style="font-size:.85rem; margin:0">Pull one of your service packages into this
+      invoice — you can still edit everything.</p>
+    <div style="display:flex; flex-wrap:wrap; gap:8px">
+      {% for pk in packages %}
+        <a class="btn ghost" href="/invoices/new?package_id={{ pk.id }}{% if preselect_client %}&client_id={{ preselect_client }}{% endif %}{% if preselect_project %}&project_id={{ preselect_project }}{% endif %}">{{ pk.name }} · {{ pk.price_display }}</a>
+      {% endfor %}
+    </div>
+    <a class="muted" href="/packages" style="font-size:.85rem">Manage packages →</a>
+  </div>
+  {% endif %}
   <form method="post" action="/invoices">
     {% include "_csrf.html" %}
     <label for="title">Description</label>
-    <input type="text" id="title" name="title" placeholder="Wedding photography — balance" required autofocus>
+    <input type="text" id="title" name="title" placeholder="Wedding photography — balance"
+           value="{{ prefill.title if prefill else '' }}" required autofocus>
 
     <label for="amount">Amount ({{ settings.currency|upper }})</label>
-    <input type="text" id="amount" name="amount" placeholder="2500.00">
+    <input type="text" id="amount" name="amount" placeholder="2500.00"
+           value="{{ prefill.amount if prefill else '' }}">
     <p class="muted" style="font-size:.85rem; margin:0">Enter a single amount, or itemize below — line items
       override the amount and their sum becomes the subtotal.</p>
 
@@ -31,7 +46,7 @@
     </select>
 
     <label for="note">Note to client <span class="muted">(optional — shown on the pay page & in the email)</span></label>
-    <textarea id="note" name="note" rows="3" placeholder="Thank you for choosing us! Balance due two weeks before your date. Venmo @studio also accepted."></textarea>
+    <textarea id="note" name="note" rows="3" placeholder="Thank you for choosing us! Balance due two weeks before your date. Venmo @studio also accepted.">{{ prefill.note if prefill else '' }}</textarea>
 
     <div class="form-actions">
       <button class="btn" type="submit">Create invoice</button>

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ pkg.name }} — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>Edit package</h1>
+  <form method="post" action="/packages/{{ pkg.id }}">
+    {% include "_csrf.html" %}
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" value="{{ pkg.name }}" required autofocus>
+
+    <label for="description">What's included <span class="muted">(optional — becomes the invoice note)</span></label>
+    <textarea id="description" name="description" rows="3">{{ pkg.description }}</textarea>
+
+    <div class="inline-grid-form">
+      <div><label for="price">Price ({{ settings.currency|upper }})</label>
+        <input type="text" id="price" name="price" value="{{ '%.2f'|format(pkg.price_cents / 100) }}"></div>
+      <div><label for="deposit">Deposit <span class="muted">(optional)</span></label>
+        <input type="text" id="deposit" name="deposit" value="{{ '%.2f'|format(pkg.deposit_cents / 100) }}"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" type="submit">Save</button>
+      <a class="btn ghost" href="/packages">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
