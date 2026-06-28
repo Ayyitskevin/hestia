@@ -57,6 +57,13 @@
       <input type="text" name="label" placeholder="Add a task — e.g. send contract" style="flex:1">
       <button class="btn secondary" type="submit">Add</button>
     </form>
+    <div style="display:flex; gap:10px; align-items:center; margin-top:8px">
+      <form method="post" action="/projects/{{ project.id }}/apply-checklist" style="margin:0">
+        {% include "_csrf.html" %}
+        <button class="btn ghost" type="submit" title="Copy your saved checklist for this shoot type">⤓ Apply checklist template</button>
+      </form>
+      <a class="muted" href="/checklists" style="font-size:.85rem">Manage templates →</a>
+    </div>
   </div>
 
   <div class="card stack">

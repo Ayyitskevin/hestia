@@ -11,6 +11,7 @@ from fastapi.responses import RedirectResponse, Response
 
 from .. import messaging
 from ..auth import context_from_session
+from ..checklists import apply_checklist
 from ..content import list_packs, recipes_for
 from ..contracts import list_contracts
 from ..crm import (
@@ -523,4 +524,17 @@ def project_task_delete(request: Request, project_id: int, task_id: int):
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_task(conn, auth.tenant["id"], task_id)
+    return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/projects/{project_id}/apply-checklist")
+def project_apply_checklist(request: Request, project_id: int):
+    """Copy the studio's checklist template for this project's shoot type onto its tasks.
+    Idempotent — tasks already present are skipped."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if get_project(conn, auth.tenant["id"], project_id):   # only on a project you own
+            apply_checklist(conn, auth.tenant["id"], project_id)
     return RedirectResponse(f"/projects/{project_id}", status_code=303)

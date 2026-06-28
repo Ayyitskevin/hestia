@@ -34,6 +34,7 @@ from .routes import (
     automations,
     billing,
     book,
+    checklists,
     client,
     content,
     contracts,
@@ -155,6 +156,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(web.router, dependencies=csrf)
     app.include_router(admin.router, dependencies=csrf)
     app.include_router(crm.router, dependencies=csrf)
+    app.include_router(checklists.router, dependencies=csrf)
     app.include_router(galleries.router, dependencies=csrf)
     app.include_router(albums.router, dependencies=csrf)
     app.include_router(products.router, dependencies=csrf)

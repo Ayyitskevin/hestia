@@ -238,6 +238,10 @@ def set_project_status(conn: sqlite3.Connection, tenant_id: str, project_id: int
         # import keeps crm ⇄ referral_rewards from forming an import cycle.
         from .referral_rewards import award_referral_credit
         award_referral_credit(conn, tenant_id, project_id)
+        # Lay down the studio's checklist for this shoot type so no deliverable is
+        # forgotten. Idempotent (skips tasks already present), so re-booking is safe.
+        from .checklists import apply_checklist
+        apply_checklist(conn, tenant_id, project_id)
 
 
 # ── Gallery ↔ project linkage ───────────────────────────────────────────────
