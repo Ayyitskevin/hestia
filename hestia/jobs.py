@@ -244,6 +244,21 @@ def _send_owner_digests(db_path: str | Path, settings: Settings) -> int:
         conn.close()
 
 
+def _generate_recurring(db_path: str | Path, settings: Settings) -> int:
+    """Worker-cadence wrapper: generate any due recurring invoices. Each profile is claimed
+    atomically (next_run_at advanced past today) and committed on its own inside
+    run_recurring — before the client email is sent — so running this hourly is safe: the
+    per-profile claim+commit, not this cadence, bounds billing to one invoice per period
+    and a crash can never double-bill. Deferred imports keep the jobs↔modules edge one-way."""
+    from .db import connect
+    from .recurring import run_recurring
+    conn = connect(db_path)
+    try:
+        return run_recurring(conn, settings)   # self-commits per profile
+    finally:
+        conn.close()
+
+
 def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_sleep: float = 0.5,
                reclaim_interval: float = 60.0, remind_interval: float = 3600.0) -> None:
     """Background loop: drain the queue, periodically reclaim orphaned jobs, and
@@ -277,6 +292,10 @@ def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_slee
             try:
                 _send_owner_digests(db_path, settings)
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
+                pass
+            try:
+                _generate_recurring(db_path, settings)
+            except Exception:  # noqa: BLE001 - a billing miss must never kill the worker
                 pass
             last_remind = time.monotonic()
         try:

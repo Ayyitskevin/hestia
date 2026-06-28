@@ -52,6 +52,7 @@ from .routes import (
     portal,
     products,
     questionnaires,
+    recurring,
     scheduler,
     sign,
     studio,
@@ -160,6 +161,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(invoices.router, dependencies=csrf)
     app.include_router(packages.router, dependencies=csrf)
     app.include_router(payment_plans.router, dependencies=csrf)
+    app.include_router(recurring.router, dependencies=csrf)
     app.include_router(contracts.router, dependencies=csrf)
     app.include_router(questionnaires.router, dependencies=csrf)
     app.include_router(automations.router, dependencies=csrf)
