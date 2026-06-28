@@ -104,9 +104,10 @@ def invoice_create(request: Request, title: str = Form(...), amount: str = Form(
         cid = raw_c if raw_c and get_client(conn, tid, raw_c) else None
         raw_p = int(project_id) if project_id.strip().isdigit() else None
         pid = raw_p if raw_p and get_project(conn, tid, raw_p) else None
-        # line items, when given, define the subtotal; otherwise the single amount field
+        # line items, when given, define the subtotal; otherwise the single amount field.
+        # Items may include a negative (discount) line; the subtotal is floored at zero.
         line_items = _parse_line_items(items)
-        subtotal = sum(c for _, c in line_items) if line_items else _to_cents(amount)
+        subtotal = max(0, sum(c for _, c in line_items)) if line_items else _to_cents(amount)
         # add the studio's sales tax (0 unless they've set a rate) on top of the subtotal
         tax = tax_for(subtotal, auth.tenant.get("tax_rate_bps") or 0)
         invoice = create_invoice(
