@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
+from ..availability import available_slots, has_availability, is_slot_open
 from ..ratelimit import enforce
 from ..scheduler import (
     appointment_ics,
@@ -12,6 +13,7 @@ from ..scheduler import (
     cancel_by_token,
     get_appointment_by_token,
     get_tenant_by_calendar_token,
+    reschedule_by_token,
     schedule_ics,
 )
 from ..tenants import get_tenant
@@ -41,7 +43,43 @@ def book_page(request: Request, token: str):
         if not appt or appt["status"] == "canceled":
             return render(request, "offer_missing.html", auth=None, status_code=404)
         tenant = get_tenant(conn, appt["tenant_id"])
-    return render(request, "scheduler/book.html", auth=None, appt=appt, tenant=tenant)
+        # a confirmed session can be self-rescheduled only if the studio offers open hours
+        can_reschedule = appt["status"] == "confirmed" and has_availability(conn, appt["tenant_id"])
+    return render(request, "scheduler/book.html", auth=None, appt=appt, tenant=tenant,
+                  can_reschedule=can_reschedule)
+
+
+@router.get("/book/{token}/reschedule")
+def book_reschedule_page(request: Request, token: str):
+    with db_conn(request) as conn:
+        appt = get_appointment_by_token(conn, token)
+        if not appt or appt["status"] not in ("proposed", "confirmed"):
+            return render(request, "offer_missing.html", auth=None, status_code=404)
+        tenant = get_tenant(conn, appt["tenant_id"])
+        if not has_availability(conn, appt["tenant_id"]):     # nothing to self-serve → back
+            return RedirectResponse(f"/book/{token}", status_code=303)
+        slots = available_slots(conn, appt["tenant_id"], duration_minutes=appt["duration_minutes"])
+    return render(request, "scheduler/reschedule.html", auth=None, appt=appt, tenant=tenant, slots=slots)
+
+
+@router.post("/book/{token}/reschedule")
+def book_reschedule_submit(request: Request, token: str, slot: str = Form("")):
+    enforce(request, "checkout")
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        conn.execute("BEGIN IMMEDIATE")                       # serialize: guard the new slot
+        appt = get_appointment_by_token(conn, token)
+        if not appt or appt["status"] not in ("proposed", "confirmed"):
+            return render(request, "offer_missing.html", auth=None, status_code=404)
+        dur = appt["duration_minutes"]
+        if not (slot.strip() and is_slot_open(conn, appt["tenant_id"], duration_minutes=dur, slot=slot)):
+            tenant = get_tenant(conn, appt["tenant_id"])
+            slots = available_slots(conn, appt["tenant_id"], duration_minutes=dur)
+            return render(request, "scheduler/reschedule.html", auth=None, appt=appt, tenant=tenant,
+                          slots=slots, error="That time is no longer available — please pick another.",
+                          status_code=400)
+        reschedule_by_token(conn, settings, token=token, new_slot=slot)
+    return RedirectResponse(f"/book/{token}", status_code=303)
 
 
 @router.get("/book/{token}/calendar.ics")
