@@ -4,11 +4,18 @@ import datetime
 
 from conftest import login_owner, onboard_studio
 
+from hestia.crm import create_project
 from hestia.db import connect
 from hestia.finances import create_expense
 from hestia.invoices import create_invoice, send_invoice
 from hestia.payment_plans import create_payment_plan, deposit_balance_installments
-from hestia.reports import ar_aging, expense_breakdown, monthly_pnl
+from hestia.reports import (
+    ar_aging,
+    booking_funnel,
+    expense_breakdown,
+    monthly_pnl,
+    tax_by_period,
+)
 from hestia.tenants import create_tenant
 
 TODAY = datetime.date.today()
@@ -130,3 +137,66 @@ def test_monthly_pnl_empty_is_zeroed(conn):
     trend = monthly_pnl(conn, t["id"], months=3)
     assert len(trend) == 3
     assert all(m["revenue_cents"] == 0 and m["profit_cents"] == 0 for m in trend)
+
+
+# ── tax by period ─────────────────────────────────────────────────────────────
+
+
+def _ym(d):
+    return d.strftime("%Y-%m")
+
+
+def test_tax_by_period_buckets_by_paid_month(conn, settings):
+    t = create_tenant(conn, name="Tax", shoot_type="wedding")
+    i1 = create_invoice(conn, settings, tenant_id=t["id"], title="A", amount_cents=10000, tax_cents=800)
+    i2 = create_invoice(conn, settings, tenant_id=t["id"], title="B", amount_cents=20000, tax_cents=1600)
+    i3 = create_invoice(conn, settings, tenant_id=t["id"], title="C", amount_cents=5000, tax_cents=0)
+    create_invoice(conn, settings, tenant_id=t["id"], title="D", amount_cents=9000, tax_cents=700)  # unpaid
+    this_m = _ym(TODAY)
+    last_m = _ym(TODAY.replace(day=1) - datetime.timedelta(days=1))
+    conn.execute("UPDATE invoices SET status='paid', paid_at=? WHERE id=?", (f"{this_m}-15 10:00:00", i1["id"]))
+    conn.execute("UPDATE invoices SET status='paid', paid_at=? WHERE id=?", (f"{last_m}-15 10:00:00", i2["id"]))
+    conn.execute("UPDATE invoices SET status='paid', paid_at=? WHERE id=?", (f"{this_m}-16 10:00:00", i3["id"]))
+    conn.commit()
+    rep = tax_by_period(conn, t["id"], months=4)
+    by = {r["month"]: r["cents"] for r in rep["rows"]}
+    assert by.get(this_m) == 800 and by.get(last_m) == 1600   # zero-tax + unpaid excluded
+    assert rep["total_cents"] == 2400
+
+
+# ── booking funnel ────────────────────────────────────────────────────────────
+
+
+def test_booking_funnel_counts_and_conversions(conn):
+    t = create_tenant(conn, name="Funnel", shoot_type="wedding")
+    for name, status in [("L1", "lead"), ("L2", "lead"), ("B", "booked"),
+                         ("S", "shooting"), ("D", "delivered"), ("Ar", "archived")]:
+        create_project(conn, tenant_id=t["id"], name=name, status=status)
+    conn.commit()
+    f = booking_funnel(conn, t["id"])
+    assert f["total"] == 6
+    assert f["booked"] == 4 and f["delivered"] == 2          # booked = past-lead; delivered = delivered+archived
+    assert f["lead_to_booked_pct"] == round(100 * 4 / 6)
+    assert f["booked_to_delivered_pct"] == 50
+    assert f["overall_pct"] == round(100 * 2 / 6)
+    assert f["by_status"]["lead"] == 2
+
+
+def test_reports_tenant_scoped(conn, settings):
+    t1 = create_tenant(conn, name="A", shoot_type="wedding")
+    t2 = create_tenant(conn, name="B", shoot_type="wedding")
+    create_project(conn, tenant_id=t1["id"], name="P", status="booked")
+    i = create_invoice(conn, settings, tenant_id=t1["id"], title="X", amount_cents=10000, tax_cents=900)
+    conn.execute("UPDATE invoices SET status='paid', paid_at=datetime('now') WHERE id=?", (i["id"],))
+    conn.commit()
+    assert booking_funnel(conn, t2["id"])["total"] == 0
+    assert tax_by_period(conn, t2["id"])["total_cents"] == 0
+
+
+def test_http_reports_page_and_tax_export(client):
+    creds = onboard_studio(client, email="rep@example.com")
+    login_owner(client, creds)
+    page = client.get("/finances/reports")
+    assert page.status_code == 200 and "Booking funnel" in page.text
+    csv = client.get("/finances/export/tax.csv")
+    assert csv.status_code == 200 and "month,tax_collected" in csv.text

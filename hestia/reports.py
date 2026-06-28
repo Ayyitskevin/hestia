@@ -123,6 +123,54 @@ def tax_collected(conn: sqlite3.Connection, tenant_id: str) -> dict:
     return {"cents": cents, "display": money(cents)}
 
 
+def tax_by_period(conn: sqlite3.Connection, tenant_id: str, *, months: int = 12) -> dict:
+    """Sales tax collected per calendar month (attributed to the month a taxed invoice was
+    paid), for the last ``months`` oldest-first — the period breakdown an accountant files
+    from, where :func:`tax_collected` gives only the lifetime total. Tax rides on the
+    invoice (an order's tax is on its backing invoice), so summing paid invoices counts
+    each taxed sale once."""
+    by: dict[str, int] = {}
+    for r in conn.execute(
+        "SELECT strftime('%Y-%m', COALESCE(paid_at, created_at)) AS ym, "
+        "       COALESCE(SUM(tax_cents), 0) AS cents "
+        "FROM invoices WHERE tenant_id = ? AND status = 'paid' AND tax_cents > 0 GROUP BY ym",
+        (tenant_id,),
+    ).fetchall():
+        if r["ym"]:
+            by[r["ym"]] = int(r["cents"])
+    rows = [{"month": ym, "cents": by.get(ym, 0), "display": money(by.get(ym, 0))}
+            for ym in _recent_months(months)]
+    total = sum(o["cents"] for o in rows)
+    return {"rows": rows, "total_cents": total, "total": money(total)}
+
+
+# project lifecycle stages in order; a project's status is its furthest point, so a later
+# stage implies it passed the earlier ones
+_FUNNEL_STAGES = ("lead", "booked", "shooting", "delivered", "archived")
+
+
+def booking_funnel(conn: sqlite3.Connection, tenant_id: str) -> dict:
+    """Lead → booked → delivered funnel from current project status, with conversion rates.
+    Because status is the project's *furthest* stage, 'booked' counts everything past lead
+    (booked/shooting/delivered/archived) and 'delivered' counts delivered + archived."""
+    counts = dict.fromkeys(_FUNNEL_STAGES, 0)
+    for r in conn.execute(
+        "SELECT status, COUNT(*) AS n FROM projects WHERE tenant_id = ? GROUP BY status",
+        (tenant_id,),
+    ).fetchall():
+        if r["status"] in counts:
+            counts[r["status"]] = int(r["n"])
+    total = sum(counts.values())
+    booked = counts["booked"] + counts["shooting"] + counts["delivered"] + counts["archived"]
+    delivered = counts["delivered"] + counts["archived"]
+    return {
+        "total": total, "booked": booked, "delivered": delivered, "by_status": counts,
+        "lead_to_booked_pct": round(100 * booked / total) if total else 0,
+        "booked_to_delivered_pct": round(100 * delivered / booked) if booked else 0,
+        "overall_pct": round(100 * delivered / total) if total else 0,
+    }
+
+
 def expense_breakdown(conn: sqlite3.Connection, tenant_id: str) -> dict:
     """Expenses grouped by category, biggest first, each with its share of the total."""
     rows = conn.execute(

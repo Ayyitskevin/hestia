@@ -20,7 +20,14 @@ from ..finances import (
     profit_summary,
     project_pnl,
 )
-from ..reports import ar_aging, expense_breakdown, monthly_pnl, tax_collected
+from ..reports import (
+    ar_aging,
+    booking_funnel,
+    expense_breakdown,
+    monthly_pnl,
+    tax_by_period,
+    tax_collected,
+)
 from .deps import db_conn, render
 
 router = APIRouter()
@@ -81,8 +88,11 @@ def finances_reports(request: Request):
         breakdown = expense_breakdown(conn, tid)
         trend = monthly_pnl(conn, tid)
         tax = tax_collected(conn, tid)
+        tax_periods = tax_by_period(conn, tid)
+        funnel = booking_funnel(conn, tid)
     return render(request, "finances_reports.html", auth=auth, aging=aging,
-                  breakdown=breakdown, trend=trend, tax=tax)
+                  breakdown=breakdown, trend=trend, tax=tax, tax_periods=tax_periods,
+                  funnel=funnel)
 
 
 @router.post("/finances/expenses")
@@ -141,3 +151,15 @@ def export_income(request: Request):
     rows = [[r["date"], r["type"], r["description"], r["client"], _dollars(r["amount_cents"])]
             for r in income]
     return _csv_response("income.csv", ["date", "type", "description", "client", "amount"], rows)
+
+
+@router.get("/finances/export/tax.csv")
+def export_tax(request: Request):
+    """Sales tax collected per month — the file an accountant remits from."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        periods = tax_by_period(conn, auth.tenant["id"], months=24)
+    rows = [[p["month"], _dollars(p["cents"])] for p in periods["rows"]]
+    return _csv_response("tax-by-month.csv", ["month", "tax_collected"], rows)

@@ -9,15 +9,49 @@
   <a class="btn secondary" href="/finances">← Finances</a>
 </div>
 
-{% if tax.cents %}
 <div class="card stack">
+  <h3>Booking funnel</h3>
+  <p class="muted">How leads move to booked and delivered — your conversion at a glance.</p>
+  <div class="health-strip">
+    <div class="health-item"><span class="svc">{{ funnel.total }}</span> <span class="url">leads (all projects)</span></div>
+    <div class="health-item"><span class="svc">{{ funnel.booked }}</span> <span class="url">booked · {{ funnel.lead_to_booked_pct }}%</span></div>
+    <div class="health-item"><span class="svc">{{ funnel.delivered }}</span> <span class="url">delivered · {{ funnel.booked_to_delivered_pct }}% of booked</span></div>
+    <div class="health-item"><span class="svc">{{ funnel.overall_pct }}%</span> <span class="url">lead → delivered</span></div>
+  </div>
+  {% if funnel.total %}
+  <table>
+    <thead><tr><th>Stage</th><th>Projects</th></tr></thead>
+    <tbody>
+      {% for stage, n in funnel.by_status.items() %}
+      <tr><td>{{ stage }}</td><td class="muted">{{ n }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No projects yet — leads from your studio site will show up here.</p>
+  {% endif %}
+</div>
+
+{% if tax.cents %}
+<div class="card stack" style="margin-top:18px">
   <h3>Sales tax collected · {{ tax.display }}</h3>
-  <p class="muted">Tax collected on paid invoices — set this aside to remit to the state. Your
-    revenue and profit below exclude it, since collected tax is owed, not income.</p>
+  <p class="muted">Tax collected on paid invoices — set aside to remit. Revenue and profit below
+    exclude it, since collected tax is owed, not income.
+    <a href="/finances/export/tax.csv">Export by month (CSV) →</a></p>
+  {% if tax_periods.total_cents %}
+  <table>
+    <thead><tr><th>Month</th><th>Tax collected</th></tr></thead>
+    <tbody>
+      {% for p in tax_periods.rows %}{% if p.cents %}
+      <tr><td>{{ p.month }}</td><td>{{ p.display }}</td></tr>
+      {% endif %}{% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
 </div>
 {% endif %}
 
-<div class="card stack" {% if tax.cents %}style="margin-top:18px"{% endif %}>
+<div class="card stack" style="margin-top:18px">
   <h3>Monthly trend</h3>
   <p class="muted">Revenue, expenses, and profit by month — your studio's trajectory. Each sale counts once.</p>
   {% set maxrev = trend|map(attribute='revenue_cents')|max %}
