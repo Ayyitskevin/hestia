@@ -11,7 +11,7 @@
     <div class="wrap">
       <div class="eyebrow">{{ tenant.name }}</div>
       <h1>Book a session</h1>
-      <p class="muted">Pick a session and tell us when works — we'll confirm by email.</p>
+      <p class="muted">{% if chosen %}{{ chosen.title }}{% else %}Choose a session to get started.{% endif %}</p>
     </div>
   </header>
   <main>
@@ -19,39 +19,69 @@
 
       {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
 
-      {% if types %}
-      <form method="post" action="/studio/{{ tenant.slug }}/book" class="card stack">
-        <label for="booking_type_id">Session</label>
-        <select id="booking_type_id" name="booking_type_id" required>
-          {% for t in types %}
-          <option value="{{ t.id }}">{{ t.title }} · {{ t.duration_minutes }} min{% if t.price_display %} · {{ t.price_display }}{% endif %}{% if t.deposit_display %} · {{ t.deposit_display }} deposit{% endif %}</option>
-          {% endfor %}
-        </select>
-        {% for t in types %}{% if t.description %}
-        <p class="muted" style="font-size:.85rem; margin:0">{{ t.title }}: {{ t.description }}</p>
-        {% endif %}{% endfor %}
-
-        <label for="name">Your name</label>
-        <input type="text" id="name" name="name" required>
-
-        <label for="email">Email</label>
-        <input type="email" id="email" name="email" placeholder="you@example.com">
-
-        <label for="requested_at">Preferred date &amp; time</label>
-        <input type="datetime-local" id="requested_at" name="requested_at">
-
-        <label for="message">Anything we should know? <span class="muted">(optional)</span></label>
-        <textarea id="message" name="message" rows="3"
-          placeholder="A bit about your shoot, location ideas, flexible dates…"></textarea>
-
-        <p class="muted" style="font-size:.85rem; margin:0">If the session requires a deposit, you'll
-          be taken to pay it next to secure your booking.</p>
-        <div class="form-actions"><button class="btn" type="submit">Request this session</button></div>
-      </form>
-      {% else %}
+      {% if not types %}
       <div class="card stack">
         <p class="muted">{{ tenant.name }} isn't taking online bookings just yet.
           <a href="/studio/{{ tenant.slug }}">Get in touch →</a></p>
+      </div>
+
+      {% elif not chosen %}
+      <div class="card stack">
+        <h3>Choose a session</h3>
+        {% for t in types %}
+        <a href="/studio/{{ tenant.slug }}/book?type={{ t.id }}"
+           style="display:block; padding:12px 14px; border:1px solid var(--line); border-radius:8px; text-decoration:none">
+          <strong>{{ t.title }}</strong>
+          <span class="muted">· {{ t.duration_minutes }} min{% if t.price_display %} · {{ t.price_display }}{% endif %}{% if t.deposit_display %} · {{ t.deposit_display }} deposit{% endif %}</span>
+          {% if t.description %}<br><span class="muted" style="font-size:.85rem">{{ t.description }}</span>{% endif %}
+        </a>
+        {% endfor %}
+      </div>
+
+      {% else %}
+      <div class="card stack">
+        <h3>{{ chosen.title }}</h3>
+        <p class="muted" style="margin:0">{{ chosen.duration_minutes }} min{% if chosen.price_display %} · {{ chosen.price_display }}{% endif %}{% if chosen.deposit_display %} · {{ chosen.deposit_display }} deposit{% endif %}</p>
+        {% if chosen.description %}<p class="muted">{{ chosen.description }}</p>{% endif %}
+
+        {% if use_slots and not slots %}
+        <p class="muted">No open times in the next couple of weeks. Please
+          <a href="/studio/{{ tenant.slug }}">get in touch</a> and we'll find a time.</p>
+        {% else %}
+        <form method="post" action="/studio/{{ tenant.slug }}/book" class="stack">
+          <input type="hidden" name="booking_type_id" value="{{ chosen.id }}">
+
+          {% if use_slots %}
+          <label for="slot">Pick a time</label>
+          <select id="slot" name="slot" required>
+            {% for g in slots %}
+            <optgroup label="{{ g.label }}">
+              {% for s in g.slots %}<option value="{{ s.value }}">{{ s.label }}</option>{% endfor %}
+            </optgroup>
+            {% endfor %}
+          </select>
+          {% else %}
+          <label for="requested_at">Preferred date &amp; time</label>
+          <input type="datetime-local" id="requested_at" name="requested_at">
+          {% endif %}
+
+          <label for="name">Your name</label>
+          <input type="text" id="name" name="name" required>
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="you@example.com">
+          <label for="message">Anything we should know? <span class="muted">(optional)</span></label>
+          <textarea id="message" name="message" rows="3"></textarea>
+
+          {% if chosen.deposit_display %}
+          <p class="muted" style="font-size:.85rem; margin:0">You'll be taken to pay the
+            {{ chosen.deposit_display }} deposit to secure your booking.</p>
+          {% endif %}
+          <div class="form-actions">
+            <button class="btn" type="submit">{{ 'Book this session' if use_slots else 'Request this session' }}</button>
+          </div>
+        </form>
+        {% endif %}
+        <p style="margin:6px 0 0"><a class="muted" href="/studio/{{ tenant.slug }}/book">← Choose a different session</a></p>
       </div>
       {% endif %}
 
