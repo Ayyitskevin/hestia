@@ -171,6 +171,37 @@ def booking_funnel(conn: sqlite3.Connection, tenant_id: str) -> dict:
     }
 
 
+def gallery_sales(conn: sqlite3.Connection, tenant_id: str) -> dict:
+    """Per published gallery: views, client favorites, and paid print/album orders with
+    revenue — so the studio sees which deliveries actually convert to sales. Plus the
+    overall conversion (published galleries with at least one paid order) and total print
+    revenue. Only paid orders count toward revenue/conversion; the gallery↔order join is
+    tenant-matched. Sorted by revenue. Read-only, tenant-scoped."""
+    rows = conn.execute(
+        "SELECT g.id, g.title, COALESCE(g.view_count, 0) AS views, "
+        "  (SELECT COUNT(*) FROM image_favorites f WHERE f.gallery_id = g.id) AS favorites, "
+        "  COALESCE(SUM(CASE WHEN o.status = 'paid' THEN 1 ELSE 0 END), 0) AS orders, "
+        "  COALESCE(SUM(CASE WHEN o.status = 'paid' THEN o.amount_cents ELSE 0 END), 0) AS revenue "
+        "FROM galleries g "
+        "LEFT JOIN orders o ON o.gallery_id = g.id AND o.tenant_id = g.tenant_id "
+        "WHERE g.tenant_id = ? AND g.status = 'published' "
+        "GROUP BY g.id ORDER BY revenue DESC, g.id",
+        (tenant_id,),
+    ).fetchall()
+    out = [{"id": r["id"], "title": r["title"], "views": int(r["views"]),
+            "favorites": int(r["favorites"]), "orders": int(r["orders"]),
+            "revenue_cents": int(r["revenue"]), "revenue": money(int(r["revenue"]))}
+           for r in rows]
+    total_galleries = len(out)
+    converted = sum(1 for g in out if g["orders"] > 0)
+    total_revenue = sum(g["revenue_cents"] for g in out)
+    return {
+        "rows": out, "total_galleries": total_galleries, "converted": converted,
+        "conversion_pct": round(100 * converted / total_galleries) if total_galleries else 0,
+        "total_revenue_cents": total_revenue, "total_revenue": money(total_revenue),
+    }
+
+
 def lead_sources(conn: sqlite3.Connection, tenant_id: str) -> dict:
     """Leads grouped by how they heard about the studio, with how many of each went on to
     book — so the owner sees which channels actually convert. Projects with no recorded

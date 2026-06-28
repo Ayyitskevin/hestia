@@ -53,6 +53,30 @@
 </div>
 {% endif %}
 
+{% if galleries.total_galleries %}
+<div class="card stack" style="margin-top:18px">
+  <h3>Gallery sales</h3>
+  <p class="muted">Which delivered galleries convert to print &amp; album orders —
+    {{ galleries.converted }} of {{ galleries.total_galleries }} galleries sold
+    (<span class="pill {{ 'on' if galleries.conversion_pct >= 30 else 'off' }}">{{ galleries.conversion_pct }}%</span>)
+    · {{ galleries.total_revenue }} in print revenue.</p>
+  <table>
+    <thead><tr><th>Gallery</th><th>Views</th><th>Favorites</th><th>Orders</th><th>Revenue</th></tr></thead>
+    <tbody>
+      {% for g in galleries.rows %}
+      <tr>
+        <td><a href="/galleries/{{ g.id }}">{{ g.title }}</a></td>
+        <td class="muted">{{ g.views }}</td>
+        <td class="muted">{{ g.favorites }}</td>
+        <td class="muted">{{ g.orders }}</td>
+        <td>{{ g.revenue }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {% if tax.cents %}
 <div class="card stack" style="margin-top:18px">
   <h3>Sales tax collected · {{ tax.display }}</h3>

@@ -26,6 +26,7 @@ from ..reports import (
     ar_aging,
     booking_funnel,
     expense_breakdown,
+    gallery_sales,
     lead_sources,
     monthly_pnl,
     tax_by_period,
@@ -195,9 +196,10 @@ def finances_reports(request: Request):
         tax_periods = tax_by_period(conn, tid)
         funnel = booking_funnel(conn, tid)
         sources = lead_sources(conn, tid)
+        galleries = gallery_sales(conn, tid)
     return render(request, "finances_reports.html", auth=auth, aging=aging,
                   breakdown=breakdown, trend=trend, tax=tax, tax_periods=tax_periods,
-                  funnel=funnel, sources=sources)
+                  funnel=funnel, sources=sources, galleries=galleries)
 
 
 @router.post("/finances/expenses")
