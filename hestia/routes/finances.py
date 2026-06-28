@@ -31,6 +31,7 @@ from ..reports import (
     monthly_pnl,
     tax_by_period,
     tax_collected,
+    top_clients,
 )
 from .deps import db_conn, render
 
@@ -197,9 +198,10 @@ def finances_reports(request: Request):
         funnel = booking_funnel(conn, tid)
         sources = lead_sources(conn, tid)
         galleries = gallery_sales(conn, tid)
+        clients = top_clients(conn, tid)
     return render(request, "finances_reports.html", auth=auth, aging=aging,
                   breakdown=breakdown, trend=trend, tax=tax, tax_periods=tax_periods,
-                  funnel=funnel, sources=sources, galleries=galleries)
+                  funnel=funnel, sources=sources, galleries=galleries, clients=clients)
 
 
 @router.post("/finances/expenses")
