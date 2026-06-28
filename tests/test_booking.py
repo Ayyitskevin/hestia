@@ -76,14 +76,15 @@ def test_update_and_tenant_scoped(conn):
     assert list_booking_types(conn, t2["id"]) == []
 
 
-def test_request_booking_creates_lead_and_proposed_appointment(conn):
+def test_request_booking_creates_lead_and_proposed_appointment(conn, settings):
     t = _tenant(conn)
     bt = create_booking_type(conn, tenant_id=t["id"], title="Engagement", kind="shoot",
                              duration_minutes=90)
-    out = request_booking(conn, tenant=t, booking_type=bt, name="Sam Visitor",
+    out = request_booking(conn, settings, tenant=t, booking_type=bt, name="Sam Visitor",
                           email="sam@example.com", requested_at="2030-05-01T14:00",
                           message="Golden hour please")
     conn.commit()
+    assert out["invoice"] is None                              # no deposit on this type
     # a CRM lead was created
     assert any(c["name"] == "Sam Visitor" for c in list_clients(conn, t["id"]))
     assert out["project"]["status"] == "lead"
@@ -94,14 +95,53 @@ def test_request_booking_creates_lead_and_proposed_appointment(conn):
     assert "Golden hour" in out["project"]["notes"] and "2030-05-01 14:00" in out["project"]["notes"]
 
 
-def test_request_booking_without_time_still_creates_lead(conn):
+def test_request_booking_without_time_still_creates_lead(conn, settings):
     t = _tenant(conn)
     bt = create_booking_type(conn, tenant_id=t["id"], title="Consult")
-    out = request_booking(conn, tenant=t, booking_type=bt, name="No Time", email="")
+    out = request_booking(conn, settings, tenant=t, booking_type=bt, name="No Time", email="")
     conn.commit()
     assert out["project"]["status"] == "lead"
     appts = list_appointments(conn, t["id"])
     assert appts[0]["status"] == "proposed" and appts[0]["option_count"] == 0   # no time given
+
+
+# ── deposit (the money path) ────────────────────────────────────────────────────
+
+
+def test_deposit_stored_and_updated(conn):
+    t = _tenant(conn)
+    bt = create_booking_type(conn, tenant_id=t["id"], title="Mini", deposit_cents=15000)
+    assert get_booking_type(conn, t["id"], bt["id"])["deposit_cents"] == 15000
+    assert update_booking_type(conn, t["id"], bt["id"], title="Mini", deposit_cents=20000)
+    assert get_booking_type(conn, t["id"], bt["id"])["deposit_cents"] == 20000
+
+
+def test_request_booking_with_deposit_raises_invoice(conn, settings):
+    from hestia.invoices import get_invoice_by_token
+    t = _tenant(conn)
+    bt = create_booking_type(conn, tenant_id=t["id"], title="Wedding hold", deposit_cents=50000)
+    out = request_booking(conn, settings, tenant=t, booking_type=bt, name="Dep Client",
+                          email="dep@example.com", requested_at="2031-01-01T10:00")
+    conn.commit()
+    inv = out["invoice"]
+    # issued (sent), not left as a draft → shows in A/R / statement even before it's paid
+    assert inv and inv["amount_cents"] == 50000 and inv["status"] == "sent"
+    assert inv["client_id"] == out["client"]["id"] and inv["project_id"] == out["project"]["id"]
+    # the deposit invoice is fetchable by its public token (so /pay can serve it)
+    assert get_invoice_by_token(conn, inv["token"])["id"] == inv["id"]
+    # exactly one invoice for this tenant, scoped to it
+    assert conn.execute("SELECT COUNT(*) AS n FROM invoices WHERE tenant_id = ?",
+                        (t["id"],)).fetchone()["n"] == 1
+
+
+def test_request_booking_zero_deposit_raises_no_invoice(conn, settings):
+    t = _tenant(conn)
+    bt = create_booking_type(conn, tenant_id=t["id"], title="Free consult", deposit_cents=0)
+    out = request_booking(conn, settings, tenant=t, booking_type=bt, name="Free Client")
+    conn.commit()
+    assert out["invoice"] is None
+    assert conn.execute("SELECT COUNT(*) AS n FROM invoices WHERE tenant_id = ?",
+                        (t["id"],)).fetchone()["n"] == 0
 
 
 # ── HTTP: owner manages the menu ────────────────────────────────────────────────
@@ -188,6 +228,42 @@ def test_public_book_creates_lead_and_appointment_and_alerts_owner(client, app):
         assert alert and "New booking request" in alert["subject"]   # owner notified
     finally:
         conn.close()
+
+
+def test_public_book_with_deposit_redirects_to_pay(client, app):
+    """A session type with a deposit sends the visitor to a payable deposit invoice, and
+    still creates the lead + proposed appointment."""
+    creds = onboard_studio(client, name="Dep Studio", email="bk_dep@example.com")
+    login_owner(client, creds)
+    slug = slugify("Dep Studio")
+    client.post("/settings/booking-types", data={"title": "Wedding hold", "kind": "shoot",
+                                                 "duration_minutes": "60", "deposit": "500"})
+    _publish(client)
+    page = client.get(f"/studio/{slug}/book").text
+    assert "deposit" in page.lower()                              # the deposit shows on the option
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = _tid_of(conn, creds["email"])
+        bt_id = list_booking_types(conn, tid)[0]["id"]
+    finally:
+        conn.close()
+
+    pub = CSRFClient(app)
+    r = pub.post(f"/studio/{slug}/book",
+                 data={"booking_type_id": str(bt_id), "name": "Pay Me", "email": "pay@example.com",
+                       "requested_at": "2031-02-02T12:00"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/pay/")   # sent to pay
+    token = r.headers["location"].split("/pay/")[1]
+    # the deposit invoice exists, unpaid, for $500, and its pay page is live
+    conn = connect(app.state.settings.db_path)
+    try:
+        inv = conn.execute("SELECT amount_cents, status FROM invoices WHERE token = ? AND tenant_id = ?",
+                           (token, tid)).fetchone()
+        assert inv and inv["amount_cents"] == 50000 and inv["status"] == "sent"   # issued, unpaid
+        assert list_appointments(conn, tid)[0]["status"] == "proposed"          # lead+appt still made
+    finally:
+        conn.close()
+    assert pub.get(f"/pay/{token}").status_code == 200                          # payable now
 
 
 def test_public_book_rejects_foreign_or_inactive_type(client, app):

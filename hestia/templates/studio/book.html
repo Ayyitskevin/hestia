@@ -24,7 +24,7 @@
         <label for="booking_type_id">Session</label>
         <select id="booking_type_id" name="booking_type_id" required>
           {% for t in types %}
-          <option value="{{ t.id }}">{{ t.title }} · {{ t.duration_minutes }} min{% if t.price_display %} · {{ t.price_display }}{% endif %}</option>
+          <option value="{{ t.id }}">{{ t.title }} · {{ t.duration_minutes }} min{% if t.price_display %} · {{ t.price_display }}{% endif %}{% if t.deposit_display %} · {{ t.deposit_display }} deposit{% endif %}</option>
           {% endfor %}
         </select>
         {% for t in types %}{% if t.description %}
@@ -44,6 +44,8 @@
         <textarea id="message" name="message" rows="3"
           placeholder="A bit about your shoot, location ideas, flexible dates…"></textarea>
 
+        <p class="muted" style="font-size:.85rem; margin:0">If the session requires a deposit, you'll
+          be taken to pay it next to secure your booking.</p>
         <div class="form-actions"><button class="btn" type="submit">Request this session</button></div>
       </form>
       {% else %}
