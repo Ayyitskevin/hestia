@@ -113,13 +113,15 @@ def get_appointment(conn: sqlite3.Connection, tenant_id: str, appt_id: int) -> d
 
 
 def get_appointment_by_token(conn: sqlite3.Connection, token: str) -> dict | None:
+    # kind != 'blocked': a personal time-block carries a token too, but it's never a
+    # client booking — keep it out of the public book/cancel/calendar flow entirely.
     row = conn.execute(
         """
         SELECT a.*, c.name AS client_name, p.name AS project_name
           FROM appointments a
           LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id
           LEFT JOIN projects p ON p.id = a.project_id AND p.tenant_id = a.tenant_id
-         WHERE a.token = ?
+         WHERE a.token = ? AND a.kind != 'blocked'
         """,
         (token,),
     ).fetchone()
