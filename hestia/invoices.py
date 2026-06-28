@@ -269,6 +269,13 @@ def _hydrate(row: dict) -> dict:
     row["tax_display"] = money(tax, cur)
     row["total_cents"] = int(row["amount_cents"]) + tax
     row["total_display"] = money(row["total_cents"], cur)     # what the client pays
+    # A discount (if any) has already been taken off amount_cents; expose the figures a
+    # receipt/pay page needs: the saved amount and the pre-discount subtotal.
+    disc = int(row.get("discount_cents") or 0)
+    row["discount_cents"] = disc
+    if disc:
+        row["discount_display"] = money(disc, cur)
+        row["original_amount_display"] = money(int(row["amount_cents"]) + disc, cur)
     return row
 
 

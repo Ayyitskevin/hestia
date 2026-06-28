@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Discount codes — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Discount codes</h1>
+</div>
+
+<div class="card stack">
+  <h3>New code</h3>
+  <p class="muted" style="font-size:.9rem; margin:0">Codes your clients enter on the payment page to
+    knock money off an invoice — a seasonal promo, a referral thank-you, a mini-session deal.</p>
+  <form method="post" action="/settings/discounts">
+    {% include "_csrf.html" %}
+    <div class="inline-grid-form">
+      <div><label for="code">Code</label>
+        <input type="text" id="code" name="code" placeholder="SPRING25" required></div>
+      <div><label for="kind">Type</label>
+        <select id="kind" name="kind">
+          <option value="percent">Percent off</option>
+          <option value="fixed">Fixed amount off</option>
+        </select></div>
+      <div><label for="value">Amount <span class="muted">(% or {{ settings.currency|upper }})</span></label>
+        <input type="text" id="value" name="value" placeholder="25"></div>
+    </div>
+    <div class="inline-grid-form">
+      <div><label for="max_uses">Max uses <span class="muted">(blank = unlimited)</span></label>
+        <input type="number" id="max_uses" name="max_uses" min="0" placeholder="0"></div>
+      <div><label for="expires_on">Expires <span class="muted">(optional)</span></label>
+        <input type="date" id="expires_on" name="expires_on"></div>
+    </div>
+    <div class="form-actions"><button class="btn" type="submit">Add code</button></div>
+  </form>
+</div>
+
+{% set active = codes|selectattr('active')|list %}
+{% set archived = codes|rejectattr('active')|list %}
+
+{% if active %}
+<div class="card" style="margin-top:18px">
+  <table>
+    <thead><tr><th>Code</th><th>Discount</th><th>Used</th><th>Expires</th><th></th></tr></thead>
+    <tbody>
+      {% for d in active %}
+      <tr>
+        <td><strong>{{ d.code }}</strong></td>
+        <td class="muted">{{ d.amount_label }}</td>
+        <td class="muted">{{ d.uses_label }}</td>
+        <td class="muted">{{ d.expires_on or '—' }}</td>
+        <td style="white-space:nowrap; text-align:right">
+          <form method="post" action="/settings/discounts/{{ d.id }}/toggle" style="display:inline">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit">Disable</button>
+          </form>
+          <form method="post" action="/settings/discounts/{{ d.id }}/delete" style="display:inline"
+                onsubmit="return confirm('Delete this code?')">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit" title="Delete">✕</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted" style="margin-top:18px">No codes yet — add one above and clients can use it at checkout.</p>
+{% endif %}
+
+{% if archived %}
+<div class="card" style="margin-top:18px">
+  <h3 class="muted">Disabled</h3>
+  <table>
+    <tbody>
+      {% for d in archived %}
+      <tr>
+        <td><strong>{{ d.code }}</strong></td>
+        <td class="muted">{{ d.amount_label }}</td>
+        <td style="text-align:right">
+          <form method="post" action="/settings/discounts/{{ d.id }}/toggle" style="display:inline">
+            {% include "_csrf.html" %}
+            <input type="hidden" name="active" value="1">
+            <button class="btn ghost" type="submit">Enable</button>
+          </form>
+          <form method="post" action="/settings/discounts/{{ d.id }}/delete" style="display:inline"
+                onsubmit="return confirm('Delete this code?')">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit" title="Delete">✕</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
