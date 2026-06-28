@@ -332,10 +332,13 @@ def client_statement_page(request: Request, client_id: int):
 
 
 @router.get("/clients/{client_id}/email")
-def client_email_compose(request: Request, client_id: int):
-    """Compose a personal email to the client — pre-filled from the 'Reply to an inquiry'
-    template (customizable under Email templates). The studio edits and sends it here, so
-    the message, signature, and record all stay inside Hestia."""
+def client_email_compose(request: Request, client_id: int, template: str = "inquiry_reply"):
+    """Compose a personal email to the client, starting from one of the studio's saved
+    templates (customizable under Email templates). Only general-purpose templates — those
+    that render fully from the client + studio names — are offered, so the draft never
+    carries a raw {token}. The studio picks one, edits, and sends here, so the message,
+    signature, and record all stay inside Hestia."""
+    kind = template if messaging.is_general_template(template) else "inquiry_reply"
     with db_conn(request) as conn:
         auth = _user(request, conn)
         if not auth:
@@ -346,9 +349,10 @@ def client_email_compose(request: Request, client_id: int):
         if not (client.get("email") or "").strip():     # nothing to send to
             return RedirectResponse(f"/clients/{client_id}", status_code=303)
         ctx = {"client": client["name"], "studio": auth.tenant.get("name", "your studio")}
-        draft = messaging.render(conn, auth.tenant["id"], "inquiry_reply", ctx)
+        draft = messaging.render(conn, auth.tenant["id"], kind, ctx)
     return render(request, "crm/client_email.html", auth=auth, client=client,
-                  subject=draft["subject"], body=draft["body"])
+                  subject=draft["subject"], body=draft["body"],
+                  templates=messaging.general_template_choices(), selected=kind)
 
 
 @router.post("/clients/{client_id}/email")
