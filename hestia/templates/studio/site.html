@@ -24,6 +24,10 @@
         </div>
         <div class="card stack">
           <h3>Inquire / book</h3>
+          {% if has_booking %}
+          <p class="muted" style="margin:0">Ready to book a session?
+            <a href="/studio/{{ tenant.slug }}/book">See available sessions →</a></p>
+          {% endif %}
           <form method="post" action="/studio/{{ tenant.slug }}/inquire">
             {% include "_csrf.html" %}
             {% if ref %}<input type="hidden" name="ref" value="{{ ref }}">{% endif %}

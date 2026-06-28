@@ -9,6 +9,7 @@ from fastapi.responses import RedirectResponse
 
 from .. import messaging
 from ..auth import context_from_session
+from ..booking import list_booking_types
 from ..dashboard import set_digest_enabled
 from ..db import list_audit
 from ..email import list_emails, notify
@@ -66,8 +67,9 @@ def public_site(request: Request, slug: str, ref: str = ""):
         packages = list_packages(conn, tenant["id"], active_only=True)
         for p in packages:
             p["price_display"] = money(p["price_cents"], currency)
+        has_booking = bool(list_booking_types(conn, tenant["id"], active_only=True))
     return render(request, "studio/site.html", auth=None, tenant=tenant, profile=profile,
-                  testimonials=testimonials, ref=ref, packages=packages)
+                  testimonials=testimonials, ref=ref, packages=packages, has_booking=has_booking)
 
 
 @router.get("/studio/{slug}/reviews")
