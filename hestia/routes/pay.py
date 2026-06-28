@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
-from ..invoices import get_invoice_by_token, mark_paid
+from ..invoices import get_invoice_by_token, invoice_items, mark_paid
 from ..orders import fulfill_for_invoice_token
 from ..payments import PaymentError, build_payments
 from ..ratelimit import enforce
@@ -22,7 +22,8 @@ def pay_page(request: Request, token: str):
         if not invoice or invoice["status"] == "void":
             return render(request, "offer_missing.html", auth=None, status_code=404)
         tenant = get_tenant(conn, invoice["tenant_id"])
-    return render(request, "invoices/pay.html", auth=None, invoice=invoice, tenant=tenant)
+        items = invoice_items(conn, invoice["tenant_id"], invoice["id"])
+    return render(request, "invoices/pay.html", auth=None, invoice=invoice, tenant=tenant, items=items)
 
 
 @router.get("/pay/{token}/receipt")
@@ -39,8 +40,9 @@ def pay_receipt(request: Request, token: str):
             (invoice.get("client_id"), invoice["tenant_id"]),
         ).fetchone() if invoice.get("client_id") else None
         client_name = crow["name"] if crow else ""
+        items = invoice_items(conn, invoice["tenant_id"], invoice["id"])
     return render(request, "invoices/receipt.html", auth=None, invoice=invoice,
-                  tenant=tenant, client_name=client_name)
+                  tenant=tenant, client_name=client_name, items=items)
 
 
 @router.post("/pay/{token}/checkout")
