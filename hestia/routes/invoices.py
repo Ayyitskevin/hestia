@@ -66,15 +66,16 @@ def _parse_line_items(raw: str) -> list[tuple[str, int]]:
 
 
 @router.get("")
-def invoices_list(request: Request):
+def invoices_list(request: Request, status: str = ""):
     with db_conn(request) as conn:
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         # Plan installments live under their payment plan, not the flat list.
-        invoices = list_invoices(conn, auth.tenant["id"], standalone_only=True)
+        invoices = list_invoices(conn, auth.tenant["id"], standalone_only=True, status=status or None)
         ar = accounts_receivable(conn, auth.tenant["id"])
-    return render(request, "invoices/invoices.html", auth=auth, invoices=invoices, ar=ar)
+    return render(request, "invoices/invoices.html", auth=auth, invoices=invoices, ar=ar,
+                  active_status=status)
 
 
 @router.get("/new")

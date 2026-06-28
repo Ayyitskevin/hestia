@@ -17,6 +17,14 @@
 </div>
 {% endif %}
 
+<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; align-items:center">
+  <span class="muted" style="font-size:.85rem">Filter:</span>
+  {% for val, label in [('', 'All'), ('draft', 'Draft'), ('sent', 'Sent'), ('overdue', 'Overdue'), ('paid', 'Paid'), ('void', 'Void')] %}
+  <a class="pill {{ 'on' if active_status == val else '' }}"
+     href="/invoices{{ '?status=' ~ val if val else '' }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
 {% if invoices %}
 <div class="card">
   <table>
@@ -43,6 +51,10 @@
       {% endfor %}
     </tbody>
   </table>
+</div>
+{% elif active_status %}
+<div class="card stack">
+  <p class="muted">No {{ active_status }} invoices. <a href="/invoices">Show all</a></p>
 </div>
 {% else %}
 <div class="card stack">
