@@ -203,3 +203,33 @@ def test_enable_emails_client_once_on_first_enable(client, app):
     finally:
         conn.close()
     assert len(again) == 1
+
+
+def test_favorites_zip_downloads_only_hearted(client, conn, storage):
+    from hestia.proofing import toggle_favorite
+    t, g = _gallery(conn)
+    _img(conn, storage, t, g, "a.jpg", b"AAA")
+    _img(conn, storage, t, g, "b.jpg", b"BBB")
+    _img(conn, storage, t, g, "c.jpg", b"CCC")
+    imgs = list_images(conn, g["id"])
+    toggle_favorite(conn, tenant_id=t["id"], gallery_id=g["id"], image_id=imgs[0]["id"])
+    toggle_favorite(conn, tenant_id=t["id"], gallery_id=g["id"], image_id=imgs[2]["id"])
+    token = enable_delivery(conn, t["id"], g["id"])
+    conn.commit()
+
+    page = client.get(f"/d/{token}").text
+    assert "Download my favorites (2)" in page                  # the new CTA
+    z = client.get(f"/d/{token}/favorites.zip")
+    assert z.status_code == 200 and z.headers["content-type"] == "application/zip"
+    zf = zipfile.ZipFile(io.BytesIO(z.content))
+    assert set(zf.namelist()) == {"a.jpg", "c.jpg"}             # only the hearted frames
+
+
+def test_favorites_zip_absent_when_none_hearted(client, conn, storage):
+    t, g = _gallery(conn)
+    _img(conn, storage, t, g, "a.jpg", b"AAA")
+    token = enable_delivery(conn, t["id"], g["id"])
+    conn.commit()
+    assert "Download my favorites" not in client.get(f"/d/{token}").text
+    assert client.get(f"/d/{token}/favorites.zip").status_code == 404   # nothing to zip
+    assert client.get("/d/nope/favorites.zip").status_code == 404       # bad token
