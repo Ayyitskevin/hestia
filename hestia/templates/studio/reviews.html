@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reviews — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>Kind words</h1>
+      <p class="muted"><a href="/studio/{{ tenant.slug }}">← Back to {{ tenant.name }}</a></p>
+    </div>
+  </header>
+  <main>
+    <div class="wrap" style="padding-top:24px">
+      {% if testimonials %}
+      <div class="testimonial-grid">
+        {% for t in testimonials %}
+        <figure class="testimonial-card">
+          <div class="stars" aria-label="{{ t.rating }} out of 5">{{ '★' * t.rating }}{{ '☆' * (5 - t.rating) }}</div>
+          <blockquote>{{ t.body }}</blockquote>
+          <figcaption>— {{ t.author_name or 'A happy client' }}</figcaption>
+        </figure>
+        {% endfor %}
+      </div>
+      <div style="text-align:center; margin-top:28px">
+        <a class="btn" href="/studio/{{ tenant.slug }}">Work with {{ tenant.name }} →</a>
+      </div>
+      {% else %}
+      <p class="muted" style="text-align:center">No reviews yet — check back soon.</p>
+      {% endif %}
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">{{ tenant.name }} · powered by Hestia 🔥</div></footer>
+</body>
+</html>
