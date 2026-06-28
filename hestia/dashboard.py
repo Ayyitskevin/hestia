@@ -42,7 +42,8 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
     upcoming = [dict(r) for r in conn.execute(
         "SELECT a.id, a.title, a.starts_at, a.status, c.name AS client_name "
         "FROM appointments a LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id "
-        "WHERE a.tenant_id = ? AND a.status != 'canceled' "
+        # a 'blocked' entry is the studio's own busy-time, not a client session — exclude it
+        "WHERE a.tenant_id = ? AND a.status != 'canceled' AND a.kind != 'blocked' "
         "AND datetime(a.starts_at) IS NOT NULL AND datetime(a.starts_at) >= datetime('now') "
         "ORDER BY datetime(a.starts_at) ASC LIMIT ?",
         (tenant_id, limit))]

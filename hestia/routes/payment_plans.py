@@ -39,10 +39,11 @@ def _user(request: Request, conn):
 
 def _to_cents(raw: str) -> int:
     try:
-        dollars = float(raw.replace("$", "").replace(",", "").strip())
-        # 'inf'/'nan' parse but overflow round() to int — treat non-finite as zero.
-        return int(round(dollars * 100)) if math.isfinite(dollars) else 0
-    except (ValueError, AttributeError):
+        # check finiteness AFTER the * 100: a huge but finite input (e.g. 1e308) is
+        # finite itself yet overflows to inf once multiplied, which round() can't convert.
+        cents = float(raw.replace("$", "").replace(",", "").strip()) * 100
+        return int(round(cents)) if math.isfinite(cents) else 0
+    except (ValueError, AttributeError, OverflowError):
         return 0
 
 
