@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Packages — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Service packages</h1>
+</div>
+
+<div class="card stack">
+  <h3>New package</h3>
+  <p class="muted" style="font-size:.9rem; margin:0">Your go-to offerings, priced once — then pull
+    one into any invoice in a click instead of re-typing it.</p>
+  <form method="post" action="/packages">
+    {% include "_csrf.html" %}
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" placeholder="Wedding Collection" required>
+
+    <label for="description">What's included <span class="muted">(optional — becomes the invoice note)</span></label>
+    <textarea id="description" name="description" rows="3"
+      placeholder="8 hours coverage · engagement session · online gallery · 50 edited images"></textarea>
+
+    <div class="inline-grid-form">
+      <div><label for="price">Price ({{ settings.currency|upper }})</label>
+        <input type="text" id="price" name="price" placeholder="3500.00"></div>
+      <div><label for="deposit">Deposit <span class="muted">(optional)</span></label>
+        <input type="text" id="deposit" name="deposit" placeholder="1000.00"></div>
+    </div>
+    <div class="form-actions"><button class="btn" type="submit">Add package</button></div>
+  </form>
+</div>
+
+{% set active = packages|selectattr('active')|list %}
+{% set archived = packages|rejectattr('active')|list %}
+
+{% if active %}
+<div class="card" style="margin-top:18px">
+  <table>
+    <thead><tr><th>Package</th><th>Price</th><th>Deposit</th><th></th></tr></thead>
+    <tbody>
+      {% for p in active %}
+      <tr>
+        <td><a href="/packages/{{ p.id }}">{{ p.name }}</a>
+          {% if p.description %}<br><span class="muted" style="font-size:.85rem">{{ p.description }}</span>{% endif %}</td>
+        <td>{{ p.price_display }}</td>
+        <td class="muted">{{ p.deposit_display or '—' }}</td>
+        <td style="white-space:nowrap; text-align:right">
+          <a class="btn ghost" href="/invoices/new?package_id={{ p.id }}">Use on invoice</a>
+          <form method="post" action="/packages/{{ p.id }}/archive" style="display:inline">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit">Archive</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted" style="margin-top:18px">No packages yet — add your go-to offerings above and pull
+  them into any invoice in one click.</p>
+{% endif %}
+
+{% if archived %}
+<div class="card" style="margin-top:18px">
+  <h3 class="muted">Archived</h3>
+  <table>
+    <tbody>
+      {% for p in archived %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td class="muted">{{ p.price_display }}</td>
+        <td style="text-align:right">
+          <form method="post" action="/packages/{{ p.id }}/restore" style="display:inline">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit">Restore</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
