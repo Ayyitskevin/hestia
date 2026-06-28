@@ -17,6 +17,8 @@
   <main>
     <div class="wrap narrow" style="padding-top:32px">
 
+      {% if sent %}<div class="alert ok">✓ Message sent — {{ tenant.name }} will be in touch.</div>{% endif %}
+
       {% set unsigned = contracts | selectattr('status', 'equalto', 'sent') | list %}
       {% set open_invoices = invoices | rejectattr('status', 'in', ['paid', 'void']) | list %}
       {% set to_fill = questionnaires | selectattr('status', 'equalto', 'sent') | list %}
@@ -188,6 +190,16 @@
         <div><a class="btn" href="{{ review_url }}">Leave a review</a></div>
       </div>
       {% endif %}
+
+      <div class="card stack">
+        <h3>Message {{ tenant.name }}</h3>
+        <p class="muted">A question about your shoot, gallery, or an invoice? Send a note and
+          {{ tenant.name }} will get it by email.</p>
+        <form method="post" action="/portal/{{ client.portal_token }}/message">
+          <textarea name="message" rows="4" placeholder="Type your message…" required></textarea>
+          <div class="form-actions"><button class="btn" type="submit">Send message</button></div>
+        </form>
+      </div>
 
     </div>
   </main>
