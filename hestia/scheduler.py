@@ -303,6 +303,55 @@ def cancel_by_token(conn: sqlite3.Connection, settings: Settings, token: str) ->
     return True
 
 
+def reschedule_by_token(conn: sqlite3.Connection, settings: Settings, *, token: str,
+                        new_slot: str) -> bool:
+    """Client moves their session to a new time via their booking link. Confirms the new
+    time, sends a fresh confirmation + reminder, and alerts the studio. The caller validates
+    the slot is open and holds the write lock. Re-emitting ``appointment.confirmed`` is
+    deliberately skipped so a reschedule doesn't re-fire booking automations. Idempotent on
+    status; a no-op for a canceled/completed session."""
+    appt = get_appointment_by_token(conn, token)
+    if not appt or appt["status"] not in ("proposed", "confirmed"):
+        return False
+    when = (new_slot or "").replace("T", " ").strip()
+    if not when:
+        return False
+    old = appt.get("starts_at") or ""
+    cur = conn.execute(
+        "UPDATE appointments SET starts_at = ?, status = 'confirmed', updated_at = datetime('now') "
+        "WHERE id = ? AND status IN ('proposed', 'confirmed')",
+        (when, appt["id"]),
+    )
+    if cur.rowcount == 0:
+        return False
+    confirmed = get_appointment(conn, appt["tenant_id"], appt["id"])
+    # fresh confirmation + day-before reminder for the new time (no event re-fire)
+    enqueue(conn, kind="scheduler.notify", tenant_id=appt["tenant_id"],
+            payload={"appointment_id": appt["id"], "kind": "confirm"})
+    _schedule_reminder(conn, appt["tenant_id"], confirmed)
+    audit(conn, actor="client", action="appointment.rescheduled", tenant_id=appt["tenant_id"],
+          detail=f"{appt['title']} · {old or '—'} → {when}")
+    _alert_reschedule(conn, settings, appt["tenant_id"], confirmed, old)
+    return True
+
+
+def _alert_reschedule(conn: sqlite3.Connection, settings: Settings, tenant_id: str,
+                      appt: dict, old_when: str) -> None:
+    """Tell the studio owner a client moved their session."""
+    row = conn.execute(
+        "SELECT email FROM users WHERE tenant_id = ? AND role = 'owner' ORDER BY id LIMIT 1",
+        (tenant_id,),
+    ).fetchone()
+    to = row["email"] if row else ""
+    if not to:
+        return
+    who = appt.get("client_name") or "A client"
+    notify(conn, settings, to=to, signed=False, tenant_id=tenant_id,
+           subject=f"Rescheduled: {appt['title']}",
+           body=(f"{who} moved their {appt['title']} to {appt.get('starts_at')}"
+                 + (f" (was {old_when})" if old_when else "") + "."))
+
+
 def _alert_cancellation(conn: sqlite3.Connection, settings: Settings, tenant_id: str,
                         appt: dict) -> None:
     """Tell the studio owner a client canceled, so the freed time gets noticed."""
