@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Statement — {{ client.name }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Account statement</h1>
+    <span class="muted">{{ client.name }}{% if client.email %} · {{ client.email }}{% endif %}</span>
+  </div>
+  <a class="btn secondary" href="/clients/{{ client.id }}">← Client</a>
+</div>
+
+<div class="card stack">
+  <div class="health-strip">
+    <div class="health-item"><span class="svc">{{ statement.billed }}</span> <span class="url">billed</span></div>
+    <div class="health-item"><span class="svc">{{ statement.paid }}</span> <span class="url">paid</span></div>
+    <div class="health-item"><span class="svc">{{ statement.outstanding }}</span> <span class="url">outstanding</span></div>
+  </div>
+  {% if statement.lines %}
+  <table>
+    <thead><tr><th>Date</th><th>Item</th><th>Amount</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for it in statement.lines %}
+      <tr>
+        <td class="muted">{{ (it.paid_at or it.created_at)[:10] }}</td>
+        <td>{{ it.title }}{% if it.plan_id %} <span class="muted">· plan installment</span>{% endif %}</td>
+        <td>{{ it.total_display }}</td>
+        <td><span class="pill {{ 'on' if it.status == 'paid' else 'off' }}">{{ it.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><th colspan="2" style="text-align:right">Outstanding</th><th>{{ statement.outstanding }}</th><th></th></tr>
+    </tfoot>
+  </table>
+  {% else %}
+  <p class="muted">Nothing billed to this client yet.</p>
+  {% endif %}
+  <p class="hint">Use your browser's Print to save this as a PDF for the client.</p>
+</div>
+{% endblock %}

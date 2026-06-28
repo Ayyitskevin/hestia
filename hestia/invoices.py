@@ -276,6 +276,37 @@ def invoice_public_url(settings: Settings, token: str) -> str:
     return f"{settings.public_url.rstrip('/')}/pay/{token}"
 
 
+def client_statement(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> dict:
+    """A client's account statement: every invoice actually issued to them — standalone,
+    payment-plan installments, and gallery-order invoices alike — newest first, with billed
+    / paid / outstanding totals. Only issued invoices count (status 'sent' or 'paid'); drafts
+    and voids are excluded. 'billed' and 'paid' are totals incl. tax (each sale's tax rides
+    on its invoice, so summing invoices counts it once). Tenant-scoped read."""
+    rows = conn.execute(
+        "SELECT id, title, amount_cents, tax_cents, currency, status, due_date, paid_at, "
+        "       created_at, plan_id, token "
+        "FROM invoices WHERE tenant_id = ? AND client_id = ? AND status IN ('sent', 'paid') "
+        "ORDER BY COALESCE(paid_at, created_at) DESC, id DESC",
+        (tenant_id, client_id),
+    ).fetchall()
+    lines, billed, paid = [], 0, 0
+    for r in rows:
+        d = _hydrate(dict(r))
+        billed += d["total_cents"]
+        if d["status"] == "paid":
+            paid += d["total_cents"]
+        lines.append(d)
+    outstanding = billed - paid
+    return {
+        # keyed "lines" (not "items") so a Jinja `statement.lines` can't collide with the
+        # dict's built-in .items method
+        "lines": lines,
+        "billed_cents": billed, "billed": money(billed),
+        "paid_cents": paid, "paid": money(paid),
+        "outstanding_cents": outstanding, "outstanding": money(outstanding),
+    }
+
+
 # --- accounts receivable: see what's owed, chase what's late ------------------
 
 # 'sent' (not draft/paid/void) and past a parseable due_date → overdue.
