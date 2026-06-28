@@ -6,11 +6,20 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from ..campaigns import discount_bundle, get_active_campaign
-from ..galleries import get_gallery_by_slug, get_image, list_images, record_gallery_view
+from ..dashboard import owner_digest_recipient
+from ..email import notify
+from ..galleries import (
+    get_gallery_by_slug,
+    get_image,
+    list_images,
+    record_gallery_view,
+    submit_selections,
+)
 from ..orders import create_order
 from ..proofing import (
     add_comment,
     comments_by_image,
+    favorite_count,
     favorite_image_ids,
     list_favorites,
     toggle_favorite,
@@ -124,6 +133,34 @@ def client_favorite(request: Request, slug: str, gallery_slug: str, image_id: in
         if gallery and unlocked:
             toggle_favorite(conn, tenant_id=tenant["id"], gallery_id=gallery["id"], image_id=image_id)
     return RedirectResponse(f"/g/{slug}/{gallery_slug}#img-{image_id}", status_code=303)
+
+
+@router.post("/g/{slug}/{gallery_slug}/submit")
+def client_submit_selections(request: Request, slug: str, gallery_slug: str):
+    """Client finalizes their proofing picks ("I'm done — send these"). On the first
+    submit, notify the owner once so they can build the album/print offer promptly.
+    Idempotent: a re-submit is a no-op (no re-stamp, no second email)."""
+    enforce(request, "checkout")
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        tenant, gallery, unlocked = _resolve_unlocked(conn, request, slug, gallery_slug)
+        if gallery and unlocked and submit_selections(
+            conn, tenant_id=tenant["id"], gallery_id=gallery["id"]
+        ):
+            count = favorite_count(conn, gallery["id"])
+            to = owner_digest_recipient(conn, tenant["id"])
+            if to:                                  # notify() also no-ops on empty recipient
+                who = gallery["client_name"] or "Your client"
+                plural = "" if count == 1 else "s"
+                notify(
+                    conn, settings, to=to, tenant_id=tenant["id"], signed=False,
+                    subject=f"{who} sent their favorites from {gallery['title']}",
+                    body=(f"{who} finalized their selections on \"{gallery['title']}\" — "
+                          f"{count} favorite{plural}.\n\nReview them and build the album or "
+                          f"print offer here:\n{settings.public_url}/galleries/{gallery['id']}"),
+                )
+            conn.commit()
+    return RedirectResponse(f"/g/{slug}/{gallery_slug}", status_code=303)
 
 
 @router.post("/g/{slug}/{gallery_slug}/comment/{image_id}")

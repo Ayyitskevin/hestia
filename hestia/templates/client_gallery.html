@@ -33,6 +33,18 @@
         {% endif %}
         <p class="muted" style="margin-bottom:14px">Heart the frames you love and leave a note —
           {{ favorites|length }} favorited so far. Your photographer sees these to build your album and prints.</p>
+        {% if gallery.selections_submitted_at %}
+          <div class="card stack" style="margin-bottom:14px">
+            <strong>✓ You've sent {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }} to {{ tenant.name }}.</strong>
+            <p class="muted">They'll use these to build your album and prints. You can still change your hearts below —
+              just let {{ tenant.name }} know if you do.</p>
+          </div>
+        {% else %}
+          <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/submit" style="margin-bottom:14px"
+                onsubmit="return confirm('Send your {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }} to {{ tenant.name }}?')">
+            <button class="btn" type="submit">✓ I'm done — send my {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }} to {{ tenant.name }}</button>
+          </form>
+        {% endif %}
         <section class="thumb-grid client-grid">
           {% for img in images %}
             <figure class="thumb proof" id="img-{{ img.id }}">

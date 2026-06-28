@@ -121,6 +121,36 @@ def publish_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -
                    context={"project_id": g["project_id"], "title": g["title"]})
 
 
+def submit_selections(conn: sqlite3.Connection, *, tenant_id: str, gallery_id: int) -> bool:
+    """Client finalizes their proofing picks — a one-way "I'm done, these are my
+    favorites" signal that closes the gallery → album/offer handoff.
+
+    Claim-before-act: the guarded UPDATE only matches a not-yet-submitted gallery
+    (``selections_submitted_at IS NULL``), so just the FIRST submit wins (rowcount
+    == 1). A double-submit or a re-opened link is a no-op that returns False and
+    never re-stamps or re-notifies. On the winning submit it emits
+    ``gallery.selections_submitted`` so the owner's automations can fire."""
+    cur = conn.execute(
+        "UPDATE galleries SET selections_submitted_at = datetime('now') "
+        "WHERE id = ? AND tenant_id = ? AND selections_submitted_at IS NULL",
+        (gallery_id, tenant_id),
+    )
+    if cur.rowcount != 1:
+        return False
+    g = conn.execute(
+        "SELECT title, project_id FROM galleries WHERE id = ? AND tenant_id = ?",
+        (gallery_id, tenant_id),
+    ).fetchone()
+    favs = conn.execute(
+        "SELECT COUNT(*) AS n FROM image_favorites WHERE gallery_id = ?", (gallery_id,)
+    ).fetchone()
+    if g:
+        emit_event(conn, tenant_id=tenant_id, event="gallery.selections_submitted",
+                   context={"project_id": g["project_id"], "title": g["title"],
+                            "favorite_count": favs["n"] if favs else 0})
+    return True
+
+
 # ── Images ──────────────────────────────────────────────────────────────────
 
 

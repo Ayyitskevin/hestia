@@ -2,8 +2,18 @@
 
 import io
 
+from conftest import onboard_studio
+
+from hestia.automations import TRIGGERS
 from hestia.db import connect
-from hestia.galleries import add_image, create_gallery, publish_gallery
+from hestia.email import list_emails
+from hestia.galleries import (
+    add_image,
+    create_gallery,
+    get_gallery,
+    publish_gallery,
+    submit_selections,
+)
 from hestia.proofing import (
     add_comment,
     comments_by_image,
@@ -136,5 +146,96 @@ def test_http_locked_gallery_blocks_favorite(client, app):
     conn = connect(app.state.settings.db_path)
     try:
         assert favorite_count(conn, g["id"]) == 0
+    finally:
+        conn.close()
+
+
+# ── Submit selections (close the proofing → album/offer handoff) ──────────────
+
+
+def test_submit_selections_trigger_registered():
+    # the automation engine must know the event or emit_event silently drops it
+    assert "gallery.selections_submitted" in TRIGGERS
+
+
+def test_submit_selections_idempotent(conn):
+    t = _tenant(conn)
+    g = create_gallery(conn, tenant_id=t["id"], title="G")
+    assert submit_selections(conn, tenant_id=t["id"], gallery_id=g["id"]) is True
+    stamped = get_gallery(conn, t["id"], g["id"])["selections_submitted_at"]
+    assert stamped  # first submit stamps it
+    # re-submits are no-ops: return False and never re-stamp
+    assert submit_selections(conn, tenant_id=t["id"], gallery_id=g["id"]) is False
+    assert submit_selections(conn, tenant_id=t["id"], gallery_id=g["id"]) is False
+    assert get_gallery(conn, t["id"], g["id"])["selections_submitted_at"] == stamped
+
+
+def test_submit_selections_tenant_isolation(conn):
+    t1, t2 = _tenant(conn, "A"), _tenant(conn, "B")
+    g1 = create_gallery(conn, tenant_id=t1["id"], title="G1")
+    # a different tenant cannot finalize t1's gallery
+    assert submit_selections(conn, tenant_id=t2["id"], gallery_id=g1["id"]) is False
+    assert get_gallery(conn, t1["id"], g1["id"])["selections_submitted_at"] is None
+    # the real owner can
+    assert submit_selections(conn, tenant_id=t1["id"], gallery_id=g1["id"]) is True
+
+
+def test_http_submit_notifies_owner_once(client, app):
+    # onboarding creates an owner user, so owner_digest_recipient resolves to an inbox
+    creds = onboard_studio(client, name="Pixel Studio", email="pix@example.com")
+    conn = connect(app.state.settings.db_path)
+    try:
+        row = conn.execute(
+            "SELECT t.id, t.slug FROM tenants t JOIN users u ON u.tenant_id = t.id "
+            "WHERE u.email = ?", (creds["email"],)
+        ).fetchone()
+        tid, slug = row["id"], row["slug"]
+        g = create_gallery(conn, tenant_id=tid, title="Wedding")
+        img = _img(conn, app.state.storage, tid, g["id"])
+        publish_gallery(conn, tid, g["id"])
+        conn.commit()
+    finally:
+        conn.close()
+
+    base = f"/g/{slug}/{g['slug']}"
+    client.post(f"{base}/favorite/{img['id']}")
+    # before submit: the finalize button is shown, no confirmation banner yet
+    assert "I'm done" in client.get(base).text
+
+    client.post(f"{base}/submit")
+    conn = connect(app.state.settings.db_path)
+    try:
+        sent = [e for e in list_emails(conn, tid, to_addr=creds["email"])
+                if "favorites" in e["subject"].lower()]
+        assert len(sent) == 1                       # owner notified exactly once
+        first_ts = get_gallery(conn, tid, g["id"])["selections_submitted_at"]
+        assert first_ts
+    finally:
+        conn.close()
+
+    # after submit: the gallery shows the confirmation banner, not the button
+    after = client.get(base).text
+    assert "You've sent" in after
+
+    # a second submit must not re-notify or re-stamp
+    client.post(f"{base}/submit")
+    conn = connect(app.state.settings.db_path)
+    try:
+        sent = [e for e in list_emails(conn, tid, to_addr=creds["email"])
+                if "favorites" in e["subject"].lower()]
+        assert len(sent) == 1                       # still exactly one
+        assert get_gallery(conn, tid, g["id"])["selections_submitted_at"] == first_ts
+    finally:
+        conn.close()
+
+
+def test_http_locked_gallery_blocks_submit(client, app):
+    t, g, _img_ = _published_gallery_with_image(app, pin="1234")
+    base = f"/g/{t['slug']}/{g['slug']}"
+    # no PIN cookie → submit is ignored, gallery stays un-finalized
+    client.post(f"{base}/submit")
+    conn = connect(app.state.settings.db_path)
+    try:
+        assert get_gallery(conn, t["id"], g["id"])["selections_submitted_at"] is None
     finally:
         conn.close()
