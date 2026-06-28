@@ -17,6 +17,7 @@ from ..galleries import (
     record_gallery_view,
     safe_inline_type,
 )
+from ..proofing import favorite_image_ids
 from ..ratelimit import enforce
 from ..tenants import get_tenant
 from .deps import db_conn, render, storage_of
@@ -46,9 +47,10 @@ def delivery_page(request: Request, token: str):
                           tenant=tenant, status_code=410)
         images = list_images(conn, gallery["id"])
         record_gallery_view(conn, gallery["id"])          # the client opened their gallery
+        favorites = favorite_image_ids(conn, gallery["id"])   # frames they hearted in proofing
     total_bytes = sum(img.get("bytes") or 0 for img in images)
     return render(request, "delivery.html", auth=None, gallery=gallery, images=images,
-                  token=token, total_bytes=total_bytes)
+                  token=token, total_bytes=total_bytes, favorites=favorites)
 
 
 @router.get("/d/{token}/all.zip")
@@ -71,6 +73,31 @@ def delivery_zip(request: Request, token: str):
     return StreamingResponse(
         iter_zip(storage, images), media_type="application/zip",
         headers={"Content-Disposition": _content_disposition(f"{name}.zip", "gallery.zip")})
+
+
+@router.get("/d/{token}/favorites.zip")
+def delivery_favorites_zip(request: Request, token: str):
+    """Just the frames the client hearted in proofing, as one zip — the proofing → selects
+    payoff. Registered before /{image_id} (which is int-typed anyway). 404 if no favorites."""
+    enforce(request, "download")
+    storage = storage_of(request)
+    with db_conn(request) as conn:
+        gallery = get_gallery_by_delivery_token(conn, token)
+        if not gallery:
+            return Response(status_code=404)
+        if delivery_expired(conn, gallery):
+            return Response(status_code=410)              # link past its expiry date
+        favs = favorite_image_ids(conn, gallery["id"])
+        images = [im for im in list_images(conn, gallery["id"]) if im["id"] in favs]
+        if images:
+            record_gallery_download(conn, gallery["id"])  # favorites zip download
+    if not images:
+        return Response(status_code=404)
+    name = (gallery.get("slug") or gallery.get("title") or "gallery")
+    return StreamingResponse(
+        iter_zip(storage, images), media_type="application/zip",
+        headers={"Content-Disposition": _content_disposition(f"{name}-favorites.zip",
+                                                             "favorites.zip")})
 
 
 @router.get("/d/{token}/{image_id}")
