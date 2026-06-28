@@ -146,5 +146,17 @@
     <input type="time" name="end" aria-label="End time" required>
     <button class="btn secondary" type="submit">Add hours</button>
   </form>
+
+  <form method="post" action="/settings/booking-rules"
+        style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px">
+    {% include "_csrf.html" %}
+    <label for="min_notice_hours" style="margin:0">Min notice</label>
+    <input type="number" id="min_notice_hours" name="min_notice_hours" min="0" style="width:80px"
+           value="{{ min_notice_hours }}"><span class="muted">hours</span>
+    <label for="buffer_minutes" style="margin:0 0 0 8px">Buffer</label>
+    <input type="number" id="buffer_minutes" name="buffer_minutes" min="0" step="5" style="width:80px"
+           value="{{ buffer_minutes }}"><span class="muted">min between sessions</span>
+    <button class="btn secondary" type="submit">Save rules</button>
+  </form>
 </div>
 {% endblock %}

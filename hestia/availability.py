@@ -144,7 +144,13 @@ def _generate(conn: sqlite3.Connection, tenant_id: str, *, duration_minutes: int
         windows.setdefault(int(r["weekday"]), []).append((int(r["start_minute"]), int(r["end_minute"])))
     if not windows:
         return []
-    busy = _busy_intervals(conn, tenant_id, today)
+    min_notice, buffer_min = _booking_rules(conn, tenant_id)
+    # min notice pushes the earliest bookable moment out; with 0 this is the plain "future"
+    # cutoff (a slot exactly at `now` is excluded, as before).
+    earliest = now + datetime.timedelta(hours=min_notice)
+    buffer_td = datetime.timedelta(minutes=buffer_min)
+    # pad each busy interval by the buffer so slots can't butt right up against a session
+    busy = [(bs - buffer_td, be + buffer_td) for bs, be in _busy_intervals(conn, tenant_id, today)]
     slots = []
     for offset in range(days + 1):
         d = today + datetime.timedelta(days=offset)
@@ -153,11 +159,22 @@ def _generate(conn: sqlite3.Connection, tenant_id: str, *, duration_minutes: int
             while t + dur <= we:                       # the whole session must fit in the window
                 start = datetime.datetime.combine(d, datetime.time(t // 60, t % 60))
                 end = start + datetime.timedelta(minutes=dur)
-                if start > now and not _overlaps(start, end, busy):
+                if start > earliest and not _overlaps(start, end, busy):
                     slots.append(start)
                 t += dur
     slots.sort()
     return slots
+
+
+def _booking_rules(conn: sqlite3.Connection, tenant_id: str) -> tuple[int, int]:
+    """(min_notice_hours, buffer_minutes) for the tenant — both default to 0."""
+    row = conn.execute(
+        "SELECT booking_min_notice_hours, booking_buffer_minutes FROM tenants WHERE id = ?",
+        (tenant_id,),
+    ).fetchone()
+    if not row:
+        return 0, 0
+    return max(0, int(row["booking_min_notice_hours"] or 0)), max(0, int(row["booking_buffer_minutes"] or 0))
 
 
 def available_slots(conn: sqlite3.Connection, tenant_id: str, *, duration_minutes: int,
