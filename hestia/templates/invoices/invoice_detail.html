@@ -43,6 +43,22 @@
 </div>
 {% endif %}
 
+{% if items %}
+<div class="card stack">
+  <h3>Line items</h3>
+  <table>
+    <tbody>
+      {% for it in items %}
+      <tr><td>{{ it.description }}</td><td style="text-align:right">{{ it.amount_display }}</td></tr>
+      {% endfor %}
+      <tr><td class="muted">Subtotal</td><td style="text-align:right">{{ invoice.amount_display }}</td></tr>
+      {% if invoice.tax_cents %}<tr><td class="muted">Tax</td><td style="text-align:right">{{ invoice.tax_display }}</td></tr>{% endif %}
+      <tr><td><strong>Total</strong></td><td style="text-align:right"><strong>{{ invoice.total_display }}</strong></td></tr>
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <div class="card stack">
   <h3>Client pay link</h3>
   <a class="offer-url" href="{{ pay_url }}" target="_blank">{{ pay_url }}</a>

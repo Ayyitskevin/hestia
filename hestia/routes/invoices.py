@@ -14,8 +14,10 @@ from ..db import audit
 from ..email import notify
 from ..invoices import (
     accounts_receivable,
+    add_invoice_items,
     create_invoice,
     get_invoice,
+    invoice_items,
     invoice_public_url,
     list_invoices,
     record_invoice_reminder,
@@ -47,6 +49,21 @@ def _to_cents(raw: str) -> int:
         return 0
 
 
+def _parse_line_items(raw: str) -> list[tuple[str, int]]:
+    """Parse the line-items textarea: one item per line, ``Description | amount``. Lines
+    without a ``|`` (or with an empty description) are skipped, so stray text doesn't
+    become a junk $0 item."""
+    items: list[tuple[str, int]] = []
+    for line in (raw or "").splitlines():
+        if "|" not in line:
+            continue
+        desc, _, amt = line.rpartition("|")
+        desc = desc.strip()
+        if desc:
+            items.append((desc[:300], _to_cents(amt)))
+    return items
+
+
 @router.get("")
 def invoices_list(request: Request):
     with db_conn(request) as conn:
@@ -73,7 +90,8 @@ def invoice_new(request: Request, project_id: int | None = None, client_id: int 
 
 @router.post("")
 def invoice_create(request: Request, title: str = Form(...), amount: str = Form("0"),
-                   client_id: str = Form(""), project_id: str = Form(""), note: str = Form("")):
+                   items: str = Form(""), client_id: str = Form(""),
+                   project_id: str = Form(""), note: str = Form("")):
     with db_conn(request) as conn:
         auth = _user(request, conn)
         if not auth:
@@ -85,13 +103,17 @@ def invoice_create(request: Request, title: str = Form(...), amount: str = Form(
         cid = raw_c if raw_c and get_client(conn, tid, raw_c) else None
         raw_p = int(project_id) if project_id.strip().isdigit() else None
         pid = raw_p if raw_p and get_project(conn, tid, raw_p) else None
-        subtotal = _to_cents(amount)
+        # line items, when given, define the subtotal; otherwise the single amount field
+        line_items = _parse_line_items(items)
+        subtotal = sum(c for _, c in line_items) if line_items else _to_cents(amount)
         # add the studio's sales tax (0 unless they've set a rate) on top of the subtotal
         tax = tax_for(subtotal, auth.tenant.get("tax_rate_bps") or 0)
         invoice = create_invoice(
             conn, settings_of(request), tenant_id=tid, title=title,
             amount_cents=subtotal, client_id=cid, project_id=pid, tax_cents=tax, note=note,
         )
+        if line_items:
+            add_invoice_items(conn, tid, invoice["id"], line_items)
     return RedirectResponse(f"/invoices/{invoice['id']}", status_code=303)
 
 
@@ -115,8 +137,10 @@ def invoice_detail(request: Request, invoice_id: int):
         invoice = get_invoice(conn, auth.tenant["id"], invoice_id)
         if not invoice:
             return RedirectResponse("/invoices", status_code=303)
+        items = invoice_items(conn, auth.tenant["id"], invoice_id)
     pay_url = invoice_public_url(settings_of(request), invoice["token"])
-    return render(request, "invoices/invoice_detail.html", auth=auth, invoice=invoice, pay_url=pay_url)
+    return render(request, "invoices/invoice_detail.html", auth=auth, invoice=invoice,
+                  items=items, pay_url=pay_url)
 
 
 @router.post("/{invoice_id}/send")

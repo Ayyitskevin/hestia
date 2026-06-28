@@ -10,7 +10,13 @@
     <input type="text" id="title" name="title" placeholder="Wedding photography — balance" required autofocus>
 
     <label for="amount">Amount ({{ settings.currency|upper }})</label>
-    <input type="text" id="amount" name="amount" placeholder="2500.00" required>
+    <input type="text" id="amount" name="amount" placeholder="2500.00">
+    <p class="muted" style="font-size:.85rem; margin:0">Enter a single amount, or itemize below — line items
+      override the amount and their sum becomes the subtotal.</p>
+
+    <label for="items">Line items <span class="muted">(optional — one per line: Description | amount)</span></label>
+    <textarea id="items" name="items" rows="4"
+      placeholder="Wedding coverage (8h) | 2500&#10;Engagement session | 500&#10;Album | 400"></textarea>
 
     <label for="client_id">Client <span class="muted">(optional)</span></label>
     <select id="client_id" name="client_id">

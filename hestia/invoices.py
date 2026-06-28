@@ -64,6 +64,35 @@ def set_invoice_note(conn: sqlite3.Connection, tenant_id: str, invoice_id: int, 
     )
 
 
+def add_invoice_items(conn: sqlite3.Connection, tenant_id: str, invoice_id: int,
+                      items: list[tuple[str, int]]) -> None:
+    """Attach line items (description, amount_cents) to an invoice, in order. The caller
+    sets the invoice's amount_cents to their sum — these rows are the display breakdown."""
+    for pos, (desc, cents) in enumerate(items, start=1):
+        conn.execute(
+            "INSERT INTO invoice_items (invoice_id, tenant_id, description, amount_cents, position) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (invoice_id, tenant_id, (desc or "").strip()[:300], max(0, int(cents)), pos),
+        )
+
+
+def invoice_items(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> list[dict]:
+    """An invoice's line items (empty for a flat single-amount invoice), with displays.
+    The currency comes from the parent invoice via a tenant-matched join."""
+    rows = conn.execute(
+        "SELECT it.*, i.currency FROM invoice_items it "
+        "JOIN invoices i ON i.id = it.invoice_id AND i.tenant_id = it.tenant_id "
+        "WHERE it.invoice_id = ? AND it.tenant_id = ? ORDER BY it.position, it.id",
+        (invoice_id, tenant_id),
+    ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["amount_display"] = money(d["amount_cents"], d.get("currency") or "usd")
+        out.append(d)
+    return out
+
+
 def tax_for(amount_cents: int, rate_bps: int) -> int:
     """Sales tax in cents for a subtotal at a basis-point rate (850 = 8.50%)."""
     return round(max(0, int(amount_cents)) * max(0, int(rate_bps)) / 10000)
