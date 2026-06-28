@@ -35,7 +35,7 @@ from ..crm import (
 )
 from ..db import audit
 from ..email import list_emails, notify
-from ..invoices import list_invoices, money
+from ..invoices import client_statement, list_invoices, money
 from ..payment_plans import list_payment_plans
 from ..portal import enable_portal, portal_url, regenerate_portal_token
 from ..project_tasks import add_task, delete_task, list_tasks, task_progress, toggle_task
@@ -306,6 +306,22 @@ def client_detail(request: Request, client_id: int):
                   projects=projects, timeline=timeline, tags=tags, portal_link=portal_link,
                   refer_link=refer_link, credits=credits, messages=messages,
                   credit_balance_display=money(balance), credit_balance=balance)
+
+
+@router.get("/clients/{client_id}/statement")
+def client_statement_page(request: Request, client_id: int):
+    """A printable account statement — everything billed to the client and what's
+    outstanding. Read-only; the studio shares or prints it for the client."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        client = get_client(conn, auth.tenant["id"], client_id)
+        if not client:
+            return RedirectResponse("/clients", status_code=303)
+        statement = client_statement(conn, auth.tenant["id"], client_id)
+    return render(request, "crm/client_statement.html", auth=auth, client=client,
+                  statement=statement)
 
 
 @router.get("/clients/{client_id}/email")

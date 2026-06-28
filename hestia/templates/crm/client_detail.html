@@ -9,6 +9,7 @@
     </span>
   </div>
   <div style="display:flex; gap:8px">
+    <a class="btn secondary" href="/clients/{{ client.id }}/statement">📄 Statement</a>
     {% if client.email %}<a class="btn secondary" href="/clients/{{ client.id }}/email">✉ Email client</a>{% endif %}
     <a class="btn" href="/projects/new?client_id={{ client.id }}">+ New project</a>
   </div>
