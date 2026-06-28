@@ -1,5 +1,7 @@
 """Client portal — token lifecycle, aggregation, isolation, and the public hub."""
 
+import io
+
 from conftest import login_owner, onboard_studio
 
 from hestia.contracts import create_contract, send_contract
@@ -15,6 +17,7 @@ from hestia.portal import (
     get_client_by_portal_token,
     regenerate_portal_token,
 )
+from hestia.project_files import add_project_file
 from hestia.scheduler import create_appointment
 from hestia.tenants import create_tenant
 from hestia.testimonials import request_testimonial
@@ -291,3 +294,90 @@ def test_http_portal_renders_balance(client, app):
         conn.close()
     page = client.get(f"/portal/{tok}").text
     assert "outstanding" in page and "$300.00" in page
+
+
+# ── shared files ────────────────────────────────────────────────────────────────
+
+
+def test_portal_assembles_client_files_with_download_urls(conn, settings, storage):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Sarah")
+    p = create_project(conn, tenant_id=t["id"], name="Wedding", client_id=c["id"])
+    f = add_project_file(conn, storage, tenant_id=t["id"], project_id=p["id"],
+                         filename="timeline.pdf", fileobj=io.BytesIO(b"PLAN"))
+    conn.commit()
+    tok = enable_portal(conn, t["id"], c["id"])
+    data = assemble_portal(conn, settings, get_client_by_portal_token(conn, tok))
+    assert [x["filename"] for x in data["files"]] == ["timeline.pdf"]
+    assert data["files"][0]["download_url"].endswith(f"/portal/{tok}/files/{f['id']}")
+
+
+def test_http_portal_lists_and_downloads_file(client, app):
+    login_owner(client, onboard_studio(client, email="pfiles@example.com"))
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Sarah")
+        p = create_project(conn, tenant_id=tid, name="Wedding", client_id=c["id"])
+        f = add_project_file(conn, app.state.storage, tenant_id=tid, project_id=p["id"],
+                             filename="timeline.pdf", fileobj=io.BytesIO(b"PLAN-BYTES"),
+                             content_type="application/pdf")
+        tok = enable_portal(conn, tid, c["id"])
+        conn.commit()
+        fid = f["id"]
+    finally:
+        conn.close()
+
+    page = client.get(f"/portal/{tok}")
+    assert page.status_code == 200
+    assert "timeline.pdf" in page.text and f"/portal/{tok}/files/{fid}" in page.text
+
+    d = client.get(f"/portal/{tok}/files/{fid}")
+    assert d.status_code == 200 and d.content == b"PLAN-BYTES"
+    assert 'attachment; filename="timeline.pdf"' in d.headers["content-disposition"]  # never inline
+
+
+def test_http_portal_token_cannot_reach_another_clients_file(client, app):
+    """The security gate: a client's portal token only downloads files on its OWN
+    projects. A sibling client in the same tenant (and an unassigned project's file)
+    are both unreachable — even though the row lives under the same tenant."""
+    login_owner(client, onboard_studio(client, email="gate@example.com"))
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        alice = create_client(conn, tenant_id=tid, name="Alice")
+        bob = create_client(conn, tenant_id=tid, name="Bob")
+        pb = create_project(conn, tenant_id=tid, name="Bob shoot", client_id=bob["id"])
+        bob_file = add_project_file(conn, app.state.storage, tenant_id=tid, project_id=pb["id"],
+                                    filename="bob-secret.pdf", fileobj=io.BytesIO(b"BOB-SECRET"))
+        loose = create_project(conn, tenant_id=tid, name="Unassigned")  # no client_id
+        loose_file = add_project_file(conn, app.state.storage, tenant_id=tid, project_id=loose["id"],
+                                      filename="loose.pdf", fileobj=io.BytesIO(b"LOOSE"))
+        alice_tok = enable_portal(conn, tid, alice["id"])
+        conn.commit()
+        bob_fid, loose_fid = bob_file["id"], loose_file["id"]
+    finally:
+        conn.close()
+
+    r = client.get(f"/portal/{alice_tok}/files/{bob_fid}")
+    assert r.status_code == 404 and b"BOB-SECRET" not in r.content
+    r2 = client.get(f"/portal/{alice_tok}/files/{loose_fid}")
+    assert r2.status_code == 404 and b"LOOSE" not in r2.content
+
+
+def test_http_portal_file_download_bad_token_or_id_404(client, app):
+    login_owner(client, onboard_studio(client, email="badtok@example.com"))
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Sarah")
+        p = create_project(conn, tenant_id=tid, name="Wedding", client_id=c["id"])
+        f = add_project_file(conn, app.state.storage, tenant_id=tid, project_id=p["id"],
+                             filename="x.pdf", fileobj=io.BytesIO(b"X"))
+        tok = enable_portal(conn, tid, c["id"])
+        conn.commit()
+        fid = f["id"]
+    finally:
+        conn.close()
+    assert client.get(f"/portal/nope-not-real/files/{fid}").status_code == 404  # bad token
+    assert client.get(f"/portal/{tok}/files/999999").status_code == 404         # unknown file id

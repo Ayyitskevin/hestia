@@ -4,12 +4,14 @@ import io
 
 from conftest import CSRFClient, login_owner, onboard_studio
 
-from hestia.crm import create_project
+from hestia.crm import create_client, create_project
 from hestia.db import connect
 from hestia.project_files import (
     add_project_file,
     delete_project_file,
+    get_client_file,
     get_project_file,
+    list_client_files,
     list_project_files,
 )
 from hestia.tenants import create_tenant
@@ -70,6 +72,51 @@ def test_delete_removes_row_and_blob(conn, storage):
         raise AssertionError("blob should have been deleted")
     except FileNotFoundError:
         pass
+
+
+# ── client-scoped lookups (the portal download gate) ────────────────────────────
+
+
+def test_list_client_files_spans_projects_and_scopes_to_client(conn, storage):
+    t = _tenant(conn)
+    alice = create_client(conn, tenant_id=t["id"], name="Alice")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    pa1 = create_project(conn, tenant_id=t["id"], name="A1", client_id=alice["id"])
+    pa2 = create_project(conn, tenant_id=t["id"], name="A2", client_id=alice["id"])
+    pb = create_project(conn, tenant_id=t["id"], name="B1", client_id=bob["id"])
+    unassigned = create_project(conn, tenant_id=t["id"], name="Loose")  # no client
+    f1 = add_project_file(conn, storage, tenant_id=t["id"], project_id=pa1["id"],
+                          filename="a1.pdf", fileobj=io.BytesIO(b"a1"))
+    f2 = add_project_file(conn, storage, tenant_id=t["id"], project_id=pa2["id"],
+                          filename="a2.pdf", fileobj=io.BytesIO(b"a2"))
+    add_project_file(conn, storage, tenant_id=t["id"], project_id=pb["id"],
+                     filename="b.pdf", fileobj=io.BytesIO(b"b"))
+    add_project_file(conn, storage, tenant_id=t["id"], project_id=unassigned["id"],
+                     filename="loose.pdf", fileobj=io.BytesIO(b"x"))
+    # Alice sees only files across HER projects — never Bob's, never the unassigned project's
+    assert {f["id"] for f in list_client_files(conn, t["id"], alice["id"])} == {f1["id"], f2["id"]}
+    assert [f["filename"] for f in list_client_files(conn, t["id"], bob["id"])] == ["b.pdf"]
+
+
+def test_get_client_file_enforces_client_and_tenant(conn, storage):
+    t1 = _tenant(conn, "A")
+    t2 = _tenant(conn, "B")
+    alice = create_client(conn, tenant_id=t1["id"], name="Alice")
+    bob = create_client(conn, tenant_id=t1["id"], name="Bob")
+    pa = create_project(conn, tenant_id=t1["id"], name="A", client_id=alice["id"])
+    f = add_project_file(conn, storage, tenant_id=t1["id"], project_id=pa["id"],
+                         filename="secret.pdf", fileobj=io.BytesIO(b"SECRET"))
+    # the owning client can fetch it
+    assert get_client_file(conn, t1["id"], alice["id"], f["id"])["id"] == f["id"]
+    # a sibling client in the same tenant cannot — this is the cross-client gate
+    assert get_client_file(conn, t1["id"], bob["id"], f["id"]) is None
+    # another tenant cannot, even naming the right client_id integer
+    assert get_client_file(conn, t2["id"], alice["id"], f["id"]) is None
+    # an unassigned-project file is reachable by no client token
+    loose = create_project(conn, tenant_id=t1["id"], name="Loose")
+    lf = add_project_file(conn, storage, tenant_id=t1["id"], project_id=loose["id"],
+                          filename="loose.pdf", fileobj=io.BytesIO(b"x"))
+    assert get_client_file(conn, t1["id"], alice["id"], lf["id"]) is None
 
 
 # ── HTTP ──────────────────────────────────────────────────────────────────────

@@ -21,6 +21,7 @@ from .crypto import new_session_token
 from .delivery import delivery_url
 from .invoices import client_statement, invoice_public_url, list_invoices
 from .payment_plans import get_payment_plan, list_payment_plans
+from .project_files import list_client_files
 from .questionnaires import list_questionnaires
 from .scheduler import appointment_ics_url, list_appointments
 from .tenants import get_tenant
@@ -112,6 +113,11 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
     pending = pending_testimonial(conn, tenant_id, client["id"])
     review_url = testimonial_public_url(settings, pending["token"]) if pending else None
 
+    base = settings.public_url.rstrip("/")
+    files = list_client_files(conn, tenant_id, client["id"])
+    for f in files:
+        f["download_url"] = f"{base}/portal/{client['portal_token']}/files/{f['id']}"
+
     return {
         "tenant": tenant,
         "projects": list_projects(conn, tenant_id, client_id=client["id"]),
@@ -122,6 +128,7 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
         "questionnaires": questionnaires,
         "appointments": appointments,
         "review_url": review_url,
+        "files": files,
         # billed / paid / outstanding across all the client's issued invoices + installments
         "statement": client_statement(conn, tenant_id, client["id"]),
     }

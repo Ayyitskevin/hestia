@@ -58,6 +58,31 @@ def list_project_files(conn: sqlite3.Connection, tenant_id: str, project_id: int
     return [dict(r) for r in rows]
 
 
+def list_client_files(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> list[dict]:
+    """Every file across the client's projects — for the client portal. Joins through
+    projects so only files on a project belonging to this client are returned."""
+    rows = conn.execute(
+        "SELECT pf.* FROM project_files pf "
+        "JOIN projects p ON p.id = pf.project_id AND p.tenant_id = pf.tenant_id "
+        "WHERE pf.tenant_id = ? AND p.client_id = ? ORDER BY pf.id DESC",
+        (tenant_id, client_id),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_client_file(conn: sqlite3.Connection, tenant_id: str, client_id: int,
+                    file_id: int) -> dict | None:
+    """A single file ONLY IF it belongs to a project of this client — the portal download
+    gate. A client's token therefore can't reach another client's (or tenant's) files."""
+    row = conn.execute(
+        "SELECT pf.* FROM project_files pf "
+        "JOIN projects p ON p.id = pf.project_id AND p.tenant_id = pf.tenant_id "
+        "WHERE pf.id = ? AND pf.tenant_id = ? AND p.client_id = ?",
+        (file_id, tenant_id, client_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def delete_project_file(conn: sqlite3.Connection, storage: Storage, tenant_id: str,
                         file_id: int) -> None:
     """Remove a file (tenant-scoped). Drops the row, then the blob (best-effort)."""
