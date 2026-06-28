@@ -145,7 +145,8 @@ def get_invoice_by_token(conn: sqlite3.Connection, token: str) -> dict | None:
 
 def list_invoices(
     conn: sqlite3.Connection, tenant_id: str, *,
-    project_id: int | None = None, client_id: int | None = None, standalone_only: bool = False
+    project_id: int | None = None, client_id: int | None = None, standalone_only: bool = False,
+    status: str | None = None,
 ) -> list[dict]:
     sql = (
         "SELECT i.*, c.name AS client_name, p.name AS project_name, "
@@ -172,6 +173,11 @@ def list_invoices(
     if standalone_only:
         # Plan installments surface under their payment plan, not the flat list.
         sql += " AND i.plan_id IS NULL"
+    if status == "overdue":          # pseudo-status: still 'sent' and past a real due date
+        sql += " AND i.status = 'sent' AND date(i.due_date) IS NOT NULL AND date(i.due_date) < date('now')"
+    elif status in ("draft", "sent", "paid", "void"):
+        sql += " AND i.status = ?"
+        params.append(status)
     sql += " ORDER BY i.created_at DESC"
     return [_hydrate(dict(r)) for r in conn.execute(sql, params).fetchall()]
 
