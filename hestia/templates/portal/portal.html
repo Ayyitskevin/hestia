@@ -133,6 +133,7 @@
                   <td class="muted">{{ i.due_date or "" }}</td>
                   <td style="text-align:right">
                     {% if i.status == 'paid' %}<span class="muted">✓ Paid</span>
+                      <a href="{{ i.pay_url }}/receipt">receipt</a>
                     {% elif i.status == 'void' %}<span class="muted">—</span>
                     {% else %}<a class="btn secondary" href="{{ i.pay_url }}">Pay {{ i.amount_display }}</a>{% endif %}
                   </td>
@@ -152,8 +153,9 @@
               <td>{{ inv.amount_display }}</td>
               <td><span class="pill {{ 'on' if inv.status == 'paid' else 'off' }}">{{ inv.status }}</span></td>
               <td style="text-align:right">
-                {% if inv.status not in ['paid', 'void'] %}<a class="btn secondary" href="{{ inv.pay_url }}">Pay</a>
-                {% else %}<span class="muted">—</span>{% endif %}
+                {% if inv.status == 'paid' %}<a class="btn secondary" href="{{ inv.pay_url }}/receipt">View receipt</a>
+                {% elif inv.status == 'void' %}<span class="muted">—</span>
+                {% else %}<a class="btn secondary" href="{{ inv.pay_url }}">Pay</a>{% endif %}
               </td>
             </tr>
             {% endfor %}
