@@ -37,6 +37,40 @@ def get_expense(conn: sqlite3.Connection, tenant_id: str, expense_id: int) -> di
     return dict(row) if row else None
 
 
+def import_expenses(conn: sqlite3.Connection, *, tenant_id: str, rows: list[dict]) -> dict:
+    """Bulk-create expenses from parsed rows (each: amount_cents, category, description,
+    incurred_on). A row with no positive amount is skipped; a row that exactly matches an
+    expense ALREADY recorded for this tenant (same date + amount + description) is skipped
+    as a duplicate, so re-importing the same file is idempotent. The duplicate check is
+    against the pre-existing rows only — so genuinely identical line items within a single
+    file all import, but a second import of that file adds nothing. Category is normalized
+    to a known one (else 'other'). Tenant-scoped. Returns a counts summary."""
+    existing = {
+        (r["d"], int(r["a"]), r["x"])
+        for r in conn.execute(
+            "SELECT TRIM(COALESCE(incurred_on, '')) AS d, amount_cents AS a, "
+            "       TRIM(COALESCE(description, '')) AS x FROM expenses WHERE tenant_id = ?",
+            (tenant_id,))
+    }
+    imported = skipped_duplicate = skipped_zero = 0
+    for row in rows:
+        cents = max(0, int(row.get("amount_cents") or 0))
+        if cents <= 0:                                   # an expense needs an amount
+            skipped_zero += 1
+            continue
+        desc = (row.get("description") or "").strip()
+        incurred = (row.get("incurred_on") or "").strip()
+        if (incurred, cents, desc) in existing:          # already recorded → idempotent skip
+            skipped_duplicate += 1
+            continue
+        create_expense(conn, tenant_id=tenant_id, amount_cents=cents,
+                       category=(row.get("category") or "other"), description=desc,
+                       incurred_on=incurred)
+        imported += 1
+    return {"imported": imported, "skipped_duplicate": skipped_duplicate,
+            "skipped_zero": skipped_zero}
+
+
 def list_expenses(conn: sqlite3.Connection, tenant_id: str, *, project_id: int | None = None,
                   limit: int = 200) -> list[dict]:
     base = ("SELECT e.*, p.name AS project_name FROM expenses e "

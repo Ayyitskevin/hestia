@@ -6,15 +6,17 @@ import csv
 import io
 import math
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse, Response
 
 from ..auth import context_from_session
 from ..crm import get_project, list_projects
+from ..db import audit
 from ..finances import (
     EXPENSE_CATEGORIES,
     create_expense,
     delete_expense,
+    import_expenses,
     income_rows,
     list_expenses,
     profit_summary,
@@ -61,6 +63,107 @@ def _user(request: Request, conn):
     if not auth or not auth.tenant:
         return None
     return auth
+
+
+def _to_cents(raw: str) -> int:
+    """Parse a money cell to a positive cent magnitude. Bank exports show expenses as
+    negatives (debits); we take the magnitude either way. Overflow-safe (a huge finite
+    value overflows to inf only after * 100, which round() can't convert)."""
+    try:
+        cents = float(str(raw).replace("$", "").replace(",", "").strip()) * 100
+        return abs(int(round(cents))) if math.isfinite(cents) else 0
+    except (ValueError, AttributeError, OverflowError):
+        return 0
+
+
+# header labels other tools / banks export, mapped to our fields
+_EXPENSE_SYNONYMS = {
+    "date": "date", "incurred_on": "date", "incurred": "date", "transaction date": "date",
+    "posted": "date", "posted date": "date", "day": "date",
+    "category": "category", "type": "category", "tag": "category",
+    "description": "description", "desc": "description", "memo": "description",
+    "note": "description", "notes": "description", "payee": "description", "merchant": "description",
+    "amount": "amount", "amount_cents": "amount", "total": "amount", "debit": "amount",
+    "cost": "amount", "price": "amount", "spent": "amount", "withdrawal": "amount",
+    "charge": "amount", "outflow": "amount", "payment": "amount",
+}
+
+_MAX_IMPORT_BYTES = 5_000_000
+
+
+def _parse_expense_csv(text: str) -> list[dict]:
+    """Parse expense-import CSV text into row dicts. Row 0 is treated as a header only when it
+    names an ``amount`` column (via synonyms, in any order) whose own cell is NOT a data amount
+    — so a header with a numeric label elsewhere (a year/period column) still detects, while a
+    headerless bank row (whose amount column holds a number) falls back to positional date,
+    description, amount. Recognizes common bank labels (Transaction Date, Memo, Debit,
+    Withdrawal…). Raises csv.Error on a malformed/binary file."""
+    records = [r for r in csv.reader(io.StringIO(text)) if any((c or "").strip() for c in r)]
+    if not records:
+        return []
+    head = [c.strip().lower() for c in records[0]]
+    head_map: dict[str, int] = {}
+    for i, h in enumerate(head):
+        field = _EXPENSE_SYNONYMS.get(h)
+        if field and field not in head_map:      # first recognized synonym for a field wins
+            head_map[field] = i
+    # a header must map an amount column whose OWN cell isn't a real amount (else it's data)
+    if "amount" in head_map and _to_cents(records[0][head_map["amount"]]) <= 0:
+        field_map, data = head_map, records[1:]
+    else:
+        field_map, data = {"date": 0, "description": 1, "amount": 2}, records
+
+    def cell(rec: list[str], field: str) -> str:
+        i = field_map.get(field)
+        return rec[i].strip() if i is not None and i < len(rec) else ""
+
+    rows = []
+    for rec in data:
+        rows.append({"incurred_on": cell(rec, "date"), "category": cell(rec, "category"),
+                     "description": cell(rec, "description"),
+                     "amount_cents": _to_cents(cell(rec, "amount"))})
+    return rows
+
+
+@router.get("/finances/import")
+def expenses_import_form(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+    return render(request, "finances_import.html", auth=auth, summary=None, error=None)
+
+
+@router.post("/finances/import")
+async def expenses_import(request: Request, file: UploadFile = File(...)):
+    # authenticate BEFORE reading the body — a cookieless POST is CSRF-exempt, so reading
+    # first would let an anonymous caller force an unbounded read
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        raw = await file.read()
+        if len(raw) > _MAX_IMPORT_BYTES:
+            return render(request, "finances_import.html", auth=auth, summary=None,
+                          error=f"That file is too large (limit {_MAX_IMPORT_BYTES // 1_000_000} MB).")
+        try:
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1", errors="replace")
+        try:
+            rows = _parse_expense_csv(text)
+        except csv.Error:
+            rows = None
+        if rows is None:
+            return render(request, "finances_import.html", auth=auth, summary=None,
+                          error="That file didn't look like a CSV — please upload a .csv export.")
+        summary = import_expenses(conn, tenant_id=auth.tenant["id"], rows=rows)
+        if summary["imported"]:
+            audit(conn, actor="owner", action="expenses.imported", tenant_id=auth.tenant["id"],
+                  detail=(f"{summary['imported']} imported · {summary['skipped_duplicate']} dupes "
+                          f"· {summary['skipped_zero']} no-amount"))
+            conn.commit()
+    return render(request, "finances_import.html", auth=auth, summary=summary, error=None)
 
 
 @router.get("/finances")
