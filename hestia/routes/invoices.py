@@ -16,6 +16,7 @@ from ..invoices import (
     accounts_receivable,
     add_invoice_items,
     create_invoice,
+    duplicate_invoice,
     get_invoice,
     invoice_items,
     invoice_public_url,
@@ -196,6 +197,18 @@ def invoice_record_payment(request: Request, invoice_id: int, method: str = Form
             return RedirectResponse("/login", status_code=303)
         record_offline_payment(conn, auth.tenant["id"], invoice_id, method=method)
     return RedirectResponse(f"/invoices/{invoice_id}", status_code=303)
+
+
+@router.post("/{invoice_id}/duplicate")
+def invoice_duplicate(request: Request, invoice_id: int):
+    """Clone an invoice into a new draft (for repeat/retainer billing)."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        new = duplicate_invoice(conn, settings_of(request), auth.tenant["id"], invoice_id)
+        target = new["id"] if new else invoice_id
+    return RedirectResponse(f"/invoices/{target}", status_code=303)
 
 
 @router.post("/{invoice_id}/receipt")
