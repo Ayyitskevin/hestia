@@ -311,11 +311,12 @@ def _is_overdue(due_date) -> bool:
         return False
 
 
-def send_invoice_reminder(conn: sqlite3.Connection, settings: Settings, invoice: dict) -> str | None:
-    """Email the client a payment nudge with the pay link. The wording adapts to
-    whether the invoice is actually past due, so a manual nudge on a not-yet-due
-    invoice doesn't falsely claim it's overdue. Returns the send status, or None
-    when there's no client email to send to."""
+def send_invoice_reminder(conn: sqlite3.Connection, settings: Settings, invoice: dict, *,
+                          kind: str | None = None) -> str | None:
+    """Email the client a payment nudge with the pay link. When ``kind`` is given (by the
+    dunning ladder) that template is used; otherwise the wording adapts to whether the
+    invoice is actually past due, so a manual nudge on a not-yet-due invoice doesn't
+    falsely claim it's overdue. Returns the send status, or None when there's no email."""
     to = (invoice.get("client_email") or "").strip()
     if not to:
         return None
@@ -328,51 +329,80 @@ def send_invoice_reminder(conn: sqlite3.Connection, settings: Settings, invoice:
                                                          invoice.get("currency", "usd")),
         "pay_url": invoice_public_url(settings, invoice["token"]),
     }
-    # past-due vs not-yet-due get their own template, so a manual nudge on a current
-    # invoice never falsely says "past due".
-    kind = "invoice_overdue" if _is_overdue(invoice.get("due_date")) else "invoice_reminder"
+    if kind is None:
+        # past-due vs not-yet-due get their own template, so a manual nudge on a current
+        # invoice never falsely says "past due".
+        kind = "invoice_overdue" if _is_overdue(invoice.get("due_date")) else "invoice_reminder"
     msg = messaging.render(conn, invoice["tenant_id"], kind, ctx)
     return notify(conn, settings, to=to, subject=msg["subject"], body=msg["body"],
                   tenant_id=invoice["tenant_id"])
 
 
-def record_invoice_reminder(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> bool:
-    """Stamp a reminder as sent — idempotent bookkeeping that gates the next auto
-    nudge. Only stamps a still-'sent' invoice; True if a row was updated."""
-    cur = conn.execute(
-        "UPDATE invoices SET last_reminder_at = datetime('now'), reminder_count = reminder_count + 1 "
-        "WHERE id = ? AND tenant_id = ? AND status = 'sent'",
-        (invoice_id, tenant_id),
-    )
+def record_invoice_reminder(conn: sqlite3.Connection, tenant_id: str, invoice_id: int, *,
+                            expected_count: int | None = None) -> bool:
+    """Stamp a reminder as sent — idempotent bookkeeping that gates the next auto nudge.
+    Only stamps a still-'sent' invoice; True if a row was updated. ``expected_count``, when
+    given (by the ladder sweep), also guards on the current reminder_count so two
+    concurrent sweeps can't both send the same ladder step."""
+    if expected_count is None:
+        cur = conn.execute(
+            "UPDATE invoices SET last_reminder_at = datetime('now'), "
+            "reminder_count = reminder_count + 1 "
+            "WHERE id = ? AND tenant_id = ? AND status = 'sent'",
+            (invoice_id, tenant_id),
+        )
+    else:
+        cur = conn.execute(
+            "UPDATE invoices SET last_reminder_at = datetime('now'), "
+            "reminder_count = reminder_count + 1 "
+            "WHERE id = ? AND tenant_id = ? AND status = 'sent' AND reminder_count = ?",
+            (invoice_id, tenant_id, int(expected_count)),
+        )
     return cur.rowcount > 0
+
+
+# The dunning ladder: how many automated overdue reminders to send, and the template
+# tone for each step (0-indexed by the count already sent). The last step is the firm
+# final notice; after it, the client is never auto-nudged again.
+MAX_DUNNING_REMINDERS = 3
+_DUNNING_KINDS = ("invoice_overdue", "invoice_overdue", "invoice_final_notice")
 
 
 def send_overdue_reminders(conn: sqlite3.Connection, settings: Settings, *,
                            cooldown_days: int = 7, limit: int = 500) -> int:
-    """Across all tenants, nudge each overdue invoice whose client has an email on
-    file and who hasn't been reminded within the cooldown window. Returns reminders
-    sent.
+    """Across all tenants, walk each overdue invoice up a dunning ladder: the first nudge
+    fires as soon as it's overdue, then each later step waits a *widening* gap
+    (``reminder_count × cooldown_days`` — so 7, then 14 days at the default), the tone
+    escalates to a final notice on the last step, and after ``MAX_DUNNING_REMINDERS`` the
+    client is never auto-nudged again (no perpetual nagging). Returns reminders sent.
 
-    Two correctness guards:
-    - The inner JOIN + non-empty email filter means an invoice with no client (or no
-      client email) is never selected — so it can't be rescanned every sweep forever.
-    - Each invoice is *claimed* first (record_invoice_reminder is an atomic UPDATE
-      gated on status='sent'); only a successful claim sends. An invoice paid between
-      this SELECT and the send therefore can't receive a duplicate reminder."""
+    Correctness guards (unchanged in spirit):
+    - The inner JOIN + non-empty email filter means an invoice with no client/email is
+      never selected, so it isn't rescanned every sweep forever.
+    - Each invoice is *claimed* before sending (record_invoice_reminder, an atomic UPDATE
+      gated on status='sent' AND the expected reminder_count), so an invoice paid — or a
+      step already sent by a concurrent sweep — can't receive a duplicate reminder."""
+    # gap before step N (= the Nth reminder, given N already sent): N * cooldown_days.
+    gap_case = "CASE i.reminder_count " + " ".join(
+        f"WHEN {i} THEN '-{i * int(cooldown_days)} days'" for i in range(MAX_DUNNING_REMINDERS)
+    ) + " END"
     rows = conn.execute(
         "SELECT i.id, i.tenant_id, i.title, i.amount_cents, i.currency, i.token, i.due_date, "
-        "       c.name AS client_name, c.email AS client_email "
+        "       i.reminder_count, c.name AS client_name, c.email AS client_email "
         "FROM invoices i JOIN clients c ON c.id = i.client_id AND c.tenant_id = i.tenant_id "
         f"WHERE i.status = 'sent' AND {_OVERDUE_SQL.replace('due_date', 'i.due_date')} "
         "  AND TRIM(COALESCE(c.email, '')) <> '' "
-        "  AND (i.last_reminder_at IS NULL OR i.last_reminder_at < datetime('now', ?)) "
+        f"  AND i.reminder_count < {MAX_DUNNING_REMINDERS} "                 # cap the ladder
+        f"  AND (i.last_reminder_at IS NULL OR i.last_reminder_at < datetime('now', {gap_case})) "
         "ORDER BY i.id LIMIT ?",
-        (f"-{int(cooldown_days)} days", limit),
+        (limit,),
     ).fetchall()
     sent = 0
     for r in rows:
+        step = int(r["reminder_count"])
         inv = _hydrate(dict(r))
-        if record_invoice_reminder(conn, inv["tenant_id"], inv["id"]):   # claim before send
-            send_invoice_reminder(conn, settings, inv)
+        if record_invoice_reminder(conn, inv["tenant_id"], inv["id"], expected_count=step):
+            kind = _DUNNING_KINDS[min(step, len(_DUNNING_KINDS) - 1)]
+            send_invoice_reminder(conn, settings, inv, kind=kind)
             sent += 1
     return sent
