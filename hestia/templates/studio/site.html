@@ -35,6 +35,13 @@
             <select id="shoot_type" name="shoot_type">
               {% for st in shoot_types %}<option value="{{ st }}" {{ 'selected' if st == tenant.shoot_type else '' }}>{{ shoot_type_labels.get(st, st) }}</option>{% endfor %}
             </select>
+            {% if packages %}
+            <label for="package_id">Interested in a package? <span class="muted">(optional)</span></label>
+            <select id="package_id" name="package_id">
+              <option value="">— not sure yet —</option>
+              {% for pk in packages %}<option value="{{ pk.id }}">{{ pk.name }} · {{ pk.price_display }}</option>{% endfor %}
+            </select>
+            {% endif %}
             <label for="event_date">Date <span class="muted">(optional)</span></label>
             <input type="text" id="event_date" name="event_date" placeholder="2026-09-12">
             <label for="message">Message</label>
@@ -43,6 +50,24 @@
           </form>
         </div>
       </div>
+
+      {% if packages %}
+      <section style="margin-top:32px">
+        <h3 style="text-align:center">Packages</h3>
+        <div class="grid cols-2">
+          {% for pk in packages %}
+          <div class="card stack">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px">
+              <h3 style="margin:0">{{ pk.name }}</h3>
+              <strong>{{ pk.price_display }}</strong>
+            </div>
+            {% if pk.description %}<p class="muted" style="margin:0">{{ pk.description }}</p>{% endif %}
+            {% if pk.deposit_cents %}<p class="muted" style="font-size:.85rem; margin:0">Book with a deposit</p>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
 
       {% if testimonials %}
       <section style="margin-top:32px">
