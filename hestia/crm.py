@@ -44,6 +44,42 @@ def get_client(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> dict
     return dict(row) if row else None
 
 
+def import_clients(conn: sqlite3.Connection, *, tenant_id: str, rows: list[dict]) -> dict:
+    """Bulk-create clients from parsed rows (each a dict with name/email/phone/notes and
+    an optional ``tags`` list). A blank-name row is skipped; a row whose email already
+    belongs to this tenant — or repeats earlier in the same batch — is skipped as a
+    duplicate, so re-importing the same file is idempotent (matched case-insensitively
+    on email). Rows without an email can't be deduped and are always imported. Tags are
+    applied. Everything is tenant-scoped. Returns a summary of counts."""
+    existing = {
+        (r["email"] or "").strip().lower()
+        for r in conn.execute("SELECT email FROM clients WHERE tenant_id = ?", (tenant_id,))
+        if (r["email"] or "").strip()
+    }
+    seen: set[str] = set()
+    imported = skipped_duplicate = skipped_blank = 0
+    for row in rows:
+        name = (row.get("name") or "").strip()
+        if not name:
+            skipped_blank += 1
+            continue
+        email = (row.get("email") or "").strip()
+        key = email.lower()
+        if email and (key in existing or key in seen):
+            skipped_duplicate += 1
+            continue
+        client = create_client(conn, tenant_id=tenant_id, name=name, email=email,
+                               phone=(row.get("phone") or "").strip(),
+                               notes=(row.get("notes") or "").strip())
+        for tag in row.get("tags") or []:
+            add_client_tag(conn, tenant_id, client["id"], tag)
+        if email:
+            seen.add(key)
+        imported += 1
+    return {"imported": imported, "skipped_duplicate": skipped_duplicate,
+            "skipped_blank": skipped_blank}
+
+
 def _norm_tag(tag: str) -> str:
     """Normalize a tag: trimmed, lower-cased, single-spaced, capped — so 'VIP ' and
     'vip' are the same tag."""

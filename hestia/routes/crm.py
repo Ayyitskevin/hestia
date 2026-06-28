@@ -6,7 +6,7 @@ import csv
 import io
 from urllib.parse import quote
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse, Response
 
 from .. import messaging
@@ -23,6 +23,7 @@ from ..crm import (
     galleries_for_project,
     get_client,
     get_project,
+    import_clients,
     list_clients,
     list_projects,
     project_pipeline,
@@ -108,6 +109,98 @@ def clients_export(request: Request, tag: str = ""):
         )])
     return Response(content=buf.getvalue(), media_type="text/csv",
                     headers={"Content-Disposition": 'attachment; filename="clients.csv"'})
+
+
+_CSV_FIELDS = ("name", "email", "phone", "tags", "notes")
+
+# Header labels other tools export, mapped to our fields — so a CSV migrated straight
+# from another CRM imports without the user renaming columns first.
+_HEADER_SYNONYMS = {
+    "name": "name", "full name": "name", "full_name": "name", "fullname": "name",
+    "client": "name", "client name": "name", "contact": "name", "contact name": "name",
+    "first name": "name",
+    "email": "email", "email address": "email", "e-mail": "email", "mail": "email",
+    "phone": "phone", "phone number": "phone", "mobile": "phone", "cell": "phone",
+    "telephone": "phone", "tel": "phone",
+    "tags": "tags", "tag": "tags", "labels": "tags", "label": "tags",
+    "notes": "notes", "note": "notes", "comment": "notes", "comments": "notes",
+}
+
+_MAX_IMPORT_BYTES = 5_000_000
+
+
+def _parse_client_csv(text: str) -> list[dict]:
+    """Parse client-import CSV text into row dicts. Row 0 is treated as a header only when
+    it actually names a ``name`` column (via common synonyms like 'Full Name' / 'First
+    Name') and holds no email-looking value — otherwise the file is read positionally as
+    name, email, phone, tags, notes. That way a header-less export, Hestia's own export,
+    and a foreign tool's differently-labelled export all import correctly (and a real data
+    row whose first cell happens to equal a field name isn't mistaken for a header). The
+    ``tags`` cell splits on commas/whitespace; fully blank lines are ignored. Raises
+    csv.Error on a malformed/binary file, which the caller turns into a friendly message."""
+    records = [r for r in csv.reader(io.StringIO(text)) if any((c or "").strip() for c in r)]
+    if not records:
+        return []
+    head = [c.strip().lower() for c in records[0]]
+    head_map = {_HEADER_SYNONYMS[h]: i for i, h in enumerate(head) if h in _HEADER_SYNONYMS}
+    # a header must identify the (required) name column and carry no data-looking value
+    if "name" in head_map and not any("@" in c for c in records[0]):
+        field_map, data = head_map, records[1:]
+    else:
+        field_map, data = {f: i for i, f in enumerate(_CSV_FIELDS)}, records
+
+    def cell(rec: list[str], field: str) -> str:
+        i = field_map.get(field)
+        return rec[i].strip() if i is not None and i < len(rec) else ""
+
+    rows = []
+    for rec in data:
+        tags_raw = cell(rec, "tags")
+        tags = tags_raw.replace(",", " ").split() if tags_raw else []
+        rows.append({"name": cell(rec, "name"), "email": cell(rec, "email"),
+                     "phone": cell(rec, "phone"), "notes": cell(rec, "notes"), "tags": tags})
+    return rows
+
+
+@router.get("/clients/import")
+def clients_import_form(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+    return render(request, "crm/clients_import.html", auth=auth, summary=None, error=None)
+
+
+@router.post("/clients/import")
+async def clients_import(request: Request, file: UploadFile = File(...)):
+    # Authenticate BEFORE touching the body — an anonymous (cookieless) POST is
+    # CSRF-exempt, so reading/parsing first would let it force an unbounded read.
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        raw = await file.read()
+        if len(raw) > _MAX_IMPORT_BYTES:
+            return render(request, "crm/clients_import.html", auth=auth, summary=None,
+                          error=f"That file is too large (limit {_MAX_IMPORT_BYTES // 1_000_000} MB).")
+        try:
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1", errors="replace")
+        try:
+            rows = _parse_client_csv(text)
+        except csv.Error:
+            rows = None
+        if rows is None:
+            return render(request, "crm/clients_import.html", auth=auth, summary=None,
+                          error="That file didn't look like a CSV — please upload a .csv export.")
+        summary = import_clients(conn, tenant_id=auth.tenant["id"], rows=rows)
+        if summary["imported"]:
+            audit(conn, actor="owner", action="clients.imported", tenant_id=auth.tenant["id"],
+                  detail=(f"{summary['imported']} imported · {summary['skipped_duplicate']} dupes "
+                          f"· {summary['skipped_blank']} blank"))
+            conn.commit()
+    return render(request, "crm/clients_import.html", auth=auth, summary=summary)
 
 
 @router.get("/clients/new")
