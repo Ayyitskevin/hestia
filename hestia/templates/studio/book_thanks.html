@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request received — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <main>
+    <div class="wrap narrow" style="text-align:center; padding-top:80px">
+      <div style="font-size:3rem">📅</div>
+      <h1>Request received</h1>
+      <p class="muted">Thanks! We've got your request for <strong>{{ booking_title }}</strong> —
+        {{ tenant.name }} will confirm the time by email shortly.</p>
+      <p><a class="btn ghost" href="/studio/{{ tenant.slug }}">← Back</a></p>
+    </div>
+  </main>
+</body>
+</html>

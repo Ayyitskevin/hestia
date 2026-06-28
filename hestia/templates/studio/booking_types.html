@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Booking page — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Booking page</h1>
+  {% if published %}<a class="btn secondary" href="/studio/{{ slug }}/book" target="_blank">View public page ↗</a>{% endif %}
+</div>
+
+{% if not published %}
+<div class="card stack" style="border-color:#f0d9b4; background:#fff7ec">
+  <p style="margin:0">Your studio site isn't published yet, so the public booking page is hidden.
+    <a href="/settings/site">Publish your site</a> to share it.</p>
+</div>
+{% elif types|selectattr('active')|list %}
+<div class="card stack">
+  <p style="margin:0">Share your booking link so clients can request a session:
+    <strong>{{ settings.public_url.rstrip('/') }}/studio/{{ slug }}/book</strong></p>
+</div>
+{% endif %}
+
+<div class="card stack" style="margin-top:18px">
+  <h3>New session type</h3>
+  <p class="muted" style="font-size:.9rem; margin:0">The sessions clients can request from your
+    booking page — a free consultation, a mini-session, an engagement shoot. A request lands in your
+    CRM as a lead with a proposed session you confirm.</p>
+  <form method="post" action="/settings/booking-types">
+    {% include "_csrf.html" %}
+    <label for="title">Title</label>
+    <input type="text" id="title" name="title" placeholder="20-min consultation" required>
+
+    <label for="description">Description <span class="muted">(optional)</span></label>
+    <textarea id="description" name="description" rows="2"
+      placeholder="A quick call to talk through your vision, dates, and budget."></textarea>
+
+    <div class="inline-grid-form">
+      <div><label for="kind">Type</label>
+        <select id="kind" name="kind">
+          {% for k in kinds %}<option value="{{ k.value }}">{{ k.label }}</option>{% endfor %}
+        </select></div>
+      <div><label for="duration_minutes">Minutes</label>
+        <input type="number" id="duration_minutes" name="duration_minutes" value="60" min="1" step="5"></div>
+      <div><label for="price">Price ({{ settings.currency|upper }}) <span class="muted">(optional)</span></label>
+        <input type="text" id="price" name="price" placeholder="0.00"></div>
+    </div>
+    <div class="form-actions"><button class="btn" type="submit">Add session type</button></div>
+  </form>
+</div>
+
+{% set active = types|selectattr('active')|list %}
+{% set archived = types|rejectattr('active')|list %}
+
+{% if active %}
+<div class="card" style="margin-top:18px">
+  <table>
+    <thead><tr><th>Session</th><th>Type</th><th>Length</th><th>Price</th><th></th></tr></thead>
+    <tbody>
+      {% for t in active %}
+      <tr>
+        <td>{{ t.title }}{% if t.description %}<br><span class="muted" style="font-size:.85rem">{{ t.description }}</span>{% endif %}</td>
+        <td class="muted">{{ t.kind_label }}</td>
+        <td class="muted">{{ t.duration_minutes }} min</td>
+        <td class="muted">{{ t.price_display or '—' }}</td>
+        <td style="white-space:nowrap; text-align:right">
+          <form method="post" action="/settings/booking-types/{{ t.id }}/toggle" style="display:inline">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit">Archive</button>
+          </form>
+          <form method="post" action="/settings/booking-types/{{ t.id }}/delete" style="display:inline"
+                onsubmit="return confirm('Delete this session type?')">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit" title="Delete">✕</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted" style="margin-top:18px">No session types yet — add the sessions clients can book above.</p>
+{% endif %}
+
+{% if archived %}
+<div class="card" style="margin-top:18px">
+  <h3 class="muted">Archived</h3>
+  <table>
+    <tbody>
+      {% for t in archived %}
+      <tr>
+        <td>{{ t.title }}</td>
+        <td class="muted">{{ t.kind_label }}</td>
+        <td style="text-align:right">
+          <form method="post" action="/settings/booking-types/{{ t.id }}/toggle" style="display:inline">
+            {% include "_csrf.html" %}
+            <input type="hidden" name="active" value="1">
+            <button class="btn ghost" type="submit">Restore</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
