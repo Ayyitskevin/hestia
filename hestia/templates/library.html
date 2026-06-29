@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Library — Hestia{% endblock %}
 {% block content %}
-{%- macro liburl(q='', shot='', keepers=False) -%}
+{%- macro liburl(q='', shot='', keepers=False, clean=False) -%}
   {%- set p = [] -%}
   {%- if q %}{% set _ = p.append('q=' ~ (q | urlencode)) %}{% endif -%}
   {%- if shot %}{% set _ = p.append('shot=' ~ (shot | urlencode)) %}{% endif -%}
   {%- if keepers %}{% set _ = p.append('keepers=1') %}{% endif -%}
+  {%- if clean %}{% set _ = p.append('clean=1') %}{% endif -%}
   /library{% if p %}?{{ p | join('&') }}{% endif %}
 {%- endmacro -%}
 <div class="page-title">
@@ -19,12 +20,13 @@
            autofocus aria-label="Search photos by keyword">
     {% if shot %}<input type="hidden" name="shot" value="{{ shot }}">{% endif %}
     {% if keepers %}<input type="hidden" name="keepers" value="1">{% endif %}
+    {% if clean %}<input type="hidden" name="clean" value="1">{% endif %}
     <button class="btn" type="submit">Search</button>
   </form>
   {% if shots %}
   <div class="tag-cloud" aria-label="Filter by shot type">
     {% for s in shots %}
-      <a class="tag{{ ' on' if s.shot_type == shot else '' }}" href="{{ liburl(q, s.shot_type, keepers) }}">
+      <a class="tag{{ ' on' if s.shot_type == shot else '' }}" href="{{ liburl(q, s.shot_type, keepers, clean) }}">
         {{ s.shot_type }} <span class="muted">{{ s.count }}</span>
       </a>
     {% endfor %}
@@ -33,7 +35,7 @@
   {% if facets %}
   <div class="tag-cloud" aria-label="Filter by keyword">
     {% for f in facets %}
-      <a class="tag{{ ' on' if f.keyword == q else '' }}" href="{{ liburl(f.keyword, shot, keepers) }}">
+      <a class="tag{{ ' on' if f.keyword == q else '' }}" href="{{ liburl(f.keyword, shot, keepers, clean) }}">
         {{ f.keyword }} <span class="muted">{{ f.count }}</span>
       </a>
     {% endfor %}
@@ -42,15 +44,17 @@
   <p class="muted">No analyzed photos yet — process a gallery and your catalog becomes searchable.</p>
   {% endif %}
   <div class="tag-cloud" aria-label="Quality">
-    <a class="tag{{ ' on' if keepers else '' }}" href="{{ liburl(q, shot, not keepers) }}"
+    <a class="tag{{ ' on' if keepers else '' }}" href="{{ liburl(q, shot, not keepers, clean) }}"
        title="Show only technically strong frames, best first">★ Keepers only</a>
-    {% if q or shot or keepers %}<a class="muted" href="/library">Clear filters</a>{% endif %}
+    <a class="tag{{ ' on' if clean else '' }}" href="{{ liburl(q, shot, keepers, not clean) }}"
+       title="Exclude frames the AI flagged as soft or poorly exposed">✓ Clean only</a>
+    {% if q or shot or keepers or clean %}<a class="muted" href="/library">Clear filters</a>{% endif %}
   </div>
 </div>
 
-{% if q or shot or keepers %}
+{% if q or shot or keepers or clean %}
 <div class="card" style="margin-top:18px">
-  <h3>{{ results|length }} {% if keepers %}keeper {% endif %}photo{{ '' if results|length == 1 else 's' }}{% if q %} tagged “{{ q }}”{% endif %}{% if shot %} · {{ shot }}{% endif %}</h3>
+  <h3>{{ results|length }} {% if keepers %}keeper {% endif %}{% if clean %}clean {% endif %}photo{{ '' if results|length == 1 else 's' }}{% if q %} tagged “{{ q }}”{% endif %}{% if shot %} · {{ shot }}{% endif %}</h3>
   {% if results %}
   <div class="thumb-grid">
     {% for r in results %}
@@ -65,7 +69,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="muted">No photos match — try another keyword, shot type, or turn off Keepers only.</p>
+  <p class="muted">No photos match — try another keyword or shot type, or loosen the quality filters.</p>
   {% endif %}
 </div>
 {% endif %}

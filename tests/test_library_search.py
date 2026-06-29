@@ -24,11 +24,13 @@ def _img(conn, storage, t_id, g_id, name, data=b"x" * 16):
                      filename=name, fileobj=io.BytesIO(data))
 
 
-def _analyze(conn, t_id, g_id, image_id, keywords, *, shot="candid", alt="", keeper=0.8):
+def _analyze(conn, t_id, g_id, image_id, keywords, *, shot="candid", alt="", keeper=0.8,
+             exposure=0.6, sharpness=0.6):
     conn.execute(
         "INSERT INTO image_analyses (image_id, gallery_id, tenant_id, keywords_json, "
-        "keeper_score, hero_potential, shot_type, alt_text) VALUES (?, ?, ?, ?, ?, 0.5, ?, ?)",
-        (image_id, g_id, t_id, json.dumps(keywords), keeper, shot, alt),
+        "keeper_score, hero_potential, shot_type, alt_text, exposure, sharpness) "
+        "VALUES (?, ?, ?, ?, ?, 0.5, ?, ?, ?, ?)",
+        (image_id, g_id, t_id, json.dumps(keywords), keeper, shot, alt, exposure, sharpness),
     )
 
 
@@ -266,3 +268,64 @@ def test_library_keepers_filter_route(client, conn, storage):
     assert "Keepers only" in client.get("/library").text          # the toggle renders
     res = client.get("/library?keepers=1").text
     assert "1 keeper photo" in res                                 # only the strong frame, labelled
+
+
+# ── clean-only axis (excludes technically-flagged frames) ───────────────────────
+
+
+def test_clean_only_excludes_flagged(conn, storage):
+    t = create_tenant(conn, name="Clean Studio", shoot_type="wedding")
+    g = create_gallery(conn, tenant_id=t["id"], title="G")
+    clean = _img(conn, storage, t["id"], g["id"], "clean.jpg")
+    soft = _img(conn, storage, t["id"], g["id"], "soft.jpg")
+    dark = _img(conn, storage, t["id"], g["id"], "dark.jpg")
+    _analyze(conn, t["id"], g["id"], clean["id"], ["candid"], exposure=0.6, sharpness=0.8)
+    _analyze(conn, t["id"], g["id"], soft["id"], ["candid"], exposure=0.6, sharpness=0.2)
+    _analyze(conn, t["id"], g["id"], dark["id"], ["candid"], exposure=0.2, sharpness=0.8)
+    conn.commit()
+    assert {r["id"] for r in search_images(conn, t["id"], keyword="candid", clean_only=True)} == \
+        {clean["id"]}                                              # soft + dark excluded
+    assert {r["id"] for r in search_images(conn, t["id"], keyword="candid")} == \
+        {clean["id"], soft["id"], dark["id"]}                      # all three without the filter
+
+
+def test_clean_only_treats_null_subscores_as_clean(conn, storage):
+    t = create_tenant(conn, name="Null Clean", shoot_type="wedding")
+    g = create_gallery(conn, tenant_id=t["id"], title="G")
+    im = _img(conn, storage, t["id"], g["id"], "a.jpg")
+    # a frame analysed before the sub-scores existed — NULL exposure/sharpness counts as clean
+    conn.execute(
+        "INSERT INTO image_analyses (image_id, gallery_id, tenant_id, keywords_json, "
+        "keeper_score, hero_potential, shot_type, alt_text) VALUES (?, ?, ?, ?, 0.8, 0.5, 'candid', '')",
+        (im["id"], g["id"], t["id"], json.dumps(["candid"])),
+    )
+    conn.commit()
+    assert [r["id"] for r in search_images(conn, t["id"], keyword="candid", clean_only=True)] == [im["id"]]
+
+
+def test_clean_and_keepers_compose(conn, storage):
+    t = create_tenant(conn, name="CK Studio", shoot_type="wedding")
+    g = create_gallery(conn, tenant_id=t["id"], title="G")
+    best = _img(conn, storage, t["id"], g["id"], "best.jpg")
+    soft_keeper = _img(conn, storage, t["id"], g["id"], "soft.jpg")
+    clean_low = _img(conn, storage, t["id"], g["id"], "low.jpg")
+    _analyze(conn, t["id"], g["id"], best["id"], ["x"], keeper=0.95, sharpness=0.8)
+    _analyze(conn, t["id"], g["id"], soft_keeper["id"], ["x"], keeper=0.95, sharpness=0.2)   # strong but soft
+    _analyze(conn, t["id"], g["id"], clean_low["id"], ["x"], keeper=0.40, sharpness=0.8)     # clean but weak
+    conn.commit()
+    ids = {r["id"] for r in search_images(conn, t["id"], keepers_only=True, clean_only=True)}
+    assert ids == {best["id"]}                                     # only the strong AND clean frame
+
+
+def test_library_clean_filter_route(client, conn, storage):
+    creds = onboard_studio(client, email="clean@studio.test")
+    login_owner(client, creds)
+    tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+    g = create_gallery(conn, tenant_id=tid, title="Reception")
+    clean = _img(conn, storage, tid, g["id"], "clean.jpg")
+    soft = _img(conn, storage, tid, g["id"], "soft.jpg")
+    _analyze(conn, tid, g["id"], clean["id"], ["candid"], sharpness=0.8)
+    _analyze(conn, tid, g["id"], soft["id"], ["candid"], sharpness=0.2)
+    conn.commit()
+    assert "Clean only" in client.get("/library").text             # the toggle renders
+    assert "1 clean photo" in client.get("/library?q=candid&clean=1").text   # only the clean frame
