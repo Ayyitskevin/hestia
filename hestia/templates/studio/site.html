@@ -28,6 +28,7 @@
           <p class="muted" style="margin:0">Ready to book a session?
             <a href="/studio/{{ tenant.slug }}/book">See available sessions →</a></p>
           {% endif %}
+          <p class="muted" style="margin:0">🎁 <a href="/studio/{{ tenant.slug }}/gift">Give a gift card</a></p>
           <form method="post" action="/studio/{{ tenant.slug }}/inquire">
             {% include "_csrf.html" %}
             {% if ref %}<input type="hidden" name="ref" value="{{ ref }}">{% endif %}

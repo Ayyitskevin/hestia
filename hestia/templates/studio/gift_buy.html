@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Buy a gift card — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>Give a gift card</h1>
+      <p class="muted">Treat someone to a session with {{ tenant.name }}. We'll email the recipient
+        their code after checkout — they redeem it when {{ tenant.name }} invoices them.</p>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="padding-top:32px">
+      {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+      <form method="post" action="/studio/{{ tenant.slug }}/gift" class="card stack">
+        <label for="amount">Amount ({{ settings.currency|upper }})</label>
+        <input type="text" id="amount" name="amount" placeholder="100.00" required>
+
+        <label for="recipient_name">Recipient's name</label>
+        <input type="text" id="recipient_name" name="recipient_name">
+        <label for="recipient_email">Recipient's email <span class="muted">(we'll send them the code)</span></label>
+        <input type="email" id="recipient_email" name="recipient_email" placeholder="them@example.com">
+
+        <label for="message">Message <span class="muted">(optional)</span></label>
+        <textarea id="message" name="message" rows="2" placeholder="Happy birthday! Enjoy a shoot on me."></textarea>
+
+        <label for="buyer_name">Your name</label>
+        <input type="text" id="buyer_name" name="buyer_name">
+        <label for="buyer_email">Your email <span class="muted">(for your receipt)</span></label>
+        <input type="email" id="buyer_email" name="buyer_email" placeholder="you@example.com" required>
+
+        <p class="muted" style="font-size:.85rem; margin:0">You'll be taken to a secure payment page.
+          If you don't add a recipient email, the code comes to you to pass along.</p>
+        <div class="form-actions"><button class="btn" type="submit">Continue to payment</button></div>
+      </form>
+      <p style="text-align:center; margin-top:18px"><a class="btn ghost" href="/studio/{{ tenant.slug }}">← Back to {{ tenant.name }}</a></p>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">{{ tenant.name }} on Hestia 🔥</div></footer>
+</body>
+</html>
