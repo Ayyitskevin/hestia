@@ -24,7 +24,7 @@
       {% set to_fill = questionnaires | selectattr('status', 'equalto', 'sent') | list %}
       {% set to_book = appointments | selectattr('status', 'equalto', 'proposed') | list %}
       {% set to_review = albums | selectattr('state', 'equalto', 'review') | list %}
-      {% if unsigned or open_invoices or to_fill or to_book or to_review or (plans | selectattr('progress', 'ne', 'paid') | list) %}
+      {% if unsigned or open_invoices or to_fill or to_book or to_review or review_url or (plans | selectattr('progress', 'ne', 'paid') | list) %}
       <div class="card stack" style="border-color:#f0d9b4; background:#fff7ec">
         <h3>Needs your attention</h3>
         <ul class="portal-todo">
@@ -34,6 +34,7 @@
           {% for q in to_fill %}<li>Fill out <strong>{{ q.title }}</strong> — <a href="{{ q.fill_url }}">answer →</a></li>{% endfor %}
           {% for pl in plans if pl.status != 'void' and pl.progress != 'paid' %}<li>Payment plan <strong>{{ pl.title }}</strong> — {{ pl.paid_display }} of {{ pl.total_display }} paid</li>{% endfor %}
           {% for inv in open_invoices %}<li>Invoice <strong>{{ inv.title }}</strong> ({{ inv.amount_display }}) — <a href="{{ inv.pay_url }}">pay →</a></li>{% endfor %}
+          {% if review_url %}<li>Share a few words about your experience — <a href="{{ review_url }}">leave a review →</a></li>{% endif %}
         </ul>
       </div>
       {% endif %}

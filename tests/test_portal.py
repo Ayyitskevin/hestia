@@ -136,6 +136,23 @@ def test_http_portal_shows_download_and_review(client, app):
     assert "Download" in page.text and "Leave a review" in page.text
 
 
+def test_http_pending_review_is_in_attention_banner(client, app):
+    creds = onboard_studio(client, email="review@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Reviewer")
+        request_testimonial(conn, tenant_id=tid, client_id=c["id"])   # pending review request
+        portal_tok = enable_portal(conn, tid, c["id"])
+        conn.commit()
+    finally:
+        conn.close()
+    page = client.get(f"/portal/{portal_tok}").text
+    assert "Needs your attention" in page                             # the to-do banner renders
+    assert "leave a review →" in page                                 # the review is a surfaced to-do
+
+
 def test_isolation_token_resolves_only_its_client(conn):
     t1, t2 = _tenant(conn, "A"), _tenant(conn, "B")
     c1 = create_client(conn, tenant_id=t1["id"], name="A-client")
