@@ -307,14 +307,16 @@ def tenant_keyword_facets(conn: sqlite3.Connection, tenant_id: str, *, limit: in
 
 
 def search_images(conn: sqlite3.Connection, tenant_id: str, *, keyword: str = "",
-                  shot_type: str = "", limit: int = 120) -> list[dict]:
-    """Analyzed frames across all the studio's galleries (newest first), filtered by AI
-    keyword and/or shot type — the studio's catalog, searchable by what's in frame, an axis
-    a Lightroom-export-to-gallery workflow can't offer. Tenant-scoped; needs at least one
-    filter (returns [] otherwise). Each row carries its gallery context, alt text, shot type."""
+                  shot_type: str = "", keepers_only: bool = False, limit: int = 120) -> list[dict]:
+    """Analyzed frames across all the studio's galleries, filtered by AI keyword and/or shot
+    type and/or "keepers only" (technically strong frames) — the studio's catalog, searchable
+    by what's in frame and how good it is, an axis a Lightroom-export-to-gallery workflow can't
+    offer. Tenant-scoped; needs at least one filter (returns [] otherwise). ``keepers_only``
+    also ranks by keeper score (best first); otherwise results are newest gallery first. Each
+    row carries its gallery context, alt text, shot type."""
     kw = _norm_keyword(keyword)
     shot = _norm_keyword(shot_type)
-    if not kw and not shot:
+    if not kw and not shot and not keepers_only:
         return []
     where = ["a.tenant_id = ?"]
     params: list = [tenant_id]
@@ -327,6 +329,12 @@ def search_images(conn: sqlite3.Connection, tenant_id: str, *, keyword: str = ""
     if shot:
         where.append("LOWER(a.shot_type) = ?")
         params.append(shot)
+    if keepers_only:
+        # NULL keeper_score is excluded by the >= comparison, which is what we want.
+        where.append("a.keeper_score >= ?")
+        params.append(KEEPER_THRESHOLD)
+    order = ("a.keeper_score DESC, g.created_at DESC, i.position, i.id" if keepers_only
+             else "g.created_at DESC, i.position, i.id")
     params.append(limit)
     rows = conn.execute(
         "SELECT i.id, i.filename, i.storage_key, i.gallery_id, i.hidden, "
@@ -336,7 +344,7 @@ def search_images(conn: sqlite3.Connection, tenant_id: str, *, keyword: str = ""
         "JOIN images i ON i.id = a.image_id "
         "JOIN galleries g ON g.id = a.gallery_id "
         "WHERE " + " AND ".join(where) +
-        " ORDER BY g.created_at DESC, i.position, i.id LIMIT ?",
+        " ORDER BY " + order + " LIMIT ?",
         params,
     ).fetchall()
     return [dict(r) for r in rows]

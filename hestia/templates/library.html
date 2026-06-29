@@ -1,23 +1,30 @@
 {% extends "base.html" %}
 {% block title %}Library — Hestia{% endblock %}
 {% block content %}
+{%- macro liburl(q='', shot='', keepers=False) -%}
+  {%- set p = [] -%}
+  {%- if q %}{% set _ = p.append('q=' ~ (q | urlencode)) %}{% endif -%}
+  {%- if shot %}{% set _ = p.append('shot=' ~ (shot | urlencode)) %}{% endif -%}
+  {%- if keepers %}{% set _ = p.append('keepers=1') %}{% endif -%}
+  /library{% if p %}?{{ p | join('&') }}{% endif %}
+{%- endmacro -%}
 <div class="page-title">
   <h1>Library</h1>
 </div>
 <div class="card stack">
   <p class="muted">Search your whole catalog by what's in the frame — the AI tags every photo it
-    analyzes with keywords and a shot type. Try a keyword, or pick one below.</p>
+    analyzes with keywords, a shot type and a quality score. Try a keyword, or pick one below.</p>
   <form method="get" action="/library" class="lib-search">
     <input type="text" name="q" value="{{ q }}" placeholder="e.g. golden-hour, candid, portrait"
            autofocus aria-label="Search photos by keyword">
     {% if shot %}<input type="hidden" name="shot" value="{{ shot }}">{% endif %}
+    {% if keepers %}<input type="hidden" name="keepers" value="1">{% endif %}
     <button class="btn" type="submit">Search</button>
   </form>
   {% if shots %}
   <div class="tag-cloud" aria-label="Filter by shot type">
     {% for s in shots %}
-      <a class="tag{{ ' on' if s.shot_type == shot else '' }}"
-         href="/library?{% if q %}q={{ q | urlencode }}&amp;{% endif %}shot={{ s.shot_type | urlencode }}">
+      <a class="tag{{ ' on' if s.shot_type == shot else '' }}" href="{{ liburl(q, s.shot_type, keepers) }}">
         {{ s.shot_type }} <span class="muted">{{ s.count }}</span>
       </a>
     {% endfor %}
@@ -26,8 +33,7 @@
   {% if facets %}
   <div class="tag-cloud" aria-label="Filter by keyword">
     {% for f in facets %}
-      <a class="tag{{ ' on' if f.keyword == q else '' }}"
-         href="/library?q={{ f.keyword | urlencode }}{% if shot %}&amp;shot={{ shot | urlencode }}{% endif %}">
+      <a class="tag{{ ' on' if f.keyword == q else '' }}" href="{{ liburl(f.keyword, shot, keepers) }}">
         {{ f.keyword }} <span class="muted">{{ f.count }}</span>
       </a>
     {% endfor %}
@@ -35,12 +41,16 @@
   {% else %}
   <p class="muted">No analyzed photos yet — process a gallery and your catalog becomes searchable.</p>
   {% endif %}
-  {% if q or shot %}<a class="muted" href="/library">Clear filters</a>{% endif %}
+  <div class="tag-cloud" aria-label="Quality">
+    <a class="tag{{ ' on' if keepers else '' }}" href="{{ liburl(q, shot, not keepers) }}"
+       title="Show only technically strong frames, best first">★ Keepers only</a>
+    {% if q or shot or keepers %}<a class="muted" href="/library">Clear filters</a>{% endif %}
+  </div>
 </div>
 
-{% if q or shot %}
+{% if q or shot or keepers %}
 <div class="card" style="margin-top:18px">
-  <h3>{{ results|length }} photo{{ '' if results|length == 1 else 's' }}{% if q %} tagged “{{ q }}”{% endif %}{% if shot %} · {{ shot }}{% endif %}</h3>
+  <h3>{{ results|length }} {% if keepers %}keeper {% endif %}photo{{ '' if results|length == 1 else 's' }}{% if q %} tagged “{{ q }}”{% endif %}{% if shot %} · {{ shot }}{% endif %}</h3>
   {% if results %}
   <div class="thumb-grid">
     {% for r in results %}
@@ -55,7 +65,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="muted">No photos match — try another keyword or shot type.</p>
+  <p class="muted">No photos match — try another keyword, shot type, or turn off Keepers only.</p>
   {% endif %}
 </div>
 {% endif %}

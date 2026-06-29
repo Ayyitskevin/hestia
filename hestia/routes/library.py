@@ -18,16 +18,19 @@ router = APIRouter()
 
 
 @router.get("/library")
-def library(request: Request, q: str = "", shot: str = ""):
+def library(request: Request, q: str = "", shot: str = "", keepers: str = ""):
     query = (q or "").strip()
     shot_type = (shot or "").strip()
+    keepers_only = bool((keepers or "").strip())
     with db_conn(request) as conn:
         auth = context_from_session(conn, request)
         if not auth or not auth.tenant:
             return RedirectResponse("/login", status_code=303)
         facets = tenant_keyword_facets(conn, auth.tenant["id"])
         shots = tenant_shot_type_facets(conn, auth.tenant["id"])
-        results = (search_images(conn, auth.tenant["id"], keyword=query, shot_type=shot_type)
-                   if (query or shot_type) else [])
+        results = (search_images(conn, auth.tenant["id"], keyword=query, shot_type=shot_type,
+                                 keepers_only=keepers_only)
+                   if (query or shot_type or keepers_only) else [])
     return render(request, "library.html", auth=auth, facets=facets, shots=shots,
-                  results=results, q=query, shot=shot_type, storage=storage_of(request))
+                  results=results, q=query, shot=shot_type, keepers=keepers_only,
+                  storage=storage_of(request))
