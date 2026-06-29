@@ -5,9 +5,16 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
-from ..albums import AlbumError, generate_album, get_album
+from ..albums import (
+    AlbumError,
+    album_review_url,
+    album_spreads_display,
+    enable_album_review,
+    generate_album,
+    get_album,
+)
 from ..auth import context_from_session
-from ..galleries import get_gallery, get_image
+from ..galleries import get_gallery
 from ..tenants import get_tenant
 from .deps import db_conn, render, settings_of, storage_of
 
@@ -38,6 +45,17 @@ def album_generate(request: Request, gallery_id: int):
     return RedirectResponse(f"/albums/{album['id']}", status_code=303)
 
 
+@router.post("/albums/{album_id}/share")
+def album_share(request: Request, album_id: int):
+    """Mint (idempotently) the album's client review link, then return to the album."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        enable_album_review(conn, auth.tenant["id"], album_id)
+    return RedirectResponse(f"/albums/{album_id}", status_code=303)
+
+
 @router.get("/albums/{album_id}")
 def album_view(request: Request, album_id: int):
     storage = storage_of(request)
@@ -49,14 +67,10 @@ def album_view(request: Request, album_id: int):
         if not album:
             return RedirectResponse("/galleries", status_code=303)
         gallery = get_gallery(conn, auth.tenant["id"], album["gallery_id"])
-        # Resolve image ids → display dicts for the template.
-        spreads = []
-        for sp in album["spreads"]:
-            photos = []
-            for iid in sp["photo_ids"]:
-                img = get_image(conn, auth.tenant["id"], iid)
-                if img:
-                    photos.append({"id": iid, "url": storage.public_path(img["storage_key"]),
-                                   "filename": img["filename"], "is_hero": iid == sp["hero_image_id"]})
-            spreads.append({"position": sp["position"], "photos": photos})
-    return render(request, "albums/album.html", auth=auth, album=album, gallery=gallery, spreads=spreads)
+        # Owner view serves frames through the authorized /media path.
+        spreads = album_spreads_display(conn, album,
+                                        lambda img: storage.public_path(img["storage_key"]))
+    review_url = (album_review_url(settings_of(request), album["review_token"])
+                  if album.get("review_token") else None)
+    return render(request, "albums/album.html", auth=auth, album=album, gallery=gallery,
+                  spreads=spreads, review_url=review_url)

@@ -18,6 +18,7 @@ import json
 import sqlite3
 
 from .config import Settings
+from .crypto import new_session_token
 
 PHOTOS_PER_SPREAD = 4
 
@@ -124,7 +125,9 @@ def generate_album(
 ) -> dict:
     from .galleries import list_images
 
-    images = list_images(conn, gallery["id"])
+    # Exclude culled/hidden frames — the album is a client deliverable, so it should never
+    # arrange a frame the owner removed from the gallery (and the client review serves these).
+    images = list_images(conn, gallery["id"], include_hidden=False)
     if not images:
         raise AlbumError("gallery has no images to arrange")
 
@@ -186,3 +189,77 @@ def get_album_for_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: 
         "SELECT * FROM albums WHERE tenant_id = ? AND gallery_id = ?", (tenant_id, gallery_id)
     ).fetchone()
     return _hydrate(dict(row)) if row else None
+
+
+# ── Client review + approval (unguessable link, same model as delivery/offers) ──
+
+
+def enable_album_review(conn: sqlite3.Connection, tenant_id: str, album_id: int) -> str | None:
+    """Ensure the album has a review token, minting one if absent. Idempotent and race-safe:
+    the mint only writes when the token is still empty, so two concurrent 'share' requests
+    can't strand the first link — the loser reads back the winner's token."""
+    row = conn.execute(
+        "SELECT review_token FROM albums WHERE id = ? AND tenant_id = ?", (album_id, tenant_id)
+    ).fetchone()
+    if not row:
+        return None
+    if row["review_token"]:
+        return row["review_token"]
+    token = new_session_token()
+    cur = conn.execute(
+        "UPDATE albums SET review_token = ? WHERE id = ? AND tenant_id = ? "
+        "AND (review_token IS NULL OR review_token = '')",
+        (token, album_id, tenant_id),
+    )
+    if cur.rowcount:
+        return token
+    fresh = conn.execute(
+        "SELECT review_token FROM albums WHERE id = ? AND tenant_id = ?", (album_id, tenant_id)
+    ).fetchone()
+    return fresh["review_token"] if fresh else None
+
+
+def get_album_by_review_token(conn: sqlite3.Connection, token: str) -> dict | None:
+    if not token:
+        return None
+    row = conn.execute("SELECT * FROM albums WHERE review_token = ?", (token,)).fetchone()
+    return _hydrate(dict(row)) if row else None
+
+
+def approve_album(conn: sqlite3.Connection, token: str) -> bool:
+    """Client signs off on the album — a one-way 'these spreads are good' signal. Claim-before
+    -act: the guarded UPDATE only matches a not-yet-approved album, so just the FIRST approval
+    wins (rowcount == 1); a double-submit or a re-opened link is a no-op that returns False and
+    never re-stamps ``approved_at``."""
+    if not token:
+        return False
+    cur = conn.execute(
+        "UPDATE albums SET approved_at = datetime('now'), updated_at = datetime('now') "
+        "WHERE review_token = ? AND approved_at IS NULL",
+        (token,),
+    )
+    return cur.rowcount == 1
+
+
+def album_review_url(settings: Settings, token: str) -> str:
+    return f"{settings.public_url.rstrip('/')}/a/{token}"
+
+
+def album_spreads_display(conn: sqlite3.Connection, album: dict, url_builder) -> list[dict]:
+    """Resolve an album's spreads into display dicts — ``[{position, photos: [{id, url,
+    filename, is_hero}]}]``. ``url_builder(img)`` yields each photo's URL, so the owner view
+    can use the storage path while the client review serves images through its review token."""
+    from .galleries import get_image
+
+    out = []
+    for sp in album["spreads"]:
+        photos = []
+        for iid in sp["photo_ids"]:
+            img = get_image(conn, album["tenant_id"], iid)
+            # Skip a frame culled (hidden) after the album was generated — it stays in
+            # spreads_json but must not render, matching the photo route's hidden=0 gate.
+            if img and not img["hidden"]:
+                photos.append({"id": iid, "url": url_builder(img),
+                               "filename": img["filename"], "is_hero": iid == sp["hero_image_id"]})
+        out.append({"position": sp["position"], "photos": photos})
+    return out
