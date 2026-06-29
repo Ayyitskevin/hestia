@@ -27,7 +27,13 @@
   <p class="muted">✓ Approved by the client on {{ album.approved_at[:10] }} — the layout is locked.</p>
   <p class="muted">Review link: <a href="{{ review_url }}">{{ review_url }}</a></p>
   {% elif review_url %}
+  {% if album.change_request %}
+  <p class="muted">⚠ Client requested changes on {{ album.change_requested_at[:10] }}:
+    “{{ album.change_request }}”</p>
+  <p class="muted">Make your edits below — the same link lets them review again.</p>
+  {% else %}
   <p class="muted">Shared for review — awaiting the client's approval.</p>
+  {% endif %}
   <p class="muted">Send your client this link: <a href="{{ review_url }}">{{ review_url }}</a></p>
   {% else %}
   <p class="muted">Share the album so your client can page through the spreads and approve before you order.</p>

@@ -31,6 +31,7 @@ TRIGGERS: dict[str, str] = {
     "gallery.published": "Gallery published",
     "gallery.selections_submitted": "Client submitted gallery selections",
     "album.approved": "Client approved album",
+    "album.changes_requested": "Client requested album changes",
     "appointment.confirmed": "Appointment confirmed",
 }
 

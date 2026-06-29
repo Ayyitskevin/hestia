@@ -239,7 +239,8 @@ def approve_album(conn: sqlite3.Connection, token: str) -> bool:
     if not token:
         return False
     cur = conn.execute(
-        "UPDATE albums SET approved_at = datetime('now'), updated_at = datetime('now') "
+        "UPDATE albums SET approved_at = datetime('now'), updated_at = datetime('now'), "
+        "change_request = NULL, change_requested_at = NULL "
         "WHERE review_token = ? AND approved_at IS NULL",
         (token,),
     )
@@ -251,6 +252,31 @@ def approve_album(conn: sqlite3.Connection, token: str) -> bool:
     if row:
         from .automations import emit_event
         emit_event(conn, tenant_id=row["tenant_id"], event="album.approved",
+                   context={"gallery_id": row["gallery_id"], "title": row["title"]})
+    return True
+
+
+def request_album_changes(conn: sqlite3.Connection, token: str, note: str) -> bool:
+    """Client asks for changes instead of approving — records their note and notifies the
+    owner (the ``album.changes_requested`` automation). Returns False on an empty note or an
+    already-approved album (the review page hides the form once approved). The latest note
+    wins; the album stays editable."""
+    text = (note or "").strip()
+    if not token or not text:
+        return False
+    cur = conn.execute(
+        "UPDATE albums SET change_request = ?, change_requested_at = datetime('now'), "
+        "updated_at = datetime('now') WHERE review_token = ? AND approved_at IS NULL",
+        (text, token),
+    )
+    if cur.rowcount != 1:
+        return False
+    row = conn.execute(
+        "SELECT tenant_id, gallery_id, title FROM albums WHERE review_token = ?", (token,)
+    ).fetchone()
+    if row:
+        from .automations import emit_event
+        emit_event(conn, tenant_id=row["tenant_id"], event="album.changes_requested",
                    context={"gallery_id": row["gallery_id"], "title": row["title"]})
     return True
 
