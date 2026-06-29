@@ -14,6 +14,7 @@ from hestia.booking import (
 )
 from hestia.crm import list_clients
 from hestia.db import connect
+from hestia.email import list_emails
 from hestia.scheduler import list_appointments
 from hestia.tenants import create_tenant, slugify
 
@@ -103,6 +104,36 @@ def test_request_booking_without_time_still_creates_lead(conn, settings):
     assert out["project"]["status"] == "lead"
     appts = list_appointments(conn, t["id"])
     assert appts[0]["status"] == "proposed" and appts[0]["option_count"] == 0   # no time given
+
+
+def test_proposed_booking_acknowledges_the_visitor(conn, settings):
+    t = _tenant(conn)
+    bt = create_booking_type(conn, tenant_id=t["id"], title="Engagement")
+    request_booking(conn, settings, tenant=t, booking_type=bt, name="Sam",
+                    email="sam@example.com", requested_at="2026-07-01 14:00")   # proposed (not confirmed)
+    conn.commit()
+    sent = [e for e in list_emails(conn, t["id"]) if e["to_addr"] == "sam@example.com"]
+    assert len(sent) == 1 and "received your booking request" in sent[0]["subject"]
+
+
+def test_no_acknowledgement_without_an_email(conn, settings):
+    t = _tenant(conn)
+    bt = create_booking_type(conn, tenant_id=t["id"], title="Consult")
+    request_booking(conn, settings, tenant=t, booking_type=bt, name="No Email", email="")
+    conn.commit()
+    assert list_emails(conn, t["id"]) == []                                     # no address to ack
+
+
+def test_confirmed_booking_skips_the_request_ack(conn, settings):
+    t = _tenant(conn)
+    bt = create_booking_type(conn, tenant_id=t["id"], title="Mini")
+    request_booking(conn, settings, tenant=t, booking_type=bt, name="Pat",
+                    email="pat@example.com", requested_at="2026-07-02 10:00", confirm=True)
+    conn.commit()
+    # a confirmed slot is handled by confirm_appointment's own confirmation — the "request
+    # received" acknowledgement must NOT also fire (no double-send)
+    subjects = [e["subject"] for e in list_emails(conn, t["id"])]
+    assert not any("received your booking request" in s for s in subjects)
 
 
 # ── deposit (the money path) ────────────────────────────────────────────────────

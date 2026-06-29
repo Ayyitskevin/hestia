@@ -19,6 +19,7 @@ import sqlite3
 from .config import Settings
 from .crm import create_client, create_project
 from .db import audit
+from .email import notify
 from .invoices import create_invoice, get_invoice, send_invoice
 from .scheduler import (
     APPOINTMENT_KINDS,
@@ -145,11 +146,24 @@ def request_booking(
         client_id=client["id"], project_id=project["id"],
         duration_minutes=int(booking_type.get("duration_minutes") or 60),
     )
-    if confirm and when:                                # picked a real open slot → confirm it now
-        confirm_appointment(conn, tenant_id, appt["id"], when)
-        appt = get_appointment(conn, tenant_id, appt["id"])
-    invoice = None
     deposit_cents = max(0, int(booking_type.get("deposit_cents") or 0))
+    if confirm and when:                                # picked a real open slot → confirm it now
+        confirm_appointment(conn, tenant_id, appt["id"], when)   # this emails them the confirmation
+        appt = get_appointment(conn, tenant_id, appt["id"])
+    elif (email or "").strip():
+        # Not auto-confirmed (the studio hasn't set availability, or it's a free-text time
+        # request) → acknowledge it to the visitor so they're not left hanging until the studio
+        # confirms. A confirmed slot already emails them via confirm_appointment, so only here.
+        studio = (tenant.get("name") or "the studio")
+        notify(conn, settings, to=email.strip(), tenant_id=tenant_id, signed=True,
+               subject=f"We received your booking request — {booking_type['title']}",
+               body=(f"Hi {who},\n\nThanks for requesting a {booking_type['title']} with {studio}.\n"
+                     + (f"\nYou asked for: {when}.\n" if when else "")
+                     + "\nWe'll confirm your time shortly"
+                     + (" — a deposit invoice is on its way to secure your spot."
+                        if deposit_cents > 0 else ".")
+                     + f"\n\nWarmly,\n{studio}"))
+    invoice = None
     if deposit_cents > 0:
         invoice = create_invoice(
             conn, settings, tenant_id=tenant_id, title=f"Deposit — {booking_type['title']}",
