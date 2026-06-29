@@ -20,6 +20,9 @@
       </form>
       {% if album %}
         <a class="btn secondary" href="/albums/{{ album.id }}">📖 Album ({{ album.spreads|length }} spreads)</a>
+        {% if album.approved_at %}<span class="pill on" title="Client approved the album">approved ✓</span>
+        {% elif album.change_request %}<span class="pill off" title="Client requested album changes">changes requested</span>
+        {% elif album.review_token %}<span class="pill" title="Shared for client review">in review</span>{% endif %}
       {% else %}
         <form method="post" action="/galleries/{{ gallery.id }}/album">
           {% include "_csrf.html" %}

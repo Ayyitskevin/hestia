@@ -196,6 +196,27 @@ def get_album_for_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: 
     return _hydrate(dict(row)) if row else None
 
 
+def album_status_for_gallery(conn: sqlite3.Connection, tenant_id: str,
+                             gallery_id: int) -> str | None:
+    """A one-word album review status for a gallery's list/hub display, or None if there's no
+    album: 'approved' | 'changes' (client asked for edits) | 'review' (shared, awaiting) |
+    'draft' (not yet shared). Tenant-scoped, lightweight (no spread hydration)."""
+    row = conn.execute(
+        "SELECT approved_at, change_request, review_token FROM albums "
+        "WHERE tenant_id = ? AND gallery_id = ?",
+        (tenant_id, gallery_id),
+    ).fetchone()
+    if not row:
+        return None
+    if row["approved_at"]:
+        return "approved"
+    if row["change_request"]:
+        return "changes"
+    if row["review_token"]:
+        return "review"
+    return "draft"
+
+
 # ── Client review + approval (unguessable link, same model as delivery/offers) ──
 
 

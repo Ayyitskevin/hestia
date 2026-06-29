@@ -21,6 +21,13 @@
             {% endif %}
             <span>{{ g.title }}</span>
           </a>
+          {% if g.album_status in ('approved', 'changes', 'review') %}
+          <div style="margin-top:4px">
+            {% if g.album_status == 'approved' %}<span class="pill on" title="Album approved by client">📖 ✓</span>
+            {% elif g.album_status == 'changes' %}<span class="pill off" title="Album: client requested changes">📖 changes</span>
+            {% else %}<span class="pill" title="Album shared for review">📖 review</span>{% endif %}
+          </div>
+          {% endif %}
         </td>
         <td class="muted">{{ g.client_name or "—" }}</td>
         <td>{{ g.image_count }}</td>

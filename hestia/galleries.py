@@ -118,11 +118,14 @@ def list_galleries(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM galleries WHERE tenant_id = ? ORDER BY created_at DESC", (tenant_id,)
     ).fetchall()
+    from .albums import album_status_for_gallery  # lazy: albums imports galleries
+
     out = []
     for r in rows:
         g = dict(r)
         g["image_count"] = image_count(conn, g["id"])
         g["cover_key"] = cover_storage_key(conn, tenant_id, g)
+        g["album_status"] = album_status_for_gallery(conn, tenant_id, g["id"])
         out.append(g)
     return out
 
