@@ -26,12 +26,24 @@
       {% else %}
       <div class="card stack" style="text-align:center">
         <h3>Happy with the layout?</h3>
-        <p class="muted">Page through the spreads below. When everything looks right, approve it
-          and your photographer will finalize your album.</p>
+        {% if album.change_request %}
+        <p class="muted">You asked for changes on {{ album.change_requested_at[:10] }}:
+          “{{ album.change_request }}”. Your photographer will update the album and re-share it.</p>
+        {% endif %}
+        <p class="muted">Page through the spreads below. Approve it when everything looks right,
+          or ask for changes.</p>
         <form method="post" action="/a/{{ token }}/approve"
               onsubmit="return confirm('Approve this album layout? Your photographer will finalize it.')">
           <button class="btn" type="submit">✓ Approve this album</button>
         </form>
+        <details class="proof-note" style="margin-top:6px">
+          <summary>Request changes instead</summary>
+          <form method="post" action="/a/{{ token }}/request-changes">
+            <textarea name="note" rows="3" required
+                      placeholder="Tell your photographer what you'd like changed…"></textarea>
+            <button class="btn secondary" type="submit" style="margin-top:8px">Send change request</button>
+          </form>
+        </details>
       </div>
       {% endif %}
 

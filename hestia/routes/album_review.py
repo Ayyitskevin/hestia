@@ -4,10 +4,15 @@ except the one-way approve, so (like delivery) this router carries no CSRF."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
-from ..albums import album_spreads_display, approve_album, get_album_by_review_token
+from ..albums import (
+    album_spreads_display,
+    approve_album,
+    get_album_by_review_token,
+    request_album_changes,
+)
 from ..galleries import safe_inline_type
 from ..tenants import get_tenant
 from .deps import db_conn, render, storage_of
@@ -34,6 +39,15 @@ def album_review_approve(request: Request, token: str):
         if not get_album_by_review_token(conn, token):
             return render(request, "offer_missing.html", auth=None, status_code=404)
         approve_album(conn, token)          # idempotent: a second approval is a no-op
+    return RedirectResponse(f"/a/{token}", status_code=303)
+
+
+@router.post("/a/{token}/request-changes")
+def album_review_request_changes(request: Request, token: str, note: str = Form("")):
+    with db_conn(request) as conn:
+        if not get_album_by_review_token(conn, token):
+            return render(request, "offer_missing.html", auth=None, status_code=404)
+        request_album_changes(conn, token, note)
     return RedirectResponse(f"/a/{token}", status_code=303)
 
 
