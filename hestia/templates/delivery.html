@@ -34,7 +34,7 @@
           {% for img in images %}
           <figure class="thumb{{ ' is-fav' if img.id in favorites else '' }}">
             <a href="/d/{{ token }}/{{ img.id }}" title="Download {{ img.filename }}">
-              <img src="/d/{{ token }}/{{ img.id }}/view" alt="{{ img.filename }}" loading="lazy">
+              <img src="/d/{{ token }}/{{ img.id }}/view" alt="{{ alts.get(img.id) or img.filename }}" loading="lazy">
             </a>
             {% if img.id in favorites %}<span class="fav-badge" title="Your favorite">♥</span>{% endif %}
             <figcaption>{{ img.filename }}{% if img.bytes %} · {{ img.bytes | filesizeformat }}{% endif %}</figcaption>
