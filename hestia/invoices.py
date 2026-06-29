@@ -190,10 +190,14 @@ def send_invoice(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> N
 
 
 def void_invoice(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> None:
-    conn.execute(
+    cur = conn.execute(
         "UPDATE invoices SET status = 'void' WHERE id = ? AND tenant_id = ? AND status != 'paid'",
         (invoice_id, tenant_id),
     )
+    if cur.rowcount == 1:
+        # return any gift-card credit drawn against this invoice back to the card(s)
+        from .giftcards import release_for_invoice
+        release_for_invoice(conn, tenant_id, invoice_id)
 
 
 def mark_paid(conn: sqlite3.Connection, *, token: str, provider: str, ref: str) -> bool:
@@ -276,6 +280,15 @@ def _hydrate(row: dict) -> dict:
     if disc:
         row["discount_display"] = money(disc, cur)
         row["original_amount_display"] = money(int(row["amount_cents"]) + disc, cur)
+    # A gift card is post-tax stored value: it never changes amount_cents/tax_cents (so
+    # revenue + tax stay correct) — it only lowers the cash to collect now, amount_due.
+    gift = int(row.get("gift_credit_cents") or 0)
+    row["gift_credit_cents"] = gift
+    due = max(0, row["total_cents"] - gift)
+    row["amount_due_cents"] = due
+    row["amount_due_display"] = money(due, cur)
+    if gift:
+        row["gift_credit_display"] = money(gift, cur)
     return row
 
 

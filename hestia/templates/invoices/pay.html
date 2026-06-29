@@ -38,19 +38,30 @@
           <p class="muted" style="display:flex;justify-content:space-between;margin:0"><span>{{ 'Subtotal after discount' if invoice.discount_cents else 'Subtotal' }}</span><span>{{ invoice.amount_display }}</span></p>
           <p class="muted" style="display:flex;justify-content:space-between;margin:0"><span>Tax</span><span>{{ invoice.tax_display }}</span></p>
           {% endif %}
-          <p style="display:flex;justify-content:space-between;margin:4px 0"><strong>Total due</strong><strong>{{ invoice.total_display }}</strong></p>
+          <p style="display:flex;justify-content:space-between;margin:4px 0"><strong>Total</strong><strong>{{ invoice.total_display }}</strong></p>
+          {% if invoice.gift_credit_cents %}
+          <p style="display:flex;justify-content:space-between;margin:0"><span>Gift card applied</span><span>−{{ invoice.gift_credit_display }}</span></p>
+          <p style="display:flex;justify-content:space-between;margin:4px 0"><strong>Amount due</strong><strong>{{ invoice.amount_due_display }}</strong></p>
+          {% endif %}
 
-          {% if not invoice.discount_cents %}
+          {% if not invoice.discount_cents and not invoice.gift_credit_cents %}
           <form method="post" action="/pay/{{ invoice.token }}/discount"
                 style="display:flex; gap:8px; align-items:center">
             <input type="text" name="code" placeholder="Discount code" aria-label="Discount code" style="flex:1">
             <button class="btn ghost" type="submit">Apply</button>
           </form>
           {% endif %}
-          <form method="post" action="/pay/{{ invoice.token }}/checkout">
-            <button class="btn" type="submit">Pay {{ invoice.total_display }}</button>
+          {% if invoice.amount_due_cents > 0 %}
+          <form method="post" action="/pay/{{ invoice.token }}/giftcard"
+                style="display:flex; gap:8px; align-items:center">
+            <input type="text" name="code" placeholder="Gift card code" aria-label="Gift card code" style="flex:1">
+            <button class="btn ghost" type="submit">Redeem</button>
           </form>
-          {% if settings.payments_backend == 'mock' %}
+          {% endif %}
+          <form method="post" action="/pay/{{ invoice.token }}/checkout">
+            <button class="btn" type="submit">{% if invoice.amount_due_cents > 0 %}Pay {{ invoice.amount_due_display }}{% else %}Complete — fully covered{% endif %}</button>
+          </form>
+          {% if settings.payments_backend == 'mock' and invoice.amount_due_cents > 0 %}
             <p class="hint">Test mode — this is a simulated payment; no card is charged.</p>
           {% endif %}
         {% endif %}

@@ -78,6 +78,16 @@ def checkout_token_from_event(payload: bytes) -> str | None:
     return obj.get("client_reference_id") or (obj.get("metadata") or {}).get("invoice_token")
 
 
+def charge_cents(invoice: dict) -> int:
+    """What the provider should charge: the amount due *after* any gift-card credit. Falls
+    back to the full total (subtotal + tax) for a dict that wasn't hydrated with
+    ``amount_due_cents`` — so a gift card never causes a double-charge of the full total."""
+    due = invoice.get("amount_due_cents")
+    if due is None:
+        due = int(invoice["amount_cents"]) + int(invoice.get("tax_cents") or 0)
+    return max(0, int(due))
+
+
 @dataclass
 class CheckoutResult:
     url: str           # where to send the payer
@@ -113,9 +123,8 @@ class StripePayments:
             "cancel_url": cancel_url,
             "line_items[0][quantity]": "1",
             "line_items[0][price_data][currency]": invoice["currency"],
-            # charge the total the client owes: pre-tax subtotal + any sales tax
-            "line_items[0][price_data][unit_amount]":
-                str(invoice["amount_cents"] + int(invoice.get("tax_cents") or 0)),
+            # charge what's due after any gift-card credit (subtotal + tax − gift credit)
+            "line_items[0][price_data][unit_amount]": str(charge_cents(invoice)),
             "line_items[0][price_data][product_data][name]": invoice["title"],
             "client_reference_id": invoice["token"],
             "metadata[invoice_token]": invoice["token"],
