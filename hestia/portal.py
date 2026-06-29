@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from .albums import album_review_url, get_album_for_gallery
 from .config import Settings
 from .contracts import contract_public_url, list_contracts
 from .crm import galleries_for_client, get_client, list_projects
@@ -91,12 +92,24 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
     for inv in invoices:
         inv["pay_url"] = invoice_public_url(settings, inv["token"])
 
-    galleries = [g for g in galleries_for_client(conn, tenant_id, client["id"])
-                 if g["status"] == "published"]
+    all_galleries = galleries_for_client(conn, tenant_id, client["id"])
+    galleries = [g for g in all_galleries if g["status"] == "published"]
     for g in galleries:
         g["view_url"] = f"{settings.public_url.rstrip('/')}/g/{slug}/{g['slug']}"
         # If the studio has enabled digital delivery, the client downloads here too.
         g["download_url"] = delivery_url(settings, g["delivery_token"]) if g.get("delivery_token") else None
+
+    # Albums the studio has shared for review (review_token set) — over every gallery, since
+    # an album review is independent of the gallery's publish state (it serves its own frames).
+    albums = []
+    for g in all_galleries:
+        a = get_album_for_gallery(conn, tenant_id, g["id"])
+        if a and a.get("review_token"):
+            a["review_url"] = album_review_url(settings, a["review_token"])
+            a["state"] = ("approved" if a["approved_at"]
+                          else "changes" if a["change_request"] else "review")
+            a["gallery_title"] = g["title"]
+            albums.append(a)
 
     questionnaires = [q for q in list_questionnaires(conn, tenant_id, client_id=client["id"])
                       if q["status"] in ("sent", "completed")]
@@ -125,6 +138,7 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
         "plans": plans,
         "invoices": invoices,
         "galleries": galleries,
+        "albums": albums,
         "questionnaires": questionnaires,
         "appointments": appointments,
         "review_url": review_url,

@@ -188,6 +188,31 @@
         {% else %}<p class="muted">Your galleries will appear here once they're published.</p>{% endif %}
       </div>
 
+      {% if albums %}
+      <div class="card stack">
+        <h3>Your albums</h3>
+        <table>
+          <tbody>
+            {% for a in albums %}
+            <tr>
+              <td>{{ a.gallery_title }}
+                {% if a.state == 'approved' %}<span class="pill on">approved</span>
+                {% elif a.state == 'changes' %}<span class="pill">changes requested</span>{% endif %}
+              </td>
+              <td style="text-align:right">
+                {% if a.state == 'approved' %}
+                <a class="btn secondary" href="{{ a.review_url }}">View album</a>
+                {% else %}
+                <a class="btn" href="{{ a.review_url }}">Review &amp; approve</a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
       {% if files %}
       <div class="card stack">
         <h3>Files</h3>
