@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gift card balance — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>Check a gift card balance</h1>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="padding-top:32px">
+      {% if result %}
+      <div class="card stack">
+        {% if result.found %}<div class="alert ok">{{ result.message }}</div>
+        {% else %}<div class="alert error">{{ result.message }}</div>{% endif %}
+      </div>
+      {% endif %}
+      <form method="post" action="/studio/{{ tenant.slug }}/gift/balance" class="card stack">
+        <label for="code">Gift card code</label>
+        <input type="text" id="code" name="code" placeholder="Enter your code" required>
+        <div class="form-actions"><button class="btn" type="submit">Check balance</button></div>
+      </form>
+      <p style="text-align:center; margin-top:18px">
+        <a class="btn ghost" href="/studio/{{ tenant.slug }}/gift">Buy a gift card</a>
+        <a class="btn ghost" href="/studio/{{ tenant.slug }}">← Back to {{ tenant.name }}</a>
+      </p>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">{{ tenant.name }} on Hestia 🔥</div></footer>
+</body>
+</html>

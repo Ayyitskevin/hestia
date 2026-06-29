@@ -70,6 +70,17 @@ def get_gift_card(conn: sqlite3.Connection, tenant_id: str, card_id: int) -> dic
     return dict(row) if row else None
 
 
+def find_card_by_code(conn: sqlite3.Connection, tenant_id: str, code: str) -> dict | None:
+    """Look up a card by its code within a studio — for the public balance check."""
+    code = normalize_code(code)
+    if not code:
+        return None
+    row = conn.execute(
+        "SELECT * FROM gift_cards WHERE tenant_id = ? AND code = ?", (tenant_id, code)
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def list_gift_cards(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM gift_cards WHERE tenant_id = ? ORDER BY active DESC, created_at DESC, id DESC",

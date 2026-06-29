@@ -5,13 +5,20 @@ The public side (a client redeeming a card) lives on the pay flow in ``routes/pa
 
 from __future__ import annotations
 
+import datetime
 import math
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
-from ..giftcards import create_gift_card, create_purchase, list_gift_cards, set_gift_card_active
+from ..giftcards import (
+    create_gift_card,
+    create_purchase,
+    find_card_by_code,
+    list_gift_cards,
+    set_gift_card_active,
+)
 from ..invoices import create_invoice, money
 from ..ratelimit import enforce
 from ..studio import get_profile
@@ -127,3 +134,45 @@ def public_gift_buy(request: Request, slug: str, amount: str = Form(""),
         conn.commit()
         token = inv["token"]
     return RedirectResponse(f"/pay/{token}", status_code=303)
+
+
+def _balance_result(card: dict | None, currency: str) -> dict:
+    """A display-ready balance lookup result for the public check."""
+    if not card:
+        return {"found": False, "message": "We couldn't find a gift card with that code."}
+    today = datetime.date.today().isoformat()
+    bal = int(card["balance_cents"])
+    if not card["active"]:
+        msg = "This gift card is no longer active."
+    elif card["expires_on"] and card["expires_on"] < today:
+        msg = f"This gift card expired on {card['expires_on']}."
+    elif bal <= 0:
+        msg = "This gift card has been fully used."
+    else:
+        msg = (f"Balance: {money(bal, card.get('currency') or currency)}"
+               + (f" · expires {card['expires_on']}" if card["expires_on"] else ""))
+    return {"found": True, "message": msg}
+
+
+@router.get("/studio/{slug}/gift/balance")
+def public_gift_balance_page(request: Request, slug: str):
+    with db_conn(request) as conn:
+        tenant, _ = _published_tenant(conn, slug)
+        if not tenant:
+            t = get_tenant_by_slug(conn, slug)
+            if t:
+                return render(request, "studio/coming_soon.html", auth=None, tenant=t)
+            return render(request, "offer_missing.html", auth=None, status_code=404)
+    return render(request, "studio/gift_balance.html", auth=None, tenant=tenant, result=None)
+
+
+@router.post("/studio/{slug}/gift/balance")
+def public_gift_balance_check(request: Request, slug: str, code: str = Form("")):
+    enforce(request, "inquiry")                        # rate-limit to deter code enumeration
+    with db_conn(request) as conn:
+        tenant, _ = _published_tenant(conn, slug)
+        if not tenant:
+            return render(request, "offer_missing.html", auth=None, status_code=404)
+        card = find_card_by_code(conn, tenant["id"], code)
+        result = _balance_result(card, settings_of(request).currency)
+    return render(request, "studio/gift_balance.html", auth=None, tenant=tenant, result=result)

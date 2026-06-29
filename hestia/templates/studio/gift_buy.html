@@ -39,7 +39,10 @@
           If you don't add a recipient email, the code comes to you to pass along.</p>
         <div class="form-actions"><button class="btn" type="submit">Continue to payment</button></div>
       </form>
-      <p style="text-align:center; margin-top:18px"><a class="btn ghost" href="/studio/{{ tenant.slug }}">← Back to {{ tenant.name }}</a></p>
+      <p style="text-align:center; margin-top:18px">
+        <a class="btn ghost" href="/studio/{{ tenant.slug }}/gift/balance">Check a balance</a>
+        <a class="btn ghost" href="/studio/{{ tenant.slug }}">← Back to {{ tenant.name }}</a>
+      </p>
     </div>
   </main>
   <footer class="site-footer"><div class="wrap">{{ tenant.name }} on Hestia 🔥</div></footer>
