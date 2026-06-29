@@ -223,6 +223,7 @@
           {% if a.keeper %}<span class="meta-keeper" title="Strong keeper">★</span>{% endif %}
           {% if a.shot_type %}<a class="meta-tag" href="/library?shot={{ a.shot_type | urlencode }}">{{ a.shot_type }}</a>{% endif %}
           {% for kw in a.keywords[:3] %}<a class="meta-tag" href="/library?q={{ kw | urlencode }}">{{ kw }}</a>{% endfor %}
+          {% for fl in a.flags %}<span class="meta-flag" title="AI flagged a likely technical issue">⚠ {{ fl }}</span>{% endfor %}
         </div>
         {% endif %}
         {% if img.hidden %}
