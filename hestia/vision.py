@@ -306,19 +306,28 @@ def tenant_keyword_facets(conn: sqlite3.Connection, tenant_id: str, *, limit: in
     return [{"keyword": k, "count": n} for k, n in ranked[:limit]]
 
 
-def search_images_by_keyword(conn: sqlite3.Connection, tenant_id: str, keyword: str, *,
-                             limit: int = 120) -> list[dict]:
-    """Every analyzed frame whose AI keywords include ``keyword``, across all the studio's
-    galleries (newest gallery first). Tenant-scoped; returns each image with its gallery
-    context, alt text and shot type. The studio's catalog, searchable by what's in frame —
-    something a Lightroom-export-to-gallery workflow can't do."""
+def search_images(conn: sqlite3.Connection, tenant_id: str, *, keyword: str = "",
+                  shot_type: str = "", limit: int = 120) -> list[dict]:
+    """Analyzed frames across all the studio's galleries (newest first), filtered by AI
+    keyword and/or shot type — the studio's catalog, searchable by what's in frame, an axis
+    a Lightroom-export-to-gallery workflow can't offer. Tenant-scoped; needs at least one
+    filter (returns [] otherwise). Each row carries its gallery context, alt text, shot type."""
     kw = _norm_keyword(keyword)
-    if not kw:
+    shot = _norm_keyword(shot_type)
+    if not kw and not shot:
         return []
-    # Match the JSON-quoted token (``"candid"``) so "close" can't match "close-up", and
-    # escape LIKE metacharacters in the user input so % and _ are treated literally.
-    safe = kw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    pattern = f'%"{safe}"%'
+    where = ["a.tenant_id = ?"]
+    params: list = [tenant_id]
+    if kw:
+        # Match the JSON-quoted token (``"candid"``) so "close" can't match "close-up", and
+        # escape LIKE metacharacters in the user input so % and _ are treated literally.
+        safe = kw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        where.append("a.keywords_json LIKE ? ESCAPE '\\'")
+        params.append(f'%"{safe}"%')
+    if shot:
+        where.append("LOWER(a.shot_type) = ?")
+        params.append(shot)
+    params.append(limit)
     rows = conn.execute(
         "SELECT i.id, i.filename, i.storage_key, i.gallery_id, i.hidden, "
         "       g.title AS gallery_title, g.slug AS gallery_slug, "
@@ -326,11 +335,30 @@ def search_images_by_keyword(conn: sqlite3.Connection, tenant_id: str, keyword: 
         "FROM image_analyses a "
         "JOIN images i ON i.id = a.image_id "
         "JOIN galleries g ON g.id = a.gallery_id "
-        "WHERE a.tenant_id = ? AND a.keywords_json LIKE ? ESCAPE '\\' "
-        "ORDER BY g.created_at DESC, i.position, i.id LIMIT ?",
-        (tenant_id, pattern, limit),
+        "WHERE " + " AND ".join(where) +
+        " ORDER BY g.created_at DESC, i.position, i.id LIMIT ?",
+        params,
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def search_images_by_keyword(conn: sqlite3.Connection, tenant_id: str, keyword: str, *,
+                             limit: int = 120) -> list[dict]:
+    """Back-compat shim for keyword-only search. See :func:`search_images`."""
+    return search_images(conn, tenant_id, keyword=keyword, limit=limit)
+
+
+def tenant_shot_type_facets(conn: sqlite3.Connection, tenant_id: str, *,
+                            limit: int = 12) -> list[dict]:
+    """The studio's shot-type breakdown across analyzed frames (portrait, candid, detail,
+    wide, …) with counts, most common first — a second browse axis for the Library."""
+    rows = conn.execute(
+        "SELECT LOWER(shot_type) AS shot_type, COUNT(*) AS n FROM image_analyses "
+        "WHERE tenant_id = ? AND TRIM(COALESCE(shot_type, '')) <> '' "
+        "GROUP BY LOWER(shot_type) ORDER BY n DESC, shot_type LIMIT ?",
+        (tenant_id, limit),
+    ).fetchall()
+    return [{"shot_type": r["shot_type"], "count": r["n"]} for r in rows]
 
 
 def alt_text_map(conn: sqlite3.Connection, gallery_id: int) -> dict[int, str]:

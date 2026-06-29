@@ -11,7 +11,12 @@ from conftest import login_owner, onboard_studio
 
 from hestia.galleries import add_image, create_gallery
 from hestia.tenants import create_tenant
-from hestia.vision import search_images_by_keyword, tenant_keyword_facets
+from hestia.vision import (
+    search_images,
+    search_images_by_keyword,
+    tenant_keyword_facets,
+    tenant_shot_type_facets,
+)
 
 
 def _img(conn, storage, t_id, g_id, name, data=b"x" * 16):
@@ -121,7 +126,7 @@ def test_library_shows_facets_and_search_results(client, conn, storage):
     assert "golden-hour" in page and "candid" in page              # the AI's keyword cloud
     hit = client.get("/library?q=golden-hour").text
     assert "Sunset Shoot" in hit and "1 photo tagged" in hit
-    assert "No photos tagged" in client.get("/library?q=nonsense").text
+    assert "No photos match" in client.get("/library?q=nonsense").text
 
 
 def test_library_search_is_tenant_isolated_at_route(client, conn, storage):
@@ -136,3 +141,73 @@ def test_library_search_is_tenant_isolated_at_route(client, conn, storage):
     page = client.get("/library?q=candid").text
     assert "B Secret Gallery" not in page
     assert "0 photos tagged" in page
+
+
+# ── shot-type axis ──────────────────────────────────────────────────────────────
+
+
+def test_shot_type_facets_count_and_scope(conn, storage):
+    ta = create_tenant(conn, name="A Shots", shoot_type="wedding")
+    tb = create_tenant(conn, name="B Shots", shoot_type="portrait")
+    ga = create_gallery(conn, tenant_id=ta["id"], title="GA")
+    gb = create_gallery(conn, tenant_id=tb["id"], title="GB")
+    a1 = _img(conn, storage, ta["id"], ga["id"], "a1.jpg")
+    a2 = _img(conn, storage, ta["id"], ga["id"], "a2.jpg")
+    a3 = _img(conn, storage, ta["id"], ga["id"], "a3.jpg")
+    b1 = _img(conn, storage, tb["id"], gb["id"], "b1.jpg")
+    _analyze(conn, ta["id"], ga["id"], a1["id"], ["x"], shot="portrait")
+    _analyze(conn, ta["id"], ga["id"], a2["id"], ["x"], shot="portrait")
+    _analyze(conn, ta["id"], ga["id"], a3["id"], ["x"], shot="candid")
+    _analyze(conn, tb["id"], gb["id"], b1["id"], ["x"], shot="portrait")
+    conn.commit()
+    facets = tenant_shot_type_facets(conn, ta["id"])
+    assert {f["shot_type"]: f["count"] for f in facets} == {"portrait": 2, "candid": 1}  # A only
+    assert facets[0]["shot_type"] == "portrait"                    # most common first
+
+
+def test_search_by_shot_type_and_combined(conn, storage):
+    t = create_tenant(conn, name="Shot Studio", shoot_type="wedding")
+    g = create_gallery(conn, tenant_id=t["id"], title="G")
+    a = _img(conn, storage, t["id"], g["id"], "a.jpg")
+    b = _img(conn, storage, t["id"], g["id"], "b.jpg")
+    _analyze(conn, t["id"], g["id"], a["id"], ["candid"], shot="portrait")
+    _analyze(conn, t["id"], g["id"], b["id"], ["candid"], shot="wide")
+    conn.commit()
+    assert [h["id"] for h in search_images(conn, t["id"], shot_type="portrait")] == [a["id"]]
+    assert [h["id"] for h in search_images(conn, t["id"], shot_type="PORTRAIT")] == [a["id"]]  # ci
+    # keyword AND shot together narrow to the intersection
+    assert [h["id"] for h in search_images(conn, t["id"], keyword="candid", shot_type="wide")] == [b["id"]]
+    assert search_images(conn, t["id"], keyword="candid", shot_type="detail") == []   # AND, no match
+    assert search_images(conn, t["id"]) == []                      # no filters → empty
+
+
+def test_search_shot_type_is_tenant_scoped(conn, storage):
+    ta = create_tenant(conn, name="A2", shoot_type="wedding")
+    tb = create_tenant(conn, name="B2", shoot_type="portrait")
+    ga = create_gallery(conn, tenant_id=ta["id"], title="GA")
+    gb = create_gallery(conn, tenant_id=tb["id"], title="GB")
+    ia = _img(conn, storage, ta["id"], ga["id"], "a.jpg")
+    ib = _img(conn, storage, tb["id"], gb["id"], "b.jpg")
+    _analyze(conn, ta["id"], ga["id"], ia["id"], ["x"], shot="portrait")
+    _analyze(conn, tb["id"], gb["id"], ib["id"], ["x"], shot="portrait")
+    conn.commit()
+    assert [h["id"] for h in search_images(conn, ta["id"], shot_type="portrait")] == [ia["id"]]
+    assert [h["id"] for h in search_images(conn, tb["id"], shot_type="portrait")] == [ib["id"]]
+
+
+def test_library_shot_type_filter_route(client, conn, storage):
+    creds = onboard_studio(client, email="shot@studio.test")
+    login_owner(client, creds)
+    tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+    g = create_gallery(conn, tenant_id=tid, title="Reception")
+    a = _img(conn, storage, tid, g["id"], "a.jpg")
+    b = _img(conn, storage, tid, g["id"], "b.jpg")
+    _analyze(conn, tid, g["id"], a["id"], ["candid"], shot="portrait")
+    _analyze(conn, tid, g["id"], b["id"], ["candid"], shot="wide")
+    conn.commit()
+    page = client.get("/library").text
+    assert "portrait" in page and "wide" in page                   # shot-type chips render
+    res = client.get("/library?shot=portrait").text
+    assert "Reception" in res and "1 photo" in res                 # filtered to the portrait
+    combo = client.get("/library?q=candid&shot=wide").text
+    assert "1 photo" in combo and "tagged" in combo                # keyword AND shot

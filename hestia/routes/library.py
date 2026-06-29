@@ -11,20 +11,23 @@ from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
-from ..vision import search_images_by_keyword, tenant_keyword_facets
+from ..vision import search_images, tenant_keyword_facets, tenant_shot_type_facets
 from .deps import db_conn, render, storage_of
 
 router = APIRouter()
 
 
 @router.get("/library")
-def library(request: Request, q: str = ""):
+def library(request: Request, q: str = "", shot: str = ""):
     query = (q or "").strip()
+    shot_type = (shot or "").strip()
     with db_conn(request) as conn:
         auth = context_from_session(conn, request)
         if not auth or not auth.tenant:
             return RedirectResponse("/login", status_code=303)
         facets = tenant_keyword_facets(conn, auth.tenant["id"])
-        results = search_images_by_keyword(conn, auth.tenant["id"], query) if query else []
-    return render(request, "library.html", auth=auth, facets=facets, results=results,
-                  q=query, storage=storage_of(request))
+        shots = tenant_shot_type_facets(conn, auth.tenant["id"])
+        results = (search_images(conn, auth.tenant["id"], keyword=query, shot_type=shot_type)
+                   if (query or shot_type) else [])
+    return render(request, "library.html", auth=auth, facets=facets, shots=shots,
+                  results=results, q=query, shot=shot_type, storage=storage_of(request))
