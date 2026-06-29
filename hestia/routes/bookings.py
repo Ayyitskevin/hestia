@@ -37,7 +37,7 @@ from ..invoices import money
 from ..ratelimit import enforce
 from ..scheduler import APPOINTMENT_KINDS, KIND_LABELS
 from ..studio import get_profile
-from ..tenants import get_tenant_by_slug
+from ..tenants import get_tenant, get_tenant_by_slug, set_booking_rules
 from .deps import db_conn, render, settings_of
 
 router = APIRouter()
@@ -79,10 +79,13 @@ def booking_types_list(request: Request):
             t["kind_label"] = KIND_LABELS.get(t["kind"], t["kind"])
         profile = get_profile(conn, auth.tenant["id"])
         windows = list_windows(conn, auth.tenant["id"])
+        tenant = get_tenant(conn, auth.tenant["id"])
     return render(request, "studio/booking_types.html", auth=auth, types=types,
                   kinds=_kind_choices(), published=bool(profile["published"]),
                   slug=auth.tenant.get("slug", ""), windows=windows,
-                  weekdays=list(enumerate(WEEKDAYS)))
+                  weekdays=list(enumerate(WEEKDAYS)),
+                  min_notice_hours=tenant.get("booking_min_notice_hours", 0) if tenant else 0,
+                  buffer_minutes=tenant.get("booking_buffer_minutes", 0) if tenant else 0)
 
 
 @router.post("/settings/booking-types")
@@ -144,6 +147,20 @@ def availability_delete(request: Request, window_id: int):
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_window(conn, auth.tenant["id"], window_id)
+    return RedirectResponse("/settings/booking-types", status_code=303)
+
+
+@router.post("/settings/booking-rules")
+def booking_rules_save(request: Request, min_notice_hours: str = Form("0"),
+                       buffer_minutes: str = Form("0")):
+    """Save the booking guardrails (minimum notice + buffer). Non-numeric input → 0."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        notice = int(min_notice_hours) if min_notice_hours.strip().isdigit() else 0
+        buf = int(buffer_minutes) if buffer_minutes.strip().isdigit() else 0
+        set_booking_rules(conn, auth.tenant["id"], min_notice_hours=notice, buffer_minutes=buf)
     return RedirectResponse("/settings/booking-types", status_code=303)
 
 

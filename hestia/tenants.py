@@ -70,6 +70,18 @@ def set_tax_rate(conn: sqlite3.Connection, tenant_id: str, tax_rate_bps: int) ->
     conn.execute("UPDATE tenants SET tax_rate_bps = ? WHERE id = ?", (bps, tenant_id))
 
 
+def set_booking_rules(conn: sqlite3.Connection, tenant_id: str, *, min_notice_hours: int,
+                      buffer_minutes: int) -> None:
+    """Set the self-serve booking guardrails (both clamped to sane bounds): minimum notice
+    in hours and the buffer kept clear around each session in minutes."""
+    notice = max(0, min(24 * 30, int(min_notice_hours)))     # up to ~a month out
+    buffer_min = max(0, min(24 * 60, int(buffer_minutes)))    # up to a day
+    conn.execute(
+        "UPDATE tenants SET booking_min_notice_hours = ?, booking_buffer_minutes = ? WHERE id = ?",
+        (notice, buffer_min, tenant_id),
+    )
+
+
 def list_tenants(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute("SELECT * FROM tenants ORDER BY created_at DESC").fetchall()
     return [dict(r) for r in rows]
