@@ -12,7 +12,16 @@
     <tbody>
       {% for g in galleries %}
       <tr>
-        <td><a href="/galleries/{{ g.id }}">{{ g.title }}</a></td>
+        <td>
+          <a href="/galleries/{{ g.id }}" class="gallery-row">
+            {% if g.cover_key %}
+              <img class="gallery-cover" src="{{ storage.public_path(g.cover_key) }}" alt="" loading="lazy">
+            {% else %}
+              <span class="gallery-cover placeholder" aria-hidden="true"></span>
+            {% endif %}
+            <span>{{ g.title }}</span>
+          </a>
+        </td>
         <td class="muted">{{ g.client_name or "—" }}</td>
         <td>{{ g.image_count }}</td>
         <td><span class="pill {{ 'on' if g.status == 'published' else 'off' }}">{{ g.status }}</span></td>

@@ -94,6 +94,26 @@ def record_gallery_download(conn: sqlite3.Connection, gallery_id: int) -> None:
                  (gallery_id,))
 
 
+def cover_storage_key(conn: sqlite3.Connection, tenant_id: str, gallery: dict) -> str | None:
+    """The storage key to show as a gallery's cover thumbnail: the chosen ``cover_image_id``
+    when it's still a visible frame, else the first visible frame, else None (empty gallery)."""
+    cid = gallery.get("cover_image_id")
+    if cid:
+        row = conn.execute(
+            "SELECT storage_key FROM images "
+            "WHERE id = ? AND gallery_id = ? AND tenant_id = ? AND hidden = 0",
+            (cid, gallery["id"], tenant_id),
+        ).fetchone()
+        if row:
+            return row["storage_key"]
+    row = conn.execute(
+        "SELECT storage_key FROM images WHERE gallery_id = ? AND tenant_id = ? AND hidden = 0 "
+        "ORDER BY position, id LIMIT 1",
+        (gallery["id"], tenant_id),
+    ).fetchone()
+    return row["storage_key"] if row else None
+
+
 def list_galleries(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     rows = conn.execute(
         "SELECT * FROM galleries WHERE tenant_id = ? ORDER BY created_at DESC", (tenant_id,)
@@ -102,6 +122,7 @@ def list_galleries(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     for r in rows:
         g = dict(r)
         g["image_count"] = image_count(conn, g["id"])
+        g["cover_key"] = cover_storage_key(conn, tenant_id, g)
         out.append(g)
     return out
 
@@ -230,6 +251,23 @@ def set_image_hidden(conn: sqlite3.Connection, tenant_id: str, image_id: int, hi
         "UPDATE images SET hidden = ? WHERE id = ? AND tenant_id = ?",
         (1 if hidden else 0, image_id, tenant_id),
     )
+
+
+def set_cover_image(conn: sqlite3.Connection, tenant_id: str, gallery_id: int, image_id: int) -> bool:
+    """Set a gallery's cover to one of its own visible frames. Returns False if the image
+    isn't part of this gallery/tenant or is hidden (a culled frame shouldn't be the cover).
+    Tenant-scoped."""
+    row = conn.execute(
+        "SELECT 1 FROM images WHERE id = ? AND gallery_id = ? AND tenant_id = ? AND hidden = 0",
+        (image_id, gallery_id, tenant_id),
+    ).fetchone()
+    if not row:
+        return False
+    conn.execute(
+        "UPDATE galleries SET cover_image_id = ? WHERE id = ? AND tenant_id = ?",
+        (image_id, gallery_id, tenant_id),
+    )
+    return True
 
 
 def apply_cull(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> int:

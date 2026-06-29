@@ -22,6 +22,7 @@ from ..galleries import (
     list_galleries,
     list_images,
     publish_gallery,
+    set_cover_image,
     set_image_hidden,
 )
 from ..jobs import drain, enqueue
@@ -31,7 +32,7 @@ from ..products import get_set_for_gallery
 from ..proofing import comments_for_gallery, favorite_image_ids, list_favorites
 from ..sales import get_offer_for_gallery, offer_public_url
 from ..tenants import get_tenant, tenant_flags
-from ..vision import cull_summary, gallery_analysis_map
+from ..vision import cull_summary, gallery_analysis_map, hero_suggestions
 from .deps import db_conn, render, settings_of, storage_of
 
 router = APIRouter(prefix="/galleries")
@@ -57,7 +58,8 @@ def gallery_list(request: Request):
         if not auth:
             return RedirectResponse("/login", status_code=303)
         galleries = list_galleries(conn, auth.tenant["id"])
-    return render(request, "galleries.html", auth=auth, galleries=galleries)
+    return render(request, "galleries.html", auth=auth, galleries=galleries,
+                  storage=storage_of(request))
 
 
 @router.get("/new")
@@ -117,6 +119,7 @@ def gallery_detail(request: Request, gallery_id: int):
                                          order_ids=[o["id"] for o in orders])
         cull = cull_summary(conn, auth.tenant["id"], gallery_id)
         analysis = gallery_analysis_map(conn, gallery_id)
+        hero_ids = hero_suggestions(conn, auth.tenant["id"], gallery_id)
     culled_ids = cull.get("culled_ids") or set()
     # How many flagged frames are still visible (the "apply" button only matters if > 0),
     # and how many are currently hidden (so the owner can see/undo the cull state).
@@ -130,7 +133,8 @@ def gallery_detail(request: Request, gallery_id: int):
                   storage=storage_of(request), flags=flags, project=project, album=album,
                   product_set=product_set, favorites=favorites, comments=comments, campaign=campaign,
                   orders=orders, fulfillments=fulfillments, cull=cull, cull_pending=cull_pending,
-                  hidden_count=hidden_count, analysis=analysis, delivery_link=delivery_link)
+                  hidden_count=hidden_count, analysis=analysis, hero_ids=hero_ids,
+                  cover_id=gallery.get("cover_image_id"), delivery_link=delivery_link)
 
 
 @router.get("/{gallery_id}/selects.txt")
@@ -341,4 +345,17 @@ def gallery_image_unhide(request: Request, gallery_id: int, image_id: int):
         if not get_gallery(conn, auth.tenant["id"], gallery_id):
             return RedirectResponse("/galleries", status_code=303)
         set_image_hidden(conn, auth.tenant["id"], image_id, False)
+    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
+
+
+@router.post("/{gallery_id}/cover/{image_id}")
+def gallery_set_cover(request: Request, gallery_id: int, image_id: int):
+    """Set the gallery cover to a frame — typically the AI's top hero pick, one click."""
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if not get_gallery(conn, auth.tenant["id"], gallery_id):
+            return RedirectResponse("/galleries", status_code=303)
+        set_cover_image(conn, auth.tenant["id"], gallery_id, image_id)
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
