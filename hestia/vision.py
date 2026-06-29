@@ -452,6 +452,18 @@ def gallery_analysis_map(conn: sqlite3.Connection, gallery_id: int) -> dict[int,
     return out
 
 
+def flagged_image_ids(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> set[int]:
+    """Image ids in a gallery the vision pass flags as a likely technical reject (soft, dark
+    or bright), from the exposure & sharpness sub-scores. Tenant-scoped. Advisory — the owner
+    chooses whether to hide them (``apply_quality_cull``)."""
+    rows = conn.execute(
+        "SELECT image_id, exposure, sharpness FROM image_analyses "
+        "WHERE tenant_id = ? AND gallery_id = ?",
+        (tenant_id, gallery_id),
+    ).fetchall()
+    return {r["image_id"] for r in rows if _quality_flags(r["exposure"], r["sharpness"])}
+
+
 def cull_summary(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> dict:
     """Recompute the cull picture from persisted analyses, for the owner view —
     which frames are near-duplicates, likely blinks, or otherwise culled."""
