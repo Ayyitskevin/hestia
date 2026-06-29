@@ -21,6 +21,7 @@ import sqlite3
 
 from .crypto import new_session_token
 from .db import audit
+from .jobs import enqueue, register
 
 
 class GiftCardError(Exception):
@@ -106,6 +107,10 @@ def apply_card_to_invoice(conn: sqlite3.Connection, *, invoice_token: str, code:
         return {"ok": False, "error": "We couldn't find that invoice."}
     if inv["status"] in ("paid", "void"):
         return {"ok": False, "error": "This invoice can no longer take a gift card."}
+    # You buy a gift card with real money — not with another gift card (a purchase invoice
+    # issues a card at its face amount, so paying it with stored value would just shuffle it).
+    if conn.execute("SELECT 1 FROM gift_card_purchases WHERE invoice_id = ?", (inv["id"],)).fetchone():
+        return {"ok": False, "error": "A gift card can't be used to buy a gift card."}
     remaining = (inv["amount_cents"] + int(inv["tax_cents"] or 0)) - int(inv["gift_credit"] or 0)
     if remaining <= 0:
         return {"ok": False, "error": "This invoice is already fully covered."}
@@ -154,6 +159,99 @@ def apply_card_to_invoice(conn: sqlite3.Connection, *, invoice_token: str, code:
     audit(conn, actor="public", action="giftcard.redeemed", tenant_id=inv["tenant_id"],
           detail=f"{code} · {draw}")
     return {"ok": True, "draw_cents": draw, "code": code}
+
+
+def create_purchase(conn: sqlite3.Connection, *, tenant_id: str, invoice_id: int,
+                    amount_cents: int, recipient_name: str = "", recipient_email: str = "",
+                    buyer_name: str = "", buyer_email: str = "", message: str = "") -> dict | None:
+    """Record a PENDING gift-card purchase tied to a (to-be-paid) invoice. The card itself is
+    issued only once the invoice is paid — see :func:`fulfill_purchase`."""
+    amount = max(0, int(amount_cents or 0))
+    if amount <= 0:
+        return None
+    cur = conn.execute(
+        "INSERT INTO gift_card_purchases (tenant_id, invoice_id, amount_cents, recipient_name, "
+        "recipient_email, buyer_name, buyer_email, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (tenant_id, invoice_id, amount, (recipient_name or "").strip()[:200],
+         (recipient_email or "").strip()[:200], (buyer_name or "").strip()[:200],
+         (buyer_email or "").strip()[:200], (message or "").strip()[:1000]),
+    )
+    row = conn.execute(
+        "SELECT * FROM gift_card_purchases WHERE id = ?", (cur.lastrowid,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def fulfill_purchase(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> None:
+    """Issue the purchased gift card once its invoice is paid — called from
+    :func:`hestia.invoices.mark_paid`, so every settle path triggers it. Idempotent: the
+    pending→fulfilled flip is a rowcount-gated claim, so the card is issued exactly once.
+    Card issuance is DB-only here; the recipient email is enqueued for the worker."""
+    claimed = conn.execute(
+        "UPDATE gift_card_purchases SET status = 'fulfilled' "
+        "WHERE invoice_id = ? AND tenant_id = ? AND status = 'pending'",
+        (invoice_id, tenant_id),
+    )
+    if claimed.rowcount != 1:                           # no pending purchase, or already done
+        return
+    pur = conn.execute(
+        "SELECT * FROM gift_card_purchases WHERE invoice_id = ? AND tenant_id = ?",
+        (invoice_id, tenant_id),
+    ).fetchone()
+    irow = conn.execute(
+        "SELECT currency FROM invoices WHERE id = ? AND tenant_id = ?", (invoice_id, tenant_id)
+    ).fetchone()
+    currency = (irow["currency"] if irow else "usd")
+    who = pur["buyer_name"] or "Someone"
+    note = f"Gift from {who}" + (f" for {pur['recipient_name']}" if pur["recipient_name"] else "")
+    card = None
+    for _ in range(5):                                  # a fresh code each try; collisions ~never
+        card = create_gift_card(conn, tenant_id=tenant_id, initial_cents=int(pur["amount_cents"]),
+                                currency=currency, note=note)
+        if card:
+            break
+    if not card:
+        # couldn't mint a unique code — roll the whole settle back so it's retried, rather
+        # than leave a paid purchase fulfilled with no card.
+        raise GiftCardError("could not issue purchased gift card")
+    conn.execute("UPDATE gift_card_purchases SET gift_card_id = ? WHERE id = ?",
+                 (card["id"], pur["id"]))
+    enqueue(conn, kind="giftcard.deliver", tenant_id=tenant_id, payload={"purchase_id": pur["id"]})
+    audit(conn, actor="public", action="giftcard.purchased", tenant_id=tenant_id,
+          detail=f"{who} · {int(pur['amount_cents'])}")
+
+
+@register("giftcard.deliver")
+def _deliver(settings, payload: dict) -> None:
+    """Email the gift-card code to the recipient (or the buyer) after a purchase settles."""
+    from .db import get_db
+    from .email import notify
+    from .invoices import money
+    from .tenants import get_tenant
+
+    purchase_id = int(payload["purchase_id"])
+    with get_db(settings.db_path) as conn:
+        pur = conn.execute(
+            "SELECT * FROM gift_card_purchases WHERE id = ?", (purchase_id,)
+        ).fetchone()
+        if not pur or not pur["gift_card_id"]:
+            return
+        card = conn.execute("SELECT * FROM gift_cards WHERE id = ?", (pur["gift_card_id"],)).fetchone()
+        to = (pur["recipient_email"] or pur["buyer_email"] or "").strip()
+        if not card or not to:
+            return
+        tenant = get_tenant(conn, pur["tenant_id"])
+        studio = (tenant or {}).get("name") or "your studio"
+        amount = money(int(card["balance_cents"]), card["currency"])
+        who = pur["buyer_name"] or "Someone"
+        body = (f"Hi {pur['recipient_name'] or 'there'},\n\n{who} has sent you a {amount} gift card "
+                f"for {studio}!\n\nYour code: {card['code']}\n\n"
+                + (f"Their message:\n{pur['message']}\n\n" if pur["message"] else "")
+                + f"Redeem it at checkout when {studio} sends you an invoice — it can be used across "
+                "multiple payments until the balance runs out.")
+        notify(conn, settings, to=to, tenant_id=pur["tenant_id"],
+               subject=f"You've received a gift card for {studio}", body=body)
+        conn.commit()
 
 
 def release_for_invoice(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> None:

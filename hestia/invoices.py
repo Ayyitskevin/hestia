@@ -203,7 +203,7 @@ def void_invoice(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> N
 def mark_paid(conn: sqlite3.Connection, *, token: str, provider: str, ref: str) -> bool:
     """Idempotently settle an invoice. Returns True only on the transition to paid."""
     row = conn.execute(
-        "SELECT tenant_id, title, amount_cents, currency, status, client_id, project_id "
+        "SELECT id, tenant_id, title, amount_cents, currency, status, client_id, project_id "
         "FROM invoices WHERE token = ?",
         (token,),
     ).fetchone()
@@ -225,6 +225,10 @@ def mark_paid(conn: sqlite3.Connection, *, token: str, provider: str, ref: str) 
     emit_event(conn, tenant_id=row["tenant_id"], event="invoice.paid",
                context={"client_id": row["client_id"], "project_id": row["project_id"],
                         "title": row["title"]})
+    # If this invoice was a gift-card purchase, issue the card now (idempotent; covers every
+    # settle path since they all route through here).
+    from .giftcards import fulfill_purchase
+    fulfill_purchase(conn, row["tenant_id"], row["id"])
     return True
 
 

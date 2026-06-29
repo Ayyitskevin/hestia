@@ -114,6 +114,10 @@ def apply_code_to_invoice(conn: sqlite3.Connection, *, invoice_token: str, code:
         return {"ok": False, "error": "We couldn't find that invoice."}
     if inv["status"] in ("paid", "void"):
         return {"ok": False, "error": "This invoice can no longer take a discount."}
+    # A gift-card purchase issues a card at its face amount, so discounting it would sell
+    # stored value below face — exclude gift-card purchases from codes.
+    if conn.execute("SELECT 1 FROM gift_card_purchases WHERE invoice_id = ?", (inv["id"],)).fetchone():
+        return {"ok": False, "error": "A discount can't be applied to a gift-card purchase."}
     if inv["dc"]:
         return {"ok": False, "error": "A discount has already been applied."}
     # A discount reduces the (taxable) total; applying one after a gift card was drawn would
