@@ -12,6 +12,7 @@ from ..albums import (
     enable_album_review,
     generate_album,
     get_album,
+    move_spread,
     set_spread_hero,
 )
 from ..auth import context_from_session
@@ -54,6 +55,17 @@ def album_spread_hero(request: Request, album_id: int, position: int, image_id: 
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_spread_hero(conn, auth.tenant["id"], album_id, position, image_id)
+    return RedirectResponse(f"/albums/{album_id}", status_code=303)
+
+
+@router.post("/albums/{album_id}/spreads/{position}/move/{direction}")
+def album_move_spread(request: Request, album_id: int, position: int, direction: str):
+    """Reorder a spread one step up or down — the photographer's sequencing."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        move_spread(conn, auth.tenant["id"], album_id, position, direction)
     return RedirectResponse(f"/albums/{album_id}", status_code=303)
 
 
