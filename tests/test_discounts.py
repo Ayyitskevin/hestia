@@ -288,3 +288,27 @@ def test_public_apply_invalid_code_shows_error(client, app):
         assert get_invoice(conn, tid, iid)["amount_cents"] == 10000   # untouched
     finally:
         conn.close()
+
+
+def test_receipt_itemizes_discount(client, app):
+    """A paid, discounted invoice's printable receipt shows the code, original subtotal,
+    and the amount saved — not just the reduced total."""
+    creds = onboard_studio(client, email="disc_receipt@example.com")
+    login_owner(client, creds)
+    client.post("/settings/discounts", data={"code": "SAVE20", "kind": "percent", "value": "20"})
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = _tid_of(conn, creds["email"])
+        inv = create_invoice(conn, app.state.settings, tenant_id=tid, title="Session",
+                             amount_cents=10000)
+        send_invoice(conn, tid, inv["id"])
+        conn.commit()
+        token = inv["token"]
+    finally:
+        conn.close()
+    pub = CSRFClient(app)
+    pub.post(f"/pay/{token}/discount", data={"code": "SAVE20"})    # → $80.00 due
+    pub.post(f"/pay/{token}/checkout")                             # mock backend settles it
+    receipt = pub.get(f"/pay/{token}/receipt").text
+    assert "SAVE20" in receipt and "$100.00" in receipt and "$20.00" in receipt   # code, original, saved
+    assert "$80.00" in receipt                                    # the amount actually paid
