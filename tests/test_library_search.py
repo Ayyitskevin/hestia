@@ -211,3 +211,58 @@ def test_library_shot_type_filter_route(client, conn, storage):
     assert "Reception" in res and "1 photo" in res                 # filtered to the portrait
     combo = client.get("/library?q=candid&shot=wide").text
     assert "1 photo" in combo and "tagged" in combo                # keyword AND shot
+
+
+# ── keepers-only axis ───────────────────────────────────────────────────────────
+
+
+def test_keepers_only_filters_and_ranks(conn, storage):
+    t = create_tenant(conn, name="Keep Studio", shoot_type="wedding")
+    g = create_gallery(conn, tenant_id=t["id"], title="G")
+    hi = _img(conn, storage, t["id"], g["id"], "hi.jpg")
+    mid = _img(conn, storage, t["id"], g["id"], "mid.jpg")
+    lo = _img(conn, storage, t["id"], g["id"], "lo.jpg")
+    _analyze(conn, t["id"], g["id"], hi["id"], ["candid"], keeper=0.95)
+    _analyze(conn, t["id"], g["id"], mid["id"], ["candid"], keeper=0.72)
+    _analyze(conn, t["id"], g["id"], lo["id"], ["candid"], keeper=0.40)
+    conn.commit()
+    res = search_images(conn, t["id"], keepers_only=True)
+    assert [r["id"] for r in res] == [hi["id"], mid["id"]]         # below-threshold dropped, best first
+    res2 = search_images(conn, t["id"], keyword="candid", keepers_only=True)
+    assert [r["id"] for r in res2] == [hi["id"], mid["id"]]        # combines with keyword
+    # without the keepers filter, the low-quality frame is included
+    assert {r["id"] for r in search_images(conn, t["id"], keyword="candid")} == \
+        {hi["id"], mid["id"], lo["id"]}
+
+
+def test_keepers_only_alone_spans_galleries_and_is_scoped(conn, storage):
+    ta = create_tenant(conn, name="KA", shoot_type="wedding")
+    tb = create_tenant(conn, name="KB", shoot_type="portrait")
+    ga = create_gallery(conn, tenant_id=ta["id"], title="GA")
+    ga2 = create_gallery(conn, tenant_id=ta["id"], title="GA2")
+    gb = create_gallery(conn, tenant_id=tb["id"], title="GB")
+    a1 = _img(conn, storage, ta["id"], ga["id"], "a1.jpg")
+    a2 = _img(conn, storage, ta["id"], ga2["id"], "a2.jpg")
+    b1 = _img(conn, storage, tb["id"], gb["id"], "b1.jpg")
+    _analyze(conn, ta["id"], ga["id"], a1["id"], ["x"], keeper=0.9)
+    _analyze(conn, ta["id"], ga2["id"], a2["id"], ["x"], keeper=0.85)
+    _analyze(conn, tb["id"], gb["id"], b1["id"], ["x"], keeper=0.99)
+    conn.commit()
+    # no keyword/shot — just "my best frames across every gallery", tenant-scoped
+    res = search_images(conn, ta["id"], keepers_only=True)
+    assert {r["id"] for r in res} == {a1["id"], a2["id"]}          # only A's, never B's
+
+
+def test_library_keepers_filter_route(client, conn, storage):
+    creds = onboard_studio(client, email="keep@studio.test")
+    login_owner(client, creds)
+    tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+    g = create_gallery(conn, tenant_id=tid, title="Reception")
+    hi = _img(conn, storage, tid, g["id"], "hi.jpg")
+    lo = _img(conn, storage, tid, g["id"], "lo.jpg")
+    _analyze(conn, tid, g["id"], hi["id"], ["candid"], keeper=0.95)
+    _analyze(conn, tid, g["id"], lo["id"], ["candid"], keeper=0.30)
+    conn.commit()
+    assert "Keepers only" in client.get("/library").text          # the toggle renders
+    res = client.get("/library?keepers=1").text
+    assert "1 keeper photo" in res                                 # only the strong frame, labelled
