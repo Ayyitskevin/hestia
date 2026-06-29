@@ -6,16 +6,28 @@
 </div>
 <div class="card stack">
   <p class="muted">Search your whole catalog by what's in the frame — the AI tags every photo it
-    analyzes. Try a keyword, or pick one below.</p>
+    analyzes with keywords and a shot type. Try a keyword, or pick one below.</p>
   <form method="get" action="/library" class="lib-search">
     <input type="text" name="q" value="{{ q }}" placeholder="e.g. golden-hour, candid, portrait"
            autofocus aria-label="Search photos by keyword">
+    {% if shot %}<input type="hidden" name="shot" value="{{ shot }}">{% endif %}
     <button class="btn" type="submit">Search</button>
   </form>
+  {% if shots %}
+  <div class="tag-cloud" aria-label="Filter by shot type">
+    {% for s in shots %}
+      <a class="tag{{ ' on' if s.shot_type == shot else '' }}"
+         href="/library?{% if q %}q={{ q | urlencode }}&amp;{% endif %}shot={{ s.shot_type | urlencode }}">
+        {{ s.shot_type }} <span class="muted">{{ s.count }}</span>
+      </a>
+    {% endfor %}
+  </div>
+  {% endif %}
   {% if facets %}
-  <div class="tag-cloud">
+  <div class="tag-cloud" aria-label="Filter by keyword">
     {% for f in facets %}
-      <a class="tag{{ ' on' if f.keyword == q else '' }}" href="/library?q={{ f.keyword | urlencode }}">
+      <a class="tag{{ ' on' if f.keyword == q else '' }}"
+         href="/library?q={{ f.keyword | urlencode }}{% if shot %}&amp;shot={{ shot | urlencode }}{% endif %}">
         {{ f.keyword }} <span class="muted">{{ f.count }}</span>
       </a>
     {% endfor %}
@@ -23,11 +35,12 @@
   {% else %}
   <p class="muted">No analyzed photos yet — process a gallery and your catalog becomes searchable.</p>
   {% endif %}
+  {% if q or shot %}<a class="muted" href="/library">Clear filters</a>{% endif %}
 </div>
 
-{% if q %}
+{% if q or shot %}
 <div class="card" style="margin-top:18px">
-  <h3>{{ results|length }} photo{{ '' if results|length == 1 else 's' }} tagged “{{ q }}”</h3>
+  <h3>{{ results|length }} photo{{ '' if results|length == 1 else 's' }}{% if q %} tagged “{{ q }}”{% endif %}{% if shot %} · {{ shot }}{% endif %}</h3>
   {% if results %}
   <div class="thumb-grid">
     {% for r in results %}
@@ -42,7 +55,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="muted">No photos tagged “{{ q }}” yet.</p>
+  <p class="muted">No photos match — try another keyword or shot type.</p>
   {% endif %}
 </div>
 {% endif %}
