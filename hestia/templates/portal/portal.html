@@ -23,12 +23,14 @@
       {% set open_invoices = invoices | rejectattr('status', 'in', ['paid', 'void']) | list %}
       {% set to_fill = questionnaires | selectattr('status', 'equalto', 'sent') | list %}
       {% set to_book = appointments | selectattr('status', 'equalto', 'proposed') | list %}
-      {% if unsigned or open_invoices or to_fill or to_book or (plans | selectattr('progress', 'ne', 'paid') | list) %}
+      {% set to_review = albums | selectattr('state', 'equalto', 'review') | list %}
+      {% if unsigned or open_invoices or to_fill or to_book or to_review or (plans | selectattr('progress', 'ne', 'paid') | list) %}
       <div class="card stack" style="border-color:#f0d9b4; background:#fff7ec">
         <h3>Needs your attention</h3>
         <ul class="portal-todo">
           {% for ct in unsigned %}<li>Sign <strong>{{ ct.title }}</strong> — <a href="{{ ct.sign_url }}">review &amp; sign →</a></li>{% endfor %}
           {% for a in to_book %}<li>Pick a time for <strong>{{ a.title }}</strong> — <a href="{{ a.book_url }}">book →</a></li>{% endfor %}
+          {% for alb in to_review %}<li>Review your album for <strong>{{ alb.gallery_title }}</strong> — <a href="{{ alb.review_url }}">review &amp; approve →</a></li>{% endfor %}
           {% for q in to_fill %}<li>Fill out <strong>{{ q.title }}</strong> — <a href="{{ q.fill_url }}">answer →</a></li>{% endfor %}
           {% for pl in plans if pl.status != 'void' and pl.progress != 'paid' %}<li>Payment plan <strong>{{ pl.title }}</strong> — {{ pl.paid_display }} of {{ pl.total_display }} paid</li>{% endfor %}
           {% for inv in open_invoices %}<li>Invoice <strong>{{ inv.title }}</strong> ({{ inv.amount_display }}) — <a href="{{ inv.pay_url }}">pay →</a></li>{% endfor %}
