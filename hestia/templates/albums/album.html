@@ -10,10 +10,12 @@
       arranged by <span class="pill">{{ album.backend }}</span>
     </span>
   </div>
+  {% if not album.approved_at %}
   <form method="post" action="/galleries/{{ album.gallery_id }}/album">
     {% include "_csrf.html" %}
     <button class="btn secondary" type="submit">↻ Regenerate</button>
   </form>
+  {% endif %}
 </div>
 
 <p class="muted" style="margin-bottom:18px">Every frame placed exactly once — the model proposes the
@@ -22,7 +24,7 @@
 <div class="card" style="margin-bottom:18px">
   <h3>Client review</h3>
   {% if album.approved_at %}
-  <p class="muted">✓ Approved by the client on {{ album.approved_at[:10] }}.</p>
+  <p class="muted">✓ Approved by the client on {{ album.approved_at[:10] }} — the layout is locked.</p>
   <p class="muted">Review link: <a href="{{ review_url }}">{{ review_url }}</a></p>
   {% elif review_url %}
   <p class="muted">Shared for review — awaiting the client's approval.</p>
@@ -47,7 +49,7 @@
         <figure class="thumb {{ 'hero' if p.is_hero else '' }}">
           <img src="{{ p.url }}" alt="{{ p.filename }}" loading="lazy">
           <figcaption>{{ '⭐ ' if p.is_hero else '' }}{{ p.filename }}</figcaption>
-          {% if not p.is_hero %}
+          {% if not p.is_hero and not album.approved_at %}
           <form method="post" action="/albums/{{ album.id }}/spreads/{{ spread.position }}/hero/{{ p.id }}">
             {% include "_csrf.html" %}
             <button type="submit" class="thumb-action">Make hero</button>
