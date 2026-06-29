@@ -43,8 +43,12 @@
         <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">{{ it.description }}</span><span>{{ it.amount_display }}</span></p>
         {% endfor %}
         {% endif %}
+        {% if invoice.discount_cents %}
+        <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">Subtotal</span><span>{{ invoice.original_amount_display }}</span></p>
+        <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">Discount ({{ invoice.discount_code }})</span><span>−{{ invoice.discount_display }}</span></p>
+        {% endif %}
         {% if invoice.tax_cents %}
-        <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">Subtotal</span><span>{{ invoice.amount_display }}</span></p>
+        <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">{{ 'Subtotal after discount' if invoice.discount_cents else 'Subtotal' }}</span><span>{{ invoice.amount_display }}</span></p>
         <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">Tax</span><span>{{ invoice.tax_display }}</span></p>
         {% endif %}
         <p style="display:flex; justify-content:space-between; margin:4px 0; font-size:1.1rem"><strong>Paid</strong><strong>{{ invoice.total_display }}</strong></p>
