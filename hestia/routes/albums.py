@@ -12,6 +12,7 @@ from ..albums import (
     enable_album_review,
     generate_album,
     get_album,
+    set_spread_hero,
 )
 from ..auth import context_from_session
 from ..galleries import get_gallery
@@ -43,6 +44,17 @@ def album_generate(request: Request, gallery_id: int):
         except AlbumError:
             return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
     return RedirectResponse(f"/albums/{album['id']}", status_code=303)
+
+
+@router.post("/albums/{album_id}/spreads/{position}/hero/{image_id}")
+def album_spread_hero(request: Request, album_id: int, position: int, image_id: int):
+    """Override which frame leads a spread — the photographer's pick over the AI's."""
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        set_spread_hero(conn, auth.tenant["id"], album_id, position, image_id)
+    return RedirectResponse(f"/albums/{album_id}", status_code=303)
 
 
 @router.post("/albums/{album_id}/share")

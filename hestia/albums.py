@@ -245,6 +245,30 @@ def album_review_url(settings: Settings, token: str) -> str:
     return f"{settings.public_url.rstrip('/')}/a/{token}"
 
 
+def set_spread_hero(conn: sqlite3.Connection, tenant_id: str, album_id: int, position: int,
+                    image_id: int) -> bool:
+    """Override the AI's hero pick for one spread — the photographer chooses which frame leads
+    it. Returns False if the album isn't this tenant's or the image isn't in that spread.
+    Tenant-scoped; persists the edited spreads in place."""
+    album = get_album(conn, tenant_id, album_id)
+    if not album:
+        return False
+    changed = False
+    for sp in album["spreads"]:
+        if sp["position"] == position and image_id in sp["photo_ids"]:
+            sp["hero_image_id"] = image_id
+            changed = True
+            break
+    if not changed:
+        return False
+    conn.execute(
+        "UPDATE albums SET spreads_json = ?, updated_at = datetime('now') "
+        "WHERE id = ? AND tenant_id = ?",
+        (json.dumps(album["spreads"]), album_id, tenant_id),
+    )
+    return True
+
+
 def album_spreads_display(conn: sqlite3.Connection, album: dict, url_builder) -> list[dict]:
     """Resolve an album's spreads into display dicts — ``[{position, photos: [{id, url,
     filename, is_hero}]}]``. ``url_builder(img)`` yields each photo's URL, so the owner view

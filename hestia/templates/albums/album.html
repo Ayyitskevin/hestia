@@ -47,6 +47,12 @@
         <figure class="thumb {{ 'hero' if p.is_hero else '' }}">
           <img src="{{ p.url }}" alt="{{ p.filename }}" loading="lazy">
           <figcaption>{{ '⭐ ' if p.is_hero else '' }}{{ p.filename }}</figcaption>
+          {% if not p.is_hero %}
+          <form method="post" action="/albums/{{ album.id }}/spreads/{{ spread.position }}/hero/{{ p.id }}">
+            {% include "_csrf.html" %}
+            <button type="submit" class="thumb-action">Make hero</button>
+          </form>
+          {% endif %}
         </figure>
       {% endfor %}
     </div>
