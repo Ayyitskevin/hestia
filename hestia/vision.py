@@ -26,6 +26,12 @@ SHOT_TYPES = ["portrait", "candid", "detail", "wide", "group", "landscape", "sti
 BLINK_THRESHOLD = 0.85
 KEEPER_THRESHOLD = 0.7
 
+# Per-frame technical sub-scores feed owner-facing advisory flags only (never auto-cull):
+# exposure is overall brightness (0 dark .. 1 blown), sharpness is focus (0 soft .. 1 sharp).
+SHARP_THRESHOLD = 0.40    # softer than this → "soft" (likely out of focus / motion-blurred)
+DARK_THRESHOLD = 0.35     # darker than this → "dark" (underexposed)
+BRIGHT_THRESHOLD = 0.90   # brighter than this → "bright" (overexposed / blown highlights)
+
 
 def content_dup_key(data: bytes) -> str:
     """A content signature for duplicate detection — byte-identical frames (the
@@ -49,6 +55,8 @@ class VisionResult:
     shot_type: str = "candid"
     alt_text: str = ""
     eyes_closed: float = 0.0       # 0..1 — likelihood a subject blinked
+    exposure: float = 0.5          # 0..1 — overall brightness (0 dark .. 1 blown), 0.5 well-exposed
+    sharpness: float = 0.5         # 0..1 — focus (0 soft/blurred .. 1 tack-sharp)
 
     def as_dict(self) -> dict:
         return {
@@ -58,6 +66,8 @@ class VisionResult:
             "shot_type": self.shot_type,
             "alt_text": self.alt_text,
             "eyes_closed": round(self.eyes_closed, 3),
+            "exposure": round(self.exposure, 3),
+            "sharpness": round(self.sharpness, 3),
         }
 
 
@@ -79,6 +89,13 @@ def _score(value) -> float:
     return min(1.0, max(0.0, _as_float(value, 0.0)))
 
 
+def _score_or(value, default: float) -> float:
+    """A 0..1 score that falls back to ``default`` (not 0) when the field is missing or junk —
+    used for sub-scores where a missing value should read as neutral, not as "worst case"
+    (e.g. an omitted exposure shouldn't flag the frame as underexposed)."""
+    return min(1.0, max(0.0, _as_float(value, default)))
+
+
 def _result_from_parsed(parsed: dict) -> VisionResult:
     """Build a VisionResult from a model's parsed JSON, tolerating imperfect output
     (a string/null where a number was asked for, a non-list ``keywords``). This is
@@ -93,6 +110,8 @@ def _result_from_parsed(parsed: dict) -> VisionResult:
         shot_type=str(parsed.get("shot_type") or "candid"),
         alt_text=str(parsed.get("alt_text") or ""),
         eyes_closed=_score(parsed.get("eyes_closed")),
+        exposure=_score_or(parsed.get("exposure"), 0.5),
+        sharpness=_score_or(parsed.get("sharpness"), 0.5),
     )
 
 
@@ -113,6 +132,10 @@ class MockVisionProvider:
         hero = (h[4] / 255)                            # 0..1
         shot = SHOT_TYPES[h[5] % len(SHOT_TYPES)]
         eyes_closed = h[6] / 255                       # 0..1 — blink likelihood
+        # Technical sub-scores, biased toward "fine" so only a deterministic minority of
+        # frames trip a flag (most photos are well-exposed and in focus).
+        exposure = 0.30 + (h[7] / 255) * 0.65          # 0.30..0.95
+        sharpness = 0.30 + (h[8] / 255) * 0.68         # 0.30..0.98
         # A studio style profile re-weights the hero ranking deterministically
         # (the mock stand-in for "weight toward frames matching this look").
         if style.strip():
@@ -120,7 +143,8 @@ class MockVisionProvider:
             hero = max(0.0, min(1.0, 0.5 * hero + 0.5 * sb))
         alt = f"{shot} photograph featuring {', '.join(keywords)}"
         return VisionResult(keywords=keywords, keeper_score=keeper, hero_potential=hero,
-                            shot_type=shot, alt_text=alt, eyes_closed=eyes_closed)
+                            shot_type=shot, alt_text=alt, eyes_closed=eyes_closed,
+                            exposure=exposure, sharpness=sharpness)
 
 
 class XaiVisionProvider:
@@ -145,7 +169,9 @@ class XaiVisionProvider:
             "You are a photo-culling assistant. Return ONLY compact JSON with keys: "
             "keywords (array of 3-6 lowercase strings), keeper_score (0-1 float), "
             "hero_potential (0-1 float), shot_type (one word), alt_text (one sentence), "
-            "eyes_closed (0-1 float — likelihood a subject blinked or has closed eyes)."
+            "eyes_closed (0-1 float — likelihood a subject blinked or has closed eyes), "
+            "exposure (0-1 float — overall brightness: ~0 underexposed/dark, ~0.5 well-exposed, "
+            "~1 overexposed/blown), sharpness (0-1 float — 1 tack-sharp/in focus, 0 soft/blurred)."
             + style_line
         )
         body = {
@@ -222,17 +248,19 @@ def analyze_gallery(
             """
             INSERT INTO image_analyses
                 (image_id, gallery_id, tenant_id, keywords_json, keeper_score,
-                 hero_potential, shot_type, alt_text, eyes_closed, dup_key)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 hero_potential, shot_type, alt_text, eyes_closed, dup_key,
+                 exposure, sharpness)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (image_id) DO UPDATE SET
                 keywords_json=excluded.keywords_json, keeper_score=excluded.keeper_score,
                 hero_potential=excluded.hero_potential, shot_type=excluded.shot_type,
                 alt_text=excluded.alt_text, eyes_closed=excluded.eyes_closed,
-                dup_key=excluded.dup_key
+                dup_key=excluded.dup_key, exposure=excluded.exposure,
+                sharpness=excluded.sharpness
             """,
             (img["id"], gallery_id, tenant_id, json.dumps(result.keywords),
              result.keeper_score, result.hero_potential, result.shot_type, result.alt_text,
-             result.eyes_closed, img_dup_key),
+             result.eyes_closed, img_dup_key, result.exposure, result.sharpness),
         )
         analyzed.append((img, result))
     conn.commit()
@@ -381,14 +409,29 @@ def alt_text_map(conn: sqlite3.Connection, gallery_id: int) -> dict[int, str]:
     return {r["image_id"]: r["alt_text"] for r in rows if (r["alt_text"] or "").strip()}
 
 
+def _quality_flags(exposure, sharpness) -> list[str]:
+    """Advisory technical flags from the sub-scores — surfaced to the owner, never auto-cull.
+    A NULL score (frame analysed before these existed) yields no flag for that dimension."""
+    flags = []
+    if sharpness is not None and sharpness < SHARP_THRESHOLD:
+        flags.append("soft")
+    if exposure is not None:
+        if exposure < DARK_THRESHOLD:
+            flags.append("dark")
+        elif exposure > BRIGHT_THRESHOLD:
+            flags.append("bright")
+    return flags
+
+
 def gallery_analysis_map(conn: sqlite3.Connection, gallery_id: int) -> dict[int, dict]:
     """Per-image AI analysis for a gallery's owner view: ``{image_id: {keywords, shot_type,
-    keeper_score, keeper}}``. Lets the owner see what the AI saw on each frame (and the
-    template links each tag back to the catalog-wide Library search). Scoped by gallery_id,
-    which the owner route has already resolved for the tenant."""
+    keeper_score, keeper, flags}}``. Lets the owner see what the AI saw on each frame — the
+    tags link to the Library, and ``flags`` lists advisory technical issues (soft/dark/bright)
+    from the exposure & sharpness sub-scores. Scoped by gallery_id, which the owner route has
+    already resolved for the tenant."""
     rows = conn.execute(
-        "SELECT image_id, keywords_json, shot_type, keeper_score FROM image_analyses "
-        "WHERE gallery_id = ?", (gallery_id,)
+        "SELECT image_id, keywords_json, shot_type, keeper_score, exposure, sharpness "
+        "FROM image_analyses WHERE gallery_id = ?", (gallery_id,)
     ).fetchall()
     out: dict[int, dict] = {}
     for r in rows:
@@ -404,6 +447,7 @@ def gallery_analysis_map(conn: sqlite3.Connection, gallery_id: int) -> dict[int,
             "shot_type": r["shot_type"] or "",
             "keeper_score": score,
             "keeper": (score or 0) >= KEEPER_THRESHOLD,
+            "flags": _quality_flags(r["exposure"], r["sharpness"]),
         }
     return out
 

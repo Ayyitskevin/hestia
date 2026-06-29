@@ -232,6 +232,8 @@ th { color: var(--muted); font-weight: 600; font-size: .82rem; text-transform: u
   border-radius: 999px; padding: 1px 7px; text-decoration: none; }
 .meta-tag:hover { border-color: var(--ember); color: var(--ink); text-decoration: none; }
 .meta-keeper { color: var(--ember); font-size: .8rem; }
+.meta-flag { font-size: .72rem; color: var(--terracotta-dark); background: #fbeae6;
+  border: 1px solid #f0c9bf; border-radius: 999px; padding: 1px 7px; }
 /* Gallery cover thumbnail in the galleries list */
 .gallery-row { display: flex; align-items: center; gap: 10px; }
 .gallery-cover { width: 44px; height: 44px; object-fit: cover; border-radius: 7px;
