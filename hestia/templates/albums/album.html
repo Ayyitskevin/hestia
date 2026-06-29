@@ -41,8 +41,26 @@
 <div class="stack">
   {% for spread in spreads %}
   <div class="card">
-    <div class="muted" style="font-size:.82rem; text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px">
-      Spread {{ spread.position }}
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px">
+      <div class="muted" style="font-size:.82rem; text-transform:uppercase; letter-spacing:.05em">
+        Spread {{ spread.position }}
+      </div>
+      {% if not album.approved_at and spreads|length > 1 %}
+      <div style="display:flex; gap:6px">
+        {% if not loop.first %}
+        <form method="post" action="/albums/{{ album.id }}/spreads/{{ spread.position }}/move/up" style="margin:0">
+          {% include "_csrf.html" %}
+          <button type="submit" class="icon-btn" title="Move spread up">↑</button>
+        </form>
+        {% endif %}
+        {% if not loop.last %}
+        <form method="post" action="/albums/{{ album.id }}/spreads/{{ spread.position }}/move/down" style="margin:0">
+          {% include "_csrf.html" %}
+          <button type="submit" class="icon-btn" title="Move spread down">↓</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
     <div class="thumb-grid">
       {% for p in spread.photos %}

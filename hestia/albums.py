@@ -285,6 +285,35 @@ def set_spread_hero(conn: sqlite3.Connection, tenant_id: str, album_id: int, pos
     return True
 
 
+def move_spread(conn: sqlite3.Connection, tenant_id: str, album_id: int, position: int,
+                direction: str) -> bool:
+    """Reorder a spread one step ``up`` or ``down`` — the photographer's sequencing over the
+    arranged order. Swaps with the neighbour and renumbers positions 1..N. Returns False at a
+    boundary, on a bad position/direction, on an approved (locked) album, or another tenant's.
+    Tenant-scoped; persists the reordered spreads in place."""
+    if direction not in ("up", "down"):
+        return False
+    album = get_album(conn, tenant_id, album_id)
+    if not album or album.get("approved_at"):
+        return False
+    spreads = album["spreads"]
+    idx = next((i for i, sp in enumerate(spreads) if sp["position"] == position), None)
+    if idx is None:
+        return False
+    swap = idx - 1 if direction == "up" else idx + 1
+    if not 0 <= swap < len(spreads):
+        return False        # already first/last — nothing to do
+    spreads[idx], spreads[swap] = spreads[swap], spreads[idx]
+    for i, sp in enumerate(spreads):
+        sp["position"] = i + 1
+    conn.execute(
+        "UPDATE albums SET spreads_json = ?, updated_at = datetime('now') "
+        "WHERE id = ? AND tenant_id = ?",
+        (json.dumps(spreads), album_id, tenant_id),
+    )
+    return True
+
+
 def album_spreads_display(conn: sqlite3.Connection, album: dict, url_builder) -> list[dict]:
     """Resolve an album's spreads into display dicts — ``[{position, photos: [{id, url,
     filename, is_hero}]}]``. ``url_builder(img)`` yields each photo's URL, so the owner view
