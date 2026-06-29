@@ -125,6 +125,15 @@ def generate_album(
 ) -> dict:
     from .galleries import list_images
 
+    existing = conn.execute(
+        "SELECT id, approved_at FROM albums WHERE tenant_id = ? AND gallery_id = ?",
+        (tenant["id"], gallery["id"]),
+    ).fetchone()
+    if existing and existing["approved_at"]:
+        # The client has approved this layout — lock it. Re-arranging would change the album
+        # out from under them, so return the approved album unchanged.
+        return get_album(conn, tenant["id"], existing["id"])
+
     # Exclude culled/hidden frames — the album is a client deliverable, so it should never
     # arrange a frame the owner removed from the gallery (and the client review serves these).
     images = list_images(conn, gallery["id"], include_hidden=False)
@@ -151,10 +160,6 @@ def generate_album(
     spreads = _build_spreads(ordered, hero_by_id, per_spread)
     title = f"{gallery['title']} — album"
 
-    existing = conn.execute(
-        "SELECT id FROM albums WHERE tenant_id = ? AND gallery_id = ?",
-        (tenant["id"], gallery["id"]),
-    ).fetchone()
     if existing:
         conn.execute(
             "UPDATE albums SET title = ?, backend = ?, spreads_json = ?, updated_at = datetime('now') WHERE id = ?",
@@ -238,7 +243,16 @@ def approve_album(conn: sqlite3.Connection, token: str) -> bool:
         "WHERE review_token = ? AND approved_at IS NULL",
         (token,),
     )
-    return cur.rowcount == 1
+    if cur.rowcount != 1:
+        return False
+    row = conn.execute(
+        "SELECT tenant_id, gallery_id, title FROM albums WHERE review_token = ?", (token,)
+    ).fetchone()
+    if row:
+        from .automations import emit_event
+        emit_event(conn, tenant_id=row["tenant_id"], event="album.approved",
+                   context={"gallery_id": row["gallery_id"], "title": row["title"]})
+    return True
 
 
 def album_review_url(settings: Settings, token: str) -> str:
@@ -253,6 +267,8 @@ def set_spread_hero(conn: sqlite3.Connection, tenant_id: str, album_id: int, pos
     album = get_album(conn, tenant_id, album_id)
     if not album:
         return False
+    if album.get("approved_at"):
+        return False        # locked: the client approved this layout, don't edit it
     changed = False
     for sp in album["spreads"]:
         if sp["position"] == position and image_id in sp["photo_ids"]:

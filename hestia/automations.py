@@ -30,6 +30,7 @@ TRIGGERS: dict[str, str] = {
     "project.booked": "Project marked booked",
     "gallery.published": "Gallery published",
     "gallery.selections_submitted": "Client submitted gallery selections",
+    "album.approved": "Client approved album",
     "appointment.confirmed": "Appointment confirmed",
 }
 
