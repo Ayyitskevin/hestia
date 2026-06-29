@@ -287,6 +287,23 @@ def apply_cull(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> int
     return cur.rowcount
 
 
+def apply_quality_cull(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> int:
+    """Hide every still-visible frame the vision pass flags as a likely technical reject
+    (soft / under- or over-exposed, from the exposure & sharpness sub-scores). Returns how
+    many were newly hidden. Reversible per-image; re-running is harmless."""
+    from .vision import flagged_image_ids
+    ids = sorted(flagged_image_ids(conn, tenant_id, gallery_id))
+    if not ids:
+        return 0
+    placeholders = ",".join("?" * len(ids))
+    cur = conn.execute(
+        f"UPDATE images SET hidden = 1 WHERE tenant_id = ? AND gallery_id = ? "
+        f"AND hidden = 0 AND id IN ({placeholders})",
+        (tenant_id, gallery_id, *ids),
+    )
+    return cur.rowcount
+
+
 def get_image(conn: sqlite3.Connection, tenant_id: str, image_id: int) -> dict | None:
     row = conn.execute(
         "SELECT * FROM images WHERE id = ? AND tenant_id = ?", (image_id, tenant_id)

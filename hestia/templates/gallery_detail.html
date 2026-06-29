@@ -199,6 +199,14 @@
   </form>
   {% endif %}
   {% endif %}
+  {% if flagged_pending %}
+  <form method="post" action="/galleries/{{ gallery.id }}/quality-cull/apply" style="margin:8px 0">
+    {% include "_csrf.html" %}
+    <button type="submit" class="btn secondary" onclick="return confirm('Hide {{ flagged_pending }} frame(s) the AI flagged as soft or poorly exposed? You can restore any frame later.')">
+      ⚠ Hide {{ flagged_pending }} flagged reject{{ '' if flagged_pending == 1 else 's' }}
+    </button>
+  </form>
+  {% endif %}
   {% if hidden_count %}
   <p class="muted">{{ hidden_count }} frame{{ '' if hidden_count == 1 else 's' }} hidden — excluded from the client gallery &amp; delivery. Restore any below.</p>
   {% endif %}

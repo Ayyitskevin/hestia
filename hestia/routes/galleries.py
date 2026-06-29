@@ -17,6 +17,7 @@ from ..fulfillment import list_fulfillments
 from ..galleries import (
     add_image,
     apply_cull,
+    apply_quality_cull,
     create_gallery,
     get_gallery,
     list_galleries,
@@ -124,6 +125,9 @@ def gallery_detail(request: Request, gallery_id: int):
     # How many flagged frames are still visible (the "apply" button only matters if > 0),
     # and how many are currently hidden (so the owner can see/undo the cull state).
     cull_pending = sum(1 for im in images if im["id"] in culled_ids and not im["hidden"])
+    # Frames flagged as a likely technical reject (soft/dark/bright) that are still visible.
+    flagged_pending = sum(1 for im in images
+                          if (analysis.get(im["id"]) or {}).get("flags") and not im["hidden"])
     hidden_count = sum(1 for im in images if im["hidden"])
     settings = settings_of(request)
     offer_url = offer_public_url(settings, auth.tenant["slug"], offer["token"]) if offer else None
@@ -134,6 +138,7 @@ def gallery_detail(request: Request, gallery_id: int):
                   product_set=product_set, favorites=favorites, comments=comments, campaign=campaign,
                   orders=orders, fulfillments=fulfillments, cull=cull, cull_pending=cull_pending,
                   hidden_count=hidden_count, analysis=analysis, hero_ids=hero_ids,
+                  flagged_pending=flagged_pending,
                   cover_id=gallery.get("cover_image_id"), delivery_link=delivery_link)
 
 
@@ -318,6 +323,23 @@ def gallery_cull_apply(request: Request, gallery_id: int):
         hidden = apply_cull(conn, auth.tenant["id"], gallery_id)
         if hidden:
             audit(conn, actor="owner", action="gallery.cull_applied",
+                  tenant_id=auth.tenant["id"], detail=f"gallery #{gallery_id} · {hidden} hidden")
+    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
+
+
+@router.post("/{gallery_id}/quality-cull/apply")
+def gallery_quality_cull_apply(request: Request, gallery_id: int):
+    """Hide every frame the vision pass flags as a likely technical reject (soft / under- or
+    over-exposed) in one click. Reversible (each frame can be restored) — nothing is deleted."""
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if not get_gallery(conn, auth.tenant["id"], gallery_id):
+            return RedirectResponse("/galleries", status_code=303)
+        hidden = apply_quality_cull(conn, auth.tenant["id"], gallery_id)
+        if hidden:
+            audit(conn, actor="owner", action="gallery.quality_cull_applied",
                   tenant_id=auth.tenant["id"], detail=f"gallery #{gallery_id} · {hidden} hidden")
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
