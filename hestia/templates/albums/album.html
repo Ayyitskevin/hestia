@@ -19,6 +19,23 @@
 <p class="muted" style="margin-bottom:18px">Every frame placed exactly once — the model proposes the
   order, the code guarantees the layout. The ⭐ frame leads each spread.</p>
 
+<div class="card" style="margin-bottom:18px">
+  <h3>Client review</h3>
+  {% if album.approved_at %}
+  <p class="muted">✓ Approved by the client on {{ album.approved_at[:10] }}.</p>
+  <p class="muted">Review link: <a href="{{ review_url }}">{{ review_url }}</a></p>
+  {% elif review_url %}
+  <p class="muted">Shared for review — awaiting the client's approval.</p>
+  <p class="muted">Send your client this link: <a href="{{ review_url }}">{{ review_url }}</a></p>
+  {% else %}
+  <p class="muted">Share the album so your client can page through the spreads and approve before you order.</p>
+  <form method="post" action="/albums/{{ album.id }}/share">
+    {% include "_csrf.html" %}
+    <button class="btn" type="submit">Share for review</button>
+  </form>
+  {% endif %}
+</div>
+
 <div class="stack">
   {% for spread in spreads %}
   <div class="card">

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your album — {{ album.title }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name if tenant else 'Your studio' }}</div>
+      <h1>{{ album.title }}</h1>
+      <p class="lead" style="margin-top:8px">{{ album.spreads|length }} spread{{ '' if album.spreads|length == 1 else 's' }}
+        · {{ album.photo_count }} photos — review the layout and approve when you're happy.</p>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="margin-top:24px">
+      {% if album.approved_at %}
+      <div class="card" style="text-align:center">
+        <h3>✓ Approved</h3>
+        <p class="muted">Thank you — you approved this album on {{ album.approved_at[:10] }}.
+          Your photographer has been notified and will finalize it.</p>
+      </div>
+      {% else %}
+      <div class="card stack" style="text-align:center">
+        <h3>Happy with the layout?</h3>
+        <p class="muted">Page through the spreads below. When everything looks right, approve it
+          and your photographer will finalize your album.</p>
+        <form method="post" action="/a/{{ token }}/approve"
+              onsubmit="return confirm('Approve this album layout? Your photographer will finalize it.')">
+          <button class="btn" type="submit">✓ Approve this album</button>
+        </form>
+      </div>
+      {% endif %}
+
+      {% for spread in spreads %}
+      <div class="card" style="margin-top:18px">
+        <div class="muted" style="font-size:.82rem; text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px">
+          Spread {{ spread.position }}
+        </div>
+        <div class="thumb-grid">
+          {% for p in spread.photos %}
+            <figure class="thumb {{ 'hero' if p.is_hero else '' }}">
+              <img src="{{ p.url }}" alt="{{ p.filename }}" loading="lazy">
+            </figure>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </main>
+</body>
+</html>

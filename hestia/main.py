@@ -29,6 +29,7 @@ from .obs import access_log, configure_logging, new_request_id
 from .ratelimit import RateLimiter
 from .routes import (
     admin,
+    album_review,
     albums,
     api,
     automations,
@@ -189,6 +190,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(sign.router)
     app.include_router(portal.router)
     app.include_router(delivery.router)
+    app.include_router(album_review.router)
     app.include_router(forms.router)
     app.include_router(book.router)
     app.include_router(webhooks.router)
