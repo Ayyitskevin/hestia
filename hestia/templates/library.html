@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Library — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Library</h1>
+</div>
+<div class="card stack">
+  <p class="muted">Search your whole catalog by what's in the frame — the AI tags every photo it
+    analyzes. Try a keyword, or pick one below.</p>
+  <form method="get" action="/library" class="lib-search">
+    <input type="text" name="q" value="{{ q }}" placeholder="e.g. golden-hour, candid, portrait"
+           autofocus aria-label="Search photos by keyword">
+    <button class="btn" type="submit">Search</button>
+  </form>
+  {% if facets %}
+  <div class="tag-cloud">
+    {% for f in facets %}
+      <a class="tag{{ ' on' if f.keyword == q else '' }}" href="/library?q={{ f.keyword | urlencode }}">
+        {{ f.keyword }} <span class="muted">{{ f.count }}</span>
+      </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No analyzed photos yet — process a gallery and your catalog becomes searchable.</p>
+  {% endif %}
+</div>
+
+{% if q %}
+<div class="card" style="margin-top:18px">
+  <h3>{{ results|length }} photo{{ '' if results|length == 1 else 's' }} tagged “{{ q }}”</h3>
+  {% if results %}
+  <div class="thumb-grid">
+    {% for r in results %}
+      <figure class="thumb{{ ' is-hidden' if r.hidden else '' }}">
+        <img src="{{ storage.public_path(r.storage_key) }}" alt="{{ r.alt_text or r.filename }}" loading="lazy">
+        {% if r.hidden %}<span class="cull-badge" title="Hidden from client">🚫</span>{% endif %}
+        <figcaption>
+          <a href="/galleries/{{ r.gallery_id }}">{{ r.gallery_title }}</a>
+          {% if r.shot_type %}<span class="muted"> · {{ r.shot_type }}</span>{% endif %}
+        </figcaption>
+      </figure>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No photos tagged “{{ q }}” yet.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
