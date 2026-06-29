@@ -31,7 +31,7 @@ from ..products import get_set_for_gallery
 from ..proofing import comments_for_gallery, favorite_image_ids, list_favorites
 from ..sales import get_offer_for_gallery, offer_public_url
 from ..tenants import get_tenant, tenant_flags
-from ..vision import cull_summary
+from ..vision import cull_summary, gallery_analysis_map
 from .deps import db_conn, render, settings_of, storage_of
 
 router = APIRouter(prefix="/galleries")
@@ -116,6 +116,7 @@ def gallery_detail(request: Request, gallery_id: int):
         fulfillments = list_fulfillments(conn, auth.tenant["id"],
                                          order_ids=[o["id"] for o in orders])
         cull = cull_summary(conn, auth.tenant["id"], gallery_id)
+        analysis = gallery_analysis_map(conn, gallery_id)
     culled_ids = cull.get("culled_ids") or set()
     # How many flagged frames are still visible (the "apply" button only matters if > 0),
     # and how many are currently hidden (so the owner can see/undo the cull state).
@@ -129,7 +130,7 @@ def gallery_detail(request: Request, gallery_id: int):
                   storage=storage_of(request), flags=flags, project=project, album=album,
                   product_set=product_set, favorites=favorites, comments=comments, campaign=campaign,
                   orders=orders, fulfillments=fulfillments, cull=cull, cull_pending=cull_pending,
-                  hidden_count=hidden_count, delivery_link=delivery_link)
+                  hidden_count=hidden_count, analysis=analysis, delivery_link=delivery_link)
 
 
 @router.get("/{gallery_id}/selects.txt")

@@ -373,6 +373,33 @@ def alt_text_map(conn: sqlite3.Connection, gallery_id: int) -> dict[int, str]:
     return {r["image_id"]: r["alt_text"] for r in rows if (r["alt_text"] or "").strip()}
 
 
+def gallery_analysis_map(conn: sqlite3.Connection, gallery_id: int) -> dict[int, dict]:
+    """Per-image AI analysis for a gallery's owner view: ``{image_id: {keywords, shot_type,
+    keeper_score, keeper}}``. Lets the owner see what the AI saw on each frame (and the
+    template links each tag back to the catalog-wide Library search). Scoped by gallery_id,
+    which the owner route has already resolved for the tenant."""
+    rows = conn.execute(
+        "SELECT image_id, keywords_json, shot_type, keeper_score FROM image_analyses "
+        "WHERE gallery_id = ?", (gallery_id,)
+    ).fetchall()
+    out: dict[int, dict] = {}
+    for r in rows:
+        try:
+            kws = json.loads(r["keywords_json"])
+        except (TypeError, ValueError):
+            kws = []
+        if not isinstance(kws, list):
+            kws = []
+        score = r["keeper_score"]
+        out[r["image_id"]] = {
+            "keywords": [str(k) for k in kws][:6],
+            "shot_type": r["shot_type"] or "",
+            "keeper_score": score,
+            "keeper": (score or 0) >= KEEPER_THRESHOLD,
+        }
+    return out
+
+
 def cull_summary(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> dict:
     """Recompute the cull picture from persisted analyses, for the owner view —
     which frames are near-duplicates, likely blinks, or otherwise culled."""
