@@ -371,3 +371,31 @@ def test_public_book_unpublished_and_unknown_slug(client, app):
     assert pub.post(f"/studio/{slug}/book",
                     data={"booking_type_id": "1", "name": "X"}).status_code == 404
     assert pub.get("/studio/not-a-real-studio/book").status_code == 404
+
+
+def test_confirmed_slot_booking_offers_calendar_link(client, app):
+    """A visitor who picks a real availability slot gets a confirmed booking — the thanks
+    page should offer an 'add to calendar' .ics for it."""
+    from hestia.availability import add_window, available_slots
+    creds = onboard_studio(client, name="Cal Studio", email="bk_cal@example.com")
+    login_owner(client, creds)
+    slug = slugify("Cal Studio")
+    client.post("/settings/booking-types", data={"title": "Mini", "kind": "shoot",
+                                                 "duration_minutes": "60", "price": "0"})
+    _publish(client)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = _tid_of(conn, creds["email"])
+        bt_id = list_booking_types(conn, tid)[0]["id"]
+        for wd in range(7):                                           # open every day → a slot exists
+            add_window(conn, tenant_id=tid, weekday=wd, start_minute=540, end_minute=1020)
+        conn.commit()
+        groups = available_slots(conn, tid, duration_minutes=60)
+    finally:
+        conn.close()
+    slot = next(s["value"] for g in groups for s in g["slots"])       # a real, still-open slot
+    pub = CSRFClient(app)
+    r = pub.post(f"/studio/{slug}/book", data={"booking_type_id": str(bt_id),
+                 "name": "Cal Visitor", "email": "cal@v.com", "slot": slot})
+    assert r.status_code == 200 and "You're booked!" in r.text
+    assert "Add to calendar" in r.text and "/calendar.ics" in r.text  # the .ics link is offered

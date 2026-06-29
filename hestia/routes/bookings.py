@@ -35,7 +35,7 @@ from ..dashboard import owner_digest_recipient
 from ..email import notify
 from ..invoices import money
 from ..ratelimit import enforce
-from ..scheduler import APPOINTMENT_KINDS, KIND_LABELS
+from ..scheduler import APPOINTMENT_KINDS, KIND_LABELS, appointment_ics_url
 from ..studio import get_profile
 from ..tenants import get_tenant, get_tenant_by_slug, set_booking_rules
 from .deps import db_conn, render, settings_of
@@ -268,5 +268,8 @@ def public_book_submit(request: Request, slug: str, booking_type_id: str = Form(
     # A deposit is due → send the visitor straight to pay it; otherwise a simple thanks.
     if invoice:
         return RedirectResponse(f"/pay/{invoice['token']}", status_code=303)
+    # A confirmed slot has a real time → offer an "add to calendar" .ics for it.
+    calendar_url = (appointment_ics_url(settings, result["appointment"]["token"])
+                    if confirm and result["appointment"].get("token") else None)
     return render(request, "studio/book_thanks.html", auth=None, tenant=tenant,
-                  booking_title=chosen["title"], confirmed=confirm)
+                  booking_title=chosen["title"], confirmed=confirm, calendar_url=calendar_url)
