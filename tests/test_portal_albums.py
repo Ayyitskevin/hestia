@@ -84,3 +84,28 @@ def test_portal_page_renders_album(client, conn, storage, settings):
     conn.commit()
     page = client.get(f"/portal/{ptoken}").text
     assert "Your albums" in page and f"/a/{tok}" in page       # album shows even if gallery unpublished
+
+
+def test_review_album_appears_in_attention(client, conn, storage, settings):
+    t = create_tenant(conn, name="Attention", shoot_type="wedding")
+    conn.commit()
+    c, g, album = _client_gallery_album(conn, storage, settings, t)
+    tok = enable_album_review(conn, t["id"], album["id"])
+    ptoken = enable_portal(conn, t["id"], c["id"])
+    conn.commit()
+    page = client.get(f"/portal/{ptoken}").text
+    assert "Needs your attention" in page                      # an album awaiting review is a to-do
+    assert "Review your album" in page and f"/a/{tok}" in page
+
+
+def test_approved_album_not_a_todo(client, conn, storage, settings):
+    t = create_tenant(conn, name="Done", shoot_type="wedding")
+    conn.commit()
+    c, g, album = _client_gallery_album(conn, storage, settings, t)
+    tok = enable_album_review(conn, t["id"], album["id"])
+    approve_album(conn, tok)
+    ptoken = enable_portal(conn, t["id"], c["id"])
+    conn.commit()
+    page = client.get(f"/portal/{ptoken}").text
+    assert "Review your album" not in page                     # approved → no longer a to-do...
+    assert "Your albums" in page                               # ...but still listed (as approved)
