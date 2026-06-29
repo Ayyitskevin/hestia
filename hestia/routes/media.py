@@ -23,9 +23,12 @@ def serve_media(request: Request, key: str):
         ).fetchone()
         if not img:
             return Response(status_code=404)
-        # Allowed if the gallery is published (public delivery) or the caller owns it.
-        allowed = img["gallery_status"] == "published"
+        # Fast public path: a published, non-hidden frame is served to anyone.
+        allowed = img["gallery_status"] == "published" and not img["hidden"]
         if not allowed:
+            # Otherwise only the owner may view it — an unpublished gallery, or a hidden
+            # (culled) frame the owner is still managing. A hidden frame must NOT be served
+            # to a client even though its /media/ key is predictable, or culling leaks.
             auth = context_from_session(conn, request)
             allowed = bool(auth and auth.tenant and auth.tenant["id"] == img["tenant_id"])
         if not allowed:

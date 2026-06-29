@@ -45,7 +45,7 @@ def delivery_page(request: Request, token: str):
             tenant = get_tenant(conn, gallery["tenant_id"])
             return render(request, "delivery_expired.html", auth=None, gallery=gallery,
                           tenant=tenant, status_code=410)
-        images = list_images(conn, gallery["id"])
+        images = list_images(conn, gallery["id"], include_hidden=False)
         record_gallery_view(conn, gallery["id"])          # the client opened their gallery
         favorites = favorite_image_ids(conn, gallery["id"])   # frames they hearted in proofing
     total_bytes = sum(img.get("bytes") or 0 for img in images)
@@ -63,7 +63,7 @@ def delivery_zip(request: Request, token: str):
             return Response(status_code=404)
         if delivery_expired(conn, gallery):
             return Response(status_code=410)              # link past its expiry date
-        images = list_images(conn, gallery["id"])
+        images = list_images(conn, gallery["id"], include_hidden=False)
         if images:
             record_gallery_download(conn, gallery["id"])  # whole-set zip download
     if not images:
@@ -88,7 +88,8 @@ def delivery_favorites_zip(request: Request, token: str):
         if delivery_expired(conn, gallery):
             return Response(status_code=410)              # link past its expiry date
         favs = favorite_image_ids(conn, gallery["id"])
-        images = [im for im in list_images(conn, gallery["id"]) if im["id"] in favs]
+        images = [im for im in list_images(conn, gallery["id"], include_hidden=False)
+                  if im["id"] in favs]
         if images:
             record_gallery_download(conn, gallery["id"])  # favorites zip download
     if not images:
@@ -109,9 +110,10 @@ def delivery_file(request: Request, token: str, image_id: int):
             return Response(status_code=404)
         if delivery_expired(conn, gallery):
             return Response(status_code=410)              # link past its expiry date
-        # scope the image to THIS gallery — a token can't reach another gallery's files
+        # scope the image to THIS gallery — a token can't reach another gallery's files.
+        # hidden = 0: a culled frame is excluded from delivery, so it can't be pulled by id either.
         img = conn.execute(
-            "SELECT * FROM images WHERE id = ? AND gallery_id = ?",
+            "SELECT * FROM images WHERE id = ? AND gallery_id = ? AND hidden = 0",
             (image_id, gallery["id"]),
         ).fetchone()
         if not img:
@@ -139,7 +141,7 @@ def delivery_view(request: Request, token: str, image_id: int):
         if delivery_expired(conn, gallery):
             return Response(status_code=410)              # link past its expiry date
         img = conn.execute(
-            "SELECT * FROM images WHERE id = ? AND gallery_id = ?",
+            "SELECT * FROM images WHERE id = ? AND gallery_id = ? AND hidden = 0",
             (image_id, gallery["id"]),
         ).fetchone()
         if not img:

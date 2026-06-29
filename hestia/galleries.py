@@ -205,18 +205,48 @@ def add_image(
     return dict(row)
 
 
-def list_images(conn: sqlite3.Connection, gallery_id: int) -> list[dict]:
-    rows = conn.execute(
-        "SELECT * FROM images WHERE gallery_id = ? ORDER BY position, id", (gallery_id,)
-    ).fetchall()
-    return [dict(r) for r in rows]
+def list_images(conn: sqlite3.Connection, gallery_id: int, *,
+                include_hidden: bool = True) -> list[dict]:
+    """Images in a gallery. ``include_hidden`` defaults True (the owner sees every frame,
+    culled ones marked); the client gallery and delivery pass False to drop culled frames."""
+    sql = "SELECT * FROM images WHERE gallery_id = ?"
+    if not include_hidden:
+        sql += " AND hidden = 0"
+    sql += " ORDER BY position, id"
+    return [dict(r) for r in conn.execute(sql, (gallery_id,)).fetchall()]
 
 
-def image_count(conn: sqlite3.Connection, gallery_id: int) -> int:
-    row = conn.execute(
-        "SELECT COUNT(*) AS n FROM images WHERE gallery_id = ?", (gallery_id,)
-    ).fetchone()
+def image_count(conn: sqlite3.Connection, gallery_id: int, *, include_hidden: bool = True) -> int:
+    sql = "SELECT COUNT(*) AS n FROM images WHERE gallery_id = ?"
+    if not include_hidden:
+        sql += " AND hidden = 0"
+    row = conn.execute(sql, (gallery_id,)).fetchone()
     return row["n"] if row else 0
+
+
+def set_image_hidden(conn: sqlite3.Connection, tenant_id: str, image_id: int, hidden: bool) -> None:
+    """Hide (cull) or restore a single image — tenant-scoped, reversible."""
+    conn.execute(
+        "UPDATE images SET hidden = ? WHERE id = ? AND tenant_id = ?",
+        (1 if hidden else 0, image_id, tenant_id),
+    )
+
+
+def apply_cull(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> int:
+    """Hide every frame the vision pass currently flags (near-duplicates + likely blinks).
+    Returns how many were newly hidden. Reversible per-image; re-running is harmless."""
+    from .vision import cull_summary
+    cull = cull_summary(conn, tenant_id, gallery_id)
+    ids = sorted(set(cull.get("duplicate_ids") or set()) | set(cull.get("blink_ids") or set()))
+    if not ids:
+        return 0
+    placeholders = ",".join("?" * len(ids))
+    cur = conn.execute(
+        f"UPDATE images SET hidden = 1 WHERE tenant_id = ? AND gallery_id = ? "
+        f"AND hidden = 0 AND id IN ({placeholders})",
+        (tenant_id, gallery_id, *ids),
+    )
+    return cur.rowcount
 
 
 def get_image(conn: sqlite3.Connection, tenant_id: str, image_id: int) -> dict | None:

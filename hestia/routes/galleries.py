@@ -16,11 +16,13 @@ from ..email import notify
 from ..fulfillment import list_fulfillments
 from ..galleries import (
     add_image,
+    apply_cull,
     create_gallery,
     get_gallery,
     list_galleries,
     list_images,
     publish_gallery,
+    set_image_hidden,
 )
 from ..jobs import drain, enqueue
 from ..orders import list_orders
@@ -114,6 +116,11 @@ def gallery_detail(request: Request, gallery_id: int):
         fulfillments = list_fulfillments(conn, auth.tenant["id"],
                                          order_ids=[o["id"] for o in orders])
         cull = cull_summary(conn, auth.tenant["id"], gallery_id)
+    culled_ids = cull.get("culled_ids") or set()
+    # How many flagged frames are still visible (the "apply" button only matters if > 0),
+    # and how many are currently hidden (so the owner can see/undo the cull state).
+    cull_pending = sum(1 for im in images if im["id"] in culled_ids and not im["hidden"])
+    hidden_count = sum(1 for im in images if im["hidden"])
     settings = settings_of(request)
     offer_url = offer_public_url(settings, auth.tenant["slug"], offer["token"]) if offer else None
     delivery_link = delivery_url(settings, gallery["delivery_token"]) if gallery.get("delivery_token") else None
@@ -121,7 +128,8 @@ def gallery_detail(request: Request, gallery_id: int):
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
                   storage=storage_of(request), flags=flags, project=project, album=album,
                   product_set=product_set, favorites=favorites, comments=comments, campaign=campaign,
-                  orders=orders, fulfillments=fulfillments, cull=cull, delivery_link=delivery_link)
+                  orders=orders, fulfillments=fulfillments, cull=cull, cull_pending=cull_pending,
+                  hidden_count=hidden_count, delivery_link=delivery_link)
 
 
 @router.get("/{gallery_id}/selects.txt")
@@ -290,3 +298,46 @@ def gallery_process(request: Request, gallery_id: int, background_tasks: Backgro
         enqueue(conn, kind="pipeline.run", payload={"run_id": run["id"]}, tenant_id=tenant["id"])
     _schedule(request, background_tasks)
     return RedirectResponse(f"/pipeline/{run['id']}", status_code=303)
+
+
+@router.post("/{gallery_id}/cull/apply")
+def gallery_cull_apply(request: Request, gallery_id: int):
+    """Apply the vision pass's cull suggestions: hide every flagged near-duplicate and
+    likely blink in one click. Reversible (each frame can be restored) — nothing is deleted."""
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if not get_gallery(conn, auth.tenant["id"], gallery_id):
+            return RedirectResponse("/galleries", status_code=303)
+        hidden = apply_cull(conn, auth.tenant["id"], gallery_id)
+        if hidden:
+            audit(conn, actor="owner", action="gallery.cull_applied",
+                  tenant_id=auth.tenant["id"], detail=f"gallery #{gallery_id} · {hidden} hidden")
+    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
+
+
+@router.post("/{gallery_id}/images/{image_id}/hide")
+def gallery_image_hide(request: Request, gallery_id: int, image_id: int):
+    """Hide (cull) a single frame from the client gallery and delivery — reversible."""
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if not get_gallery(conn, auth.tenant["id"], gallery_id):
+            return RedirectResponse("/galleries", status_code=303)
+        set_image_hidden(conn, auth.tenant["id"], image_id, True)
+    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
+
+
+@router.post("/{gallery_id}/images/{image_id}/unhide")
+def gallery_image_unhide(request: Request, gallery_id: int, image_id: int):
+    """Restore a previously hidden frame back into the client gallery and delivery."""
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if not get_gallery(conn, auth.tenant["id"], gallery_id):
+            return RedirectResponse("/galleries", status_code=303)
+        set_image_hidden(conn, auth.tenant["id"], image_id, False)
+    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
