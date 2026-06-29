@@ -333,6 +333,18 @@ def search_images_by_keyword(conn: sqlite3.Connection, tenant_id: str, keyword: 
     return [dict(r) for r in rows]
 
 
+def alt_text_map(conn: sqlite3.Connection, gallery_id: int) -> dict[int, str]:
+    """Per-image AI alt text for a gallery: ``{image_id: alt_text}`` for the frames the
+    vision pass captioned. Used on the client gallery and delivery so every delivered photo
+    carries a real, descriptive ``alt`` (accessibility + SEO) instead of a bare filename —
+    callers fall back to the filename for any frame without a caption. Scoped by gallery_id,
+    which the caller has already resolved for the tenant/token (like ``list_images``)."""
+    rows = conn.execute(
+        "SELECT image_id, alt_text FROM image_analyses WHERE gallery_id = ?", (gallery_id,)
+    ).fetchall()
+    return {r["image_id"]: r["alt_text"] for r in rows if (r["alt_text"] or "").strip()}
+
+
 def cull_summary(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> dict:
     """Recompute the cull picture from persisted analyses, for the owner view —
     which frames are near-duplicates, likely blinks, or otherwise culled."""

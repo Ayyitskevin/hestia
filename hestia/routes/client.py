@@ -28,6 +28,7 @@ from ..ratelimit import enforce
 from ..sales import favorites_package, get_offer_by_token
 from ..storage import Storage
 from ..tenants import get_tenant_by_slug
+from ..vision import alt_text_map
 from .deps import db_conn, render, settings_of, storage_of
 
 router = APIRouter()
@@ -106,6 +107,7 @@ def client_gallery(request: Request, slug: str, gallery_slug: str):
     """Client gallery delivery. PIN-gated when the gallery has a PIN."""
     favorites: set[int] = set()
     comments: dict[int, list] = {}
+    alts: dict[int, str] = {}
     with db_conn(request) as conn:
         tenant, gallery, unlocked = _resolve_unlocked(conn, request, slug, gallery_slug)
         if not gallery:
@@ -121,9 +123,10 @@ def client_gallery(request: Request, slug: str, gallery_slug: str):
                 offer = offer_public_url(settings_of(request), slug, o["token"])
             favorites = favorite_image_ids(conn, gallery["id"])
             comments = comments_by_image(conn, gallery["id"])
+            alts = alt_text_map(conn, gallery["id"])      # AI captions for accessible/SEO alt text
     return render(request, "client_gallery.html", auth=None, tenant=tenant, gallery=gallery,
                   images=images, unlocked=unlocked, storage=storage_of(request), offer_url=offer,
-                  favorites=favorites, comments=comments)
+                  favorites=favorites, comments=comments, alts=alts)
 
 
 @router.post("/g/{slug}/{gallery_slug}/favorite/{image_id}")
