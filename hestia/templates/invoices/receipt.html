@@ -51,7 +51,13 @@
         <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">{{ 'Subtotal after discount' if invoice.discount_cents else 'Subtotal' }}</span><span>{{ invoice.amount_display }}</span></p>
         <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">Tax</span><span>{{ invoice.tax_display }}</span></p>
         {% endif %}
+        {% if invoice.gift_credit_cents %}
+        <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">Total</span><span>{{ invoice.total_display }}</span></p>
+        <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">Gift card</span><span>−{{ invoice.gift_credit_display }}</span></p>
+        <p style="display:flex; justify-content:space-between; margin:4px 0; font-size:1.1rem"><strong>Paid by card</strong><strong>{{ invoice.amount_due_display }}</strong></p>
+        {% else %}
         <p style="display:flex; justify-content:space-between; margin:4px 0; font-size:1.1rem"><strong>Paid</strong><strong>{{ invoice.total_display }}</strong></p>
+        {% endif %}
 
         <div class="alert ok" style="margin-top:6px">✓ Payment received — thank you!</div>
         <p class="muted no-print" style="font-size:.85rem; margin:0">Use your browser's Print to save this

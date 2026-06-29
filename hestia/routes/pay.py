@@ -6,6 +6,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from ..discounts import DiscountError, apply_code_to_invoice
+from ..giftcards import GiftCardError, apply_card_to_invoice
 from ..invoices import get_invoice_by_token, invoice_items, mark_paid
 from ..orders import fulfill_for_invoice_token
 from ..payments import PaymentError, build_payments
@@ -70,6 +71,30 @@ def pay_apply_discount(request: Request, token: str, code: str = Form("")):
                   items=items, error=result.get("error"), status_code=400)
 
 
+@router.post("/pay/{token}/giftcard")
+def pay_apply_giftcard(request: Request, token: str, code: str = Form("")):
+    """Client redeems a gift card against their invoice before paying. Same shape as the
+    discount apply: write-locked so concurrent redemptions serialize; on success the page
+    reloads with the reduced amount due, on failure it re-renders with the reason."""
+    enforce(request, "checkout")
+    try:
+        with db_conn(request) as conn:
+            conn.execute("BEGIN IMMEDIATE")          # serialize: no over-redeem / double-apply
+            result = apply_card_to_invoice(conn, invoice_token=token, code=code)
+    except GiftCardError:                            # anomaly after the draw → it rolled back
+        result = {"ok": False, "error": "Sorry — we couldn't apply that gift card. Please try again."}
+    if result.get("ok"):
+        return RedirectResponse(f"/pay/{token}", status_code=303)
+    with db_conn(request) as conn:
+        invoice = get_invoice_by_token(conn, token)
+        if not invoice or invoice["status"] == "void":
+            return render(request, "offer_missing.html", auth=None, status_code=404)
+        tenant = get_tenant(conn, invoice["tenant_id"])
+        items = invoice_items(conn, invoice["tenant_id"], invoice["id"])
+    return render(request, "invoices/pay.html", auth=None, invoice=invoice, tenant=tenant,
+                  items=items, error=result.get("error"), status_code=400)
+
+
 @router.post("/pay/{token}/checkout")
 def pay_checkout(request: Request, token: str):
     enforce(request, "checkout")
@@ -80,10 +105,11 @@ def pay_checkout(request: Request, token: str):
             return render(request, "offer_missing.html", auth=None, status_code=404)
         if invoice["status"] == "paid":
             return RedirectResponse(f"/pay/{token}", status_code=303)
-        # A fully-discounted (or otherwise $0) invoice has nothing to charge — settle it
-        # directly, since payment providers reject a zero / below-minimum amount.
-        if int(invoice.get("total_cents") or 0) <= 0:
-            mark_paid(conn, token=token, provider="comp", ref="zero_total")
+        # Nothing left to charge (a gift card or full discount covered it, or it's a $0
+        # invoice) — settle directly, since providers reject a zero / below-minimum amount.
+        if int(invoice.get("amount_due_cents") or 0) <= 0:
+            settled_by = "giftcard" if int(invoice.get("gift_credit_cents") or 0) > 0 else "comp"
+            mark_paid(conn, token=token, provider=settled_by, ref="zero_due")
             fulfill_for_invoice_token(conn, token)
             return RedirectResponse(f"/pay/{token}", status_code=303)
         provider = build_payments(settings)

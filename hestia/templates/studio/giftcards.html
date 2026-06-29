@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Gift cards — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Gift cards</h1>
+</div>
+
+<div class="card stack">
+  <h3>Issue a gift card</h3>
+  <p class="muted" style="font-size:.9rem; margin:0">Stored value a client redeems at checkout —
+    great for holiday sales and referrals. Share the code with the recipient; they enter it on any
+    invoice's payment page to draw it down (partial use is fine — the balance carries over).</p>
+  <form method="post" action="/settings/giftcards">
+    {% include "_csrf.html" %}
+    <div class="inline-grid-form">
+      <div><label for="amount">Amount ({{ settings.currency|upper }})</label>
+        <input type="text" id="amount" name="amount" placeholder="100.00" required></div>
+      <div><label for="code">Code <span class="muted">(blank = auto-generate)</span></label>
+        <input type="text" id="code" name="code" placeholder="auto"></div>
+      <div><label for="expires_on">Expires <span class="muted">(optional)</span></label>
+        <input type="date" id="expires_on" name="expires_on"></div>
+    </div>
+    <label for="note">Note <span class="muted">(optional — e.g. recipient)</span></label>
+    <input type="text" id="note" name="note" placeholder="For Dana — birthday gift">
+    <div class="form-actions"><button class="btn" type="submit">Issue card</button></div>
+  </form>
+</div>
+
+{% set active = cards|selectattr('active')|list %}
+{% set disabled = cards|rejectattr('active')|list %}
+
+{% if active %}
+<div class="card" style="margin-top:18px">
+  <table>
+    <thead><tr><th>Code</th><th>Balance</th><th>Issued</th><th>Expires</th><th>Note</th><th></th></tr></thead>
+    <tbody>
+      {% for c in active %}
+      <tr>
+        <td><strong>{{ c.code }}</strong></td>
+        <td>{{ c.balance_display }}</td>
+        <td class="muted">{{ c.initial_display }}</td>
+        <td class="muted">{{ c.expires_on or '—' }}</td>
+        <td class="muted">{{ c.note or '' }}</td>
+        <td style="text-align:right">
+          <form method="post" action="/settings/giftcards/{{ c.id }}/toggle" style="display:inline">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit">Disable</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted" style="margin-top:18px">No gift cards yet — issue one above and share the code.</p>
+{% endif %}
+
+{% if disabled %}
+<div class="card" style="margin-top:18px">
+  <h3 class="muted">Disabled</h3>
+  <table>
+    <tbody>
+      {% for c in disabled %}
+      <tr>
+        <td><strong>{{ c.code }}</strong></td>
+        <td class="muted">{{ c.balance_display }} left</td>
+        <td style="text-align:right">
+          <form method="post" action="/settings/giftcards/{{ c.id }}/toggle" style="display:inline">
+            {% include "_csrf.html" %}
+            <input type="hidden" name="active" value="1">
+            <button class="btn ghost" type="submit">Enable</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

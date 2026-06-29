@@ -106,7 +106,8 @@ def apply_code_to_invoice(conn: sqlite3.Connection, *, invoice_token: str, code:
         return {"ok": False, "error": "Enter a discount code."}
     inv = conn.execute(
         "SELECT id, tenant_id, amount_cents, tax_cents, status, "
-        "       COALESCE(discount_code, '') AS dc FROM invoices WHERE token = ?",
+        "       COALESCE(discount_code, '') AS dc, COALESCE(gift_credit_cents, 0) AS gift "
+        "FROM invoices WHERE token = ?",
         (invoice_token,),
     ).fetchone()
     if not inv:
@@ -115,6 +116,10 @@ def apply_code_to_invoice(conn: sqlite3.Connection, *, invoice_token: str, code:
         return {"ok": False, "error": "This invoice can no longer take a discount."}
     if inv["dc"]:
         return {"ok": False, "error": "A discount has already been applied."}
+    # A discount reduces the (taxable) total; applying one after a gift card was drawn would
+    # change what the card already covered, so lock it out — the card came first.
+    if int(inv["gift"] or 0) > 0:
+        return {"ok": False, "error": "A gift card is already applied — it can't be combined with a code."}
     today = datetime.date.today().isoformat()
     row = conn.execute(
         "SELECT id, kind, value, active, max_uses, used_count, expires_on "
