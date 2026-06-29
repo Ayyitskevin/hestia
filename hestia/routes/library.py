@@ -18,10 +18,11 @@ router = APIRouter()
 
 
 @router.get("/library")
-def library(request: Request, q: str = "", shot: str = "", keepers: str = ""):
+def library(request: Request, q: str = "", shot: str = "", keepers: str = "", clean: str = ""):
     query = (q or "").strip()
     shot_type = (shot or "").strip()
     keepers_only = bool((keepers or "").strip())
+    clean_only = bool((clean or "").strip())
     with db_conn(request) as conn:
         auth = context_from_session(conn, request)
         if not auth or not auth.tenant:
@@ -29,8 +30,8 @@ def library(request: Request, q: str = "", shot: str = "", keepers: str = ""):
         facets = tenant_keyword_facets(conn, auth.tenant["id"])
         shots = tenant_shot_type_facets(conn, auth.tenant["id"])
         results = (search_images(conn, auth.tenant["id"], keyword=query, shot_type=shot_type,
-                                 keepers_only=keepers_only)
-                   if (query or shot_type or keepers_only) else [])
+                                 keepers_only=keepers_only, clean_only=clean_only)
+                   if (query or shot_type or keepers_only or clean_only) else [])
     return render(request, "library.html", auth=auth, facets=facets, shots=shots,
                   results=results, q=query, shot=shot_type, keepers=keepers_only,
-                  storage=storage_of(request))
+                  clean=clean_only, storage=storage_of(request))

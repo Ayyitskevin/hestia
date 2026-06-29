@@ -335,16 +335,18 @@ def tenant_keyword_facets(conn: sqlite3.Connection, tenant_id: str, *, limit: in
 
 
 def search_images(conn: sqlite3.Connection, tenant_id: str, *, keyword: str = "",
-                  shot_type: str = "", keepers_only: bool = False, limit: int = 120) -> list[dict]:
+                  shot_type: str = "", keepers_only: bool = False, clean_only: bool = False,
+                  limit: int = 120) -> list[dict]:
     """Analyzed frames across all the studio's galleries, filtered by AI keyword and/or shot
-    type and/or "keepers only" (technically strong frames) — the studio's catalog, searchable
-    by what's in frame and how good it is, an axis a Lightroom-export-to-gallery workflow can't
-    offer. Tenant-scoped; needs at least one filter (returns [] otherwise). ``keepers_only``
-    also ranks by keeper score (best first); otherwise results are newest gallery first. Each
-    row carries its gallery context, alt text, shot type."""
+    type and/or "keepers only" (strong keeper score) and/or "clean only" (no soft/dark/bright
+    technical flag) — the studio's catalog, searchable by what's in frame and how good it is,
+    an axis a Lightroom-export-to-gallery workflow can't offer. Tenant-scoped; needs at least
+    one filter (returns [] otherwise). ``keepers_only`` also ranks by keeper score (best
+    first); otherwise results are newest gallery first. Each row carries its gallery context,
+    alt text, shot type."""
     kw = _norm_keyword(keyword)
     shot = _norm_keyword(shot_type)
-    if not kw and not shot and not keepers_only:
+    if not kw and not shot and not keepers_only and not clean_only:
         return []
     where = ["a.tenant_id = ?"]
     params: list = [tenant_id]
@@ -361,6 +363,13 @@ def search_images(conn: sqlite3.Connection, tenant_id: str, *, keyword: str = ""
         # NULL keeper_score is excluded by the >= comparison, which is what we want.
         where.append("a.keeper_score >= ?")
         params.append(KEEPER_THRESHOLD)
+    if clean_only:
+        # Exclude frames the sub-scores flag (soft / dark / bright). A NULL sub-score isn't
+        # known to be a problem, so it counts as clean — matching _quality_flags.
+        where.append("(a.sharpness IS NULL OR a.sharpness >= ?)")
+        params.append(SHARP_THRESHOLD)
+        where.append("(a.exposure IS NULL OR (a.exposure >= ? AND a.exposure <= ?))")
+        params.extend([DARK_THRESHOLD, BRIGHT_THRESHOLD])
     order = ("a.keeper_score DESC, g.created_at DESC, i.position, i.id" if keepers_only
              else "g.created_at DESC, i.position, i.id")
     params.append(limit)
