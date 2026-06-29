@@ -47,7 +47,7 @@ def _hero_urls(conn, storage: Storage, tenant_id: str, image_ids: list[int]) -> 
     out = []
     for iid in image_ids:
         img = get_image(conn, tenant_id, iid)
-        if img:
+        if img and not img["hidden"]:        # a culled frame never resurfaces on the public offer
             out.append({"id": img["id"], "url": storage.public_path(img["storage_key"]),
                         "filename": img["filename"]})
     return out
@@ -65,8 +65,10 @@ def public_offer(request: Request, slug: str, token: str):
             return render(request, "offer_missing.html", auth=None, status_code=404)
         storage = storage_of(request)
         heroes = _hero_urls(conn, storage, tenant["id"], offer["hero_images"])
-        # Live: auto-curate a package from the photos the client hearted.
-        favs = list_favorites(conn, tenant["id"], offer["gallery_id"])
+        # Live: auto-curate a package from the photos the client hearted. Drop any the
+        # owner has since culled (hidden) — they're gone from the gallery, so they can't
+        # reappear in the offer's thumbnails or its favorites-package count.
+        favs = [i for i in list_favorites(conn, tenant["id"], offer["gallery_id"]) if not i["hidden"]]
         fav_thumbs = [{"url": storage.public_path(i["storage_key"]), "filename": i["filename"]}
                       for i in favs]
         fav_pkg = favorites_package(len(favs))
@@ -108,7 +110,7 @@ def client_gallery(request: Request, slug: str, gallery_slug: str):
         tenant, gallery, unlocked = _resolve_unlocked(conn, request, slug, gallery_slug)
         if not gallery:
             return render(request, "offer_missing.html", auth=None, status_code=404)
-        images = list_images(conn, gallery["id"]) if unlocked else []
+        images = list_images(conn, gallery["id"], include_hidden=False) if unlocked else []
         offer = None
         if unlocked:
             record_gallery_view(conn, gallery["id"])      # client opened their proofing gallery
