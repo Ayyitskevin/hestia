@@ -277,6 +277,62 @@ def analyze_gallery(
     }
 
 
+def _norm_keyword(raw: str) -> str:
+    """Normalize a keyword to its stored token form — lowercase, trimmed. The mock palette
+    and the Grok prompt both emit lowercase tokens, so search matches case-insensitively."""
+    return (raw or "").strip().lower()
+
+
+def tenant_keyword_facets(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 40) -> list[dict]:
+    """The studio's keyword cloud across every analyzed frame: distinct keywords with how
+    many frames carry each, most common first. This is the AI's understanding of the whole
+    catalog surfaced as a browse entry point. Tenant-scoped."""
+    rows = conn.execute(
+        "SELECT keywords_json FROM image_analyses WHERE tenant_id = ?", (tenant_id,)
+    ).fetchall()
+    counts: dict[str, int] = {}
+    for r in rows:
+        try:
+            kws = json.loads(r["keywords_json"])
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(kws, list):
+            continue
+        for kw in kws:
+            k = _norm_keyword(str(kw))
+            if k:
+                counts[k] = counts.get(k, 0) + 1
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return [{"keyword": k, "count": n} for k, n in ranked[:limit]]
+
+
+def search_images_by_keyword(conn: sqlite3.Connection, tenant_id: str, keyword: str, *,
+                             limit: int = 120) -> list[dict]:
+    """Every analyzed frame whose AI keywords include ``keyword``, across all the studio's
+    galleries (newest gallery first). Tenant-scoped; returns each image with its gallery
+    context, alt text and shot type. The studio's catalog, searchable by what's in frame —
+    something a Lightroom-export-to-gallery workflow can't do."""
+    kw = _norm_keyword(keyword)
+    if not kw:
+        return []
+    # Match the JSON-quoted token (``"candid"``) so "close" can't match "close-up", and
+    # escape LIKE metacharacters in the user input so % and _ are treated literally.
+    safe = kw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    pattern = f'%"{safe}"%'
+    rows = conn.execute(
+        "SELECT i.id, i.filename, i.storage_key, i.gallery_id, i.hidden, "
+        "       g.title AS gallery_title, g.slug AS gallery_slug, "
+        "       a.alt_text, a.shot_type, a.keeper_score "
+        "FROM image_analyses a "
+        "JOIN images i ON i.id = a.image_id "
+        "JOIN galleries g ON g.id = a.gallery_id "
+        "WHERE a.tenant_id = ? AND a.keywords_json LIKE ? ESCAPE '\\' "
+        "ORDER BY g.created_at DESC, i.position, i.id LIMIT ?",
+        (tenant_id, pattern, limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def cull_summary(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> dict:
     """Recompute the cull picture from persisted analyses, for the owner view —
     which frames are near-duplicates, likely blinks, or otherwise culled."""
