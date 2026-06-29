@@ -202,15 +202,21 @@
   {% if hidden_count %}
   <p class="muted">{{ hidden_count }} frame{{ '' if hidden_count == 1 else 's' }} hidden — excluded from the client gallery &amp; delivery. Restore any below.</p>
   {% endif %}
+  {% if hero_ids and hero_ids[0] != cover_id %}
+  <form method="post" action="/galleries/{{ gallery.id }}/cover/{{ hero_ids[0] }}" style="margin:8px 0">
+    {% include "_csrf.html" %}
+    <button type="submit" class="btn secondary" title="The AI's highest-scored cover candidate">⭐ Use the AI's top pick as the cover</button>
+  </form>
+  {% endif %}
   <div class="thumb-grid">
     {% for img in images %}
-      <figure class="thumb{{ ' is-fav' if img.id in favorites else '' }}{{ ' is-culled' if cull and img.id in cull.culled_ids else '' }}{{ ' is-hidden' if img.hidden else '' }}">
+      <figure class="thumb{{ ' is-fav' if img.id in favorites else '' }}{{ ' is-culled' if cull and img.id in cull.culled_ids else '' }}{{ ' is-hidden' if img.hidden else '' }}{{ ' is-cover' if img.id == cover_id else '' }}">
         <img src="{{ storage.public_path(img.storage_key) }}" alt="{{ img.filename }}" loading="lazy">
         {% if img.id in favorites %}<span class="fav-badge" title="Client favorite">♥</span>{% endif %}
         {% if img.hidden %}<span class="cull-badge" title="Hidden from client">🚫</span>
         {% elif cull and img.id in cull.blink_ids %}<span class="cull-badge" title="Likely blink">👁</span>
         {% elif cull and img.id in cull.duplicate_ids %}<span class="cull-badge" title="Duplicate frame">⧉</span>{% endif %}
-        <figcaption>{{ img.filename }}</figcaption>
+        <figcaption>{% if img.id == cover_id %}<span title="Gallery cover">★</span> {% endif %}{{ img.filename }}</figcaption>
         {% set a = analysis.get(img.id) %}
         {% if a %}
         <div class="thumb-meta" title="What the AI saw">
@@ -228,6 +234,12 @@
         <form method="post" action="/galleries/{{ gallery.id }}/images/{{ img.id }}/hide">
           {% include "_csrf.html" %}
           <button type="submit" class="thumb-action">Hide</button>
+        </form>
+        {% endif %}
+        {% if not img.hidden and img.id != cover_id %}
+        <form method="post" action="/galleries/{{ gallery.id }}/cover/{{ img.id }}">
+          {% include "_csrf.html" %}
+          <button type="submit" class="thumb-action">{% if img.id in hero_ids %}⭐ {% endif %}Set as cover</button>
         </form>
         {% endif %}
       </figure>

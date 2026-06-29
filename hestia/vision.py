@@ -433,3 +433,18 @@ def cull_summary(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> d
         "blink_ids": blink_ids,
         "culled_ids": duplicate_ids | blink_ids,
     }
+
+
+def hero_suggestions(conn: sqlite3.Connection, tenant_id: str, gallery_id: int, *,
+                     limit: int = 4) -> list[int]:
+    """The AI's best cover candidates for a gallery: highest ``hero_potential`` among frames
+    that aren't culled (near-dup/blink) or hidden, best first. Tenant-scoped. Lets the owner
+    one-click set the strongest frame as the gallery cover."""
+    culled = cull_summary(conn, tenant_id, gallery_id).get("culled_ids") or set()
+    rows = conn.execute(
+        "SELECT a.image_id FROM image_analyses a JOIN images i ON i.id = a.image_id "
+        "WHERE a.tenant_id = ? AND a.gallery_id = ? AND i.hidden = 0 "
+        "ORDER BY a.hero_potential DESC, a.image_id",
+        (tenant_id, gallery_id),
+    ).fetchall()
+    return [r["image_id"] for r in rows if r["image_id"] not in culled][:limit]
