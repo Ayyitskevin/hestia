@@ -33,6 +33,7 @@ TRIGGERS: dict[str, str] = {
     "album.approved": "Client approved album",
     "album.changes_requested": "Client requested album changes",
     "appointment.confirmed": "Appointment confirmed",
+    "appointment.canceled": "Appointment canceled",
 }
 
 ACTIONS: dict[str, str] = {
@@ -162,6 +163,20 @@ RETENTION_RECIPES = {
         "subject": "Welcome to {studio_name}, {client_name}!",
         "body": ("Hi {client_name},\n\nWe're so excited for {project_name}. Here's what happens "
                  "next, and how to reach us any time.\n\nWarmly,\n{studio_name}"),
+    },
+    "prep": {
+        "name": "Session prep guide", "trigger": "appointment.confirmed", "delay_days": 0,
+        "subject": "Getting ready for {title}, {client_name}",
+        "body": ("Hi {client_name},\n\nYour {title} with {studio_name} is confirmed — we can't "
+                 "wait! Here are a few tips to help you prepare and make the most of our time "
+                 "together. Any questions before then? Just reply.\n\nWarmly,\n{studio_name}"),
+    },
+    "winback": {
+        "name": "Win-back after a cancellation", "trigger": "appointment.canceled", "delay_days": 2,
+        "subject": "We'd still love to work with you, {client_name}",
+        "body": ("Hi {client_name},\n\nWe're sorry {title} didn't work out this time. If your "
+                 "plans change, we'd love to find a new time that suits you — just reply and "
+                 "we'll get you back on the calendar.\n\nWarmly,\n{studio_name}"),
     },
 }
 
