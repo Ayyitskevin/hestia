@@ -14,6 +14,7 @@ import sqlite3
 from .automations import emit_event
 from .features import normalize_shoot_type
 from .invoices import money
+from .ownership import owned_client_id
 
 PROJECT_STATUSES = ("lead", "booked", "shooting", "delivered", "archived")
 
@@ -186,6 +187,7 @@ def create_project(
 ) -> dict:
     if status not in PROJECT_STATUSES:
         status = "lead"
+    client_id = owned_client_id(conn, tenant_id, client_id)
     cur = conn.execute(
         """
         INSERT INTO projects (tenant_id, client_id, name, shoot_type, status, event_date,

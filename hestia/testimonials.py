@@ -17,6 +17,7 @@ import sqlite3
 
 from .config import Settings
 from .crypto import new_session_token
+from .ownership import owned_client_id
 
 REQUESTED, SUBMITTED, FEATURED, HIDDEN = "requested", "submitted", "featured", "hidden"
 # the transitions an owner may apply — never back to 'requested', and only to a
@@ -28,6 +29,7 @@ _MOVABLE = (SUBMITTED, FEATURED, HIDDEN)
 def request_testimonial(conn: sqlite3.Connection, *, tenant_id: str,
                         client_id: int | None = None, author_name: str = "") -> dict:
     """Open a pending testimonial request and return it (including its public token)."""
+    client_id = owned_client_id(conn, tenant_id, client_id)
     token = new_session_token()
     cur = conn.execute(
         "INSERT INTO testimonials (tenant_id, client_id, token, author_name) "

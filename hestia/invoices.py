@@ -16,6 +16,7 @@ from .config import Settings
 from .crypto import new_session_token
 from .db import audit
 from .email import notify
+from .ownership import owned_client_id, owned_project_id
 
 INVOICE_STATUSES = ("draft", "sent", "paid", "void")
 
@@ -40,6 +41,8 @@ def create_invoice(
     tax_cents: int = 0,
     note: str = "",
 ) -> dict:
+    client_id = owned_client_id(conn, tenant_id, client_id)
+    project_id = owned_project_id(conn, tenant_id, project_id)
     token = new_session_token()[:28]
     cur = conn.execute(
         """

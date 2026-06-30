@@ -63,6 +63,14 @@ def test_unknown_category_falls_back_to_other(conn):
     assert create_expense(conn, tenant_id=t["id"], amount_cents=100, category="bogus")["category"] == "other"
 
 
+def test_expense_create_drops_foreign_project_id(conn):
+    a = create_tenant(conn, name="A", shoot_type="wedding")
+    b = create_tenant(conn, name="B", shoot_type="wedding")
+    foreign_project = create_project(conn, tenant_id=a["id"], name="Foreign Project")
+    e = create_expense(conn, tenant_id=b["id"], amount_cents=100, project_id=foreign_project["id"])
+    assert e["project_id"] is None
+
+
 def test_profit_summary_counts_paid_revenue_minus_expenses(conn, settings):
     t = create_tenant(conn, name="P Studio", shoot_type="wedding")
     c = create_client(conn, tenant_id=t["id"], name="C")

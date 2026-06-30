@@ -22,6 +22,7 @@ from .crypto import new_session_token
 from .db import audit
 from .email import notify
 from .jobs import enqueue, register
+from .ownership import owned_client_id, owned_project_id
 
 APPOINTMENT_KINDS = ("consultation", "shoot", "call", "other")
 KIND_LABELS = {
@@ -50,6 +51,8 @@ def create_appointment(
 ) -> dict:
     if kind not in APPOINTMENT_KINDS:
         kind = "other"
+    client_id = owned_client_id(conn, tenant_id, client_id)
+    project_id = owned_project_id(conn, tenant_id, project_id)
     token = new_session_token()[:28]
     cur = conn.execute(
         "INSERT INTO appointments (tenant_id, client_id, project_id, title, kind, location, "

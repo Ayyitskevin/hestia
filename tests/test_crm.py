@@ -47,6 +47,15 @@ def test_project_join_and_status(conn):
     assert get_project(conn, t["id"], p["id"])["status"] == "booked"
 
 
+def test_project_create_drops_foreign_client_id(conn):
+    a = _tenant(conn, "A")
+    b = _tenant(conn, "B")
+    foreign = create_client(conn, tenant_id=a["id"], name="Foreign")
+    p = create_project(conn, tenant_id=b["id"], name="B Project", client_id=foreign["id"])
+    assert p["client_id"] is None
+    assert get_project(conn, b["id"], p["id"])["client_name"] is None
+
+
 def test_gallery_links_to_project(conn):
     t = _tenant(conn)
     p = create_project(conn, tenant_id=t["id"], name="Shoot")

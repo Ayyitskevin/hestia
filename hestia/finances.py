@@ -11,6 +11,7 @@ from __future__ import annotations
 import sqlite3
 
 from .invoices import money
+from .ownership import owned_project_id
 
 EXPENSE_CATEGORIES = (
     "second_shooter", "gear", "travel", "software", "albums_prints",
@@ -22,6 +23,7 @@ def create_expense(conn: sqlite3.Connection, *, tenant_id: str, amount_cents: in
                    category: str = "other", description: str = "",
                    project_id: int | None = None, incurred_on: str = "") -> dict | None:
     cat = category if category in EXPENSE_CATEGORIES else "other"
+    project_id = owned_project_id(conn, tenant_id, project_id)
     cur = conn.execute(
         "INSERT INTO expenses (tenant_id, project_id, category, description, amount_cents, incurred_on) "
         "VALUES (?, ?, ?, ?, ?, ?)",

@@ -18,6 +18,7 @@ from .config import Settings
 from .crypto import new_session_token
 from .db import audit
 from .email import notify
+from .ownership import owned_client_id, owned_project_id
 
 QUESTIONNAIRE_STATUSES = ("draft", "sent", "completed", "void")
 
@@ -31,6 +32,8 @@ def create_questionnaire(
     client_id: int | None = None,
     project_id: int | None = None,
 ) -> dict:
+    client_id = owned_client_id(conn, tenant_id, client_id)
+    project_id = owned_project_id(conn, tenant_id, project_id)
     token = new_session_token()[:28]
     cur = conn.execute(
         "INSERT INTO questionnaires (tenant_id, client_id, project_id, title, token) "

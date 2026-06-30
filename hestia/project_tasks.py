@@ -36,17 +36,40 @@ def list_tasks(conn: sqlite3.Connection, tenant_id: str, project_id: int) -> lis
     return [dict(r) for r in rows]
 
 
-def toggle_task(conn: sqlite3.Connection, tenant_id: str, task_id: int) -> None:
-    """Flip a task between done and not-done (tenant-scoped no-op if not found)."""
-    conn.execute(
+def toggle_task(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    task_id: int,
+    *,
+    project_id: int | None = None,
+) -> bool:
+    """Flip a task between done and not-done; no-op unless the tenant/project owns it."""
+    sql = (
         "UPDATE project_tasks SET done = 1 - done, updated_at = datetime('now') "
-        "WHERE id = ? AND tenant_id = ?",
-        (task_id, tenant_id),
+        "WHERE id = ? AND tenant_id = ?"
     )
+    params: list = [task_id, tenant_id]
+    if project_id is not None:
+        sql += " AND project_id = ?"
+        params.append(project_id)
+    cur = conn.execute(sql, params)
+    return cur.rowcount > 0
 
 
-def delete_task(conn: sqlite3.Connection, tenant_id: str, task_id: int) -> None:
-    conn.execute("DELETE FROM project_tasks WHERE id = ? AND tenant_id = ?", (task_id, tenant_id))
+def delete_task(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    task_id: int,
+    *,
+    project_id: int | None = None,
+) -> bool:
+    sql = "DELETE FROM project_tasks WHERE id = ? AND tenant_id = ?"
+    params: list = [task_id, tenant_id]
+    if project_id is not None:
+        sql += " AND project_id = ?"
+        params.append(project_id)
+    cur = conn.execute(sql, params)
+    return cur.rowcount > 0
 
 
 def task_progress(conn: sqlite3.Connection, tenant_id: str, project_id: int) -> dict:

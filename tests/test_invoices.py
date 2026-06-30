@@ -121,6 +121,7 @@ def test_invoice_join_does_not_leak_cross_tenant_client(conn, settings):
                          client_id=ca["id"])
     conn.commit()
     got = get_invoice(conn, b["id"], inv["id"])
+    assert got["client_id"] is None
     assert got["client_name"] is None and got["client_email"] is None     # A's data not leaked
     listed = {i["id"]: i for i in list_invoices(conn, b["id"])}
     assert listed[inv["id"]]["client_name"] is None

@@ -57,6 +57,19 @@ def test_tasks_are_tenant_scoped(conn):
     assert len(remaining) == 1 and remaining[0]["done"] == 0     # untouched by B
 
 
+def test_task_mutations_can_be_project_scoped(conn):
+    t = create_tenant(conn, name="Studio", shoot_type="wedding")
+    p1 = _project(conn, t["id"], "Project A")
+    p2 = _project(conn, t["id"], "Project B")
+    task = add_task(conn, tenant_id=t["id"], project_id=p2["id"], label="B task")
+
+    assert toggle_task(conn, t["id"], task["id"], project_id=p1["id"]) is False
+    assert list_tasks(conn, t["id"], p2["id"])[0]["done"] == 0
+
+    assert delete_task(conn, t["id"], task["id"], project_id=p1["id"]) is False
+    assert [x["id"] for x in list_tasks(conn, t["id"], p2["id"])] == [task["id"]]
+
+
 def test_empty_progress(conn):
     t = create_tenant(conn, name="Empty", shoot_type="wedding")
     p = _project(conn, t["id"])
@@ -82,3 +95,21 @@ def test_checklist_http_flow(client, conn):
 
     client.post(f"/projects/{pid}/tasks/{task_id}/delete")
     assert conn.execute("SELECT COUNT(*) AS n FROM project_tasks WHERE id=?", (task_id,)).fetchone()["n"] == 0
+
+
+def test_task_http_mutations_require_url_project(client, conn):
+    login_owner(client, onboard_studio(client, email="task-scope@owner.com"))
+    tid = conn.execute("SELECT id FROM tenants ORDER BY id DESC LIMIT 1").fetchone()["id"]
+    p1 = _project(conn, tid, "Project A")
+    p2 = _project(conn, tid, "Project B")
+    task = add_task(conn, tenant_id=tid, project_id=p2["id"], label="B task")
+    conn.commit()
+
+    client.post(f"/projects/{p1['id']}/tasks/{task['id']}/toggle")
+    assert conn.execute("SELECT done FROM project_tasks WHERE id=?", (task["id"],)).fetchone()["done"] == 0
+
+    client.post(f"/projects/{p1['id']}/tasks/{task['id']}/delete")
+    assert conn.execute(
+        "SELECT COUNT(*) AS n FROM project_tasks WHERE id=?",
+        (task["id"],),
+    ).fetchone()["n"] == 1

@@ -51,6 +51,20 @@ def test_create_plan_builds_installments(conn, settings):
     assert plan["client_name"] == "Sarah" and plan["project_name"] == "Wedding"
 
 
+def test_create_plan_drops_foreign_parent_ids(conn, settings):
+    a = _tenant(conn, "A")
+    b = _tenant(conn, "B")
+    foreign_client = create_client(conn, tenant_id=a["id"], name="Foreign")
+    foreign_project = create_project(conn, tenant_id=a["id"], name="Foreign Project")
+    plan = create_payment_plan(
+        conn, settings, tenant_id=b["id"], title="B Plan",
+        client_id=foreign_client["id"], project_id=foreign_project["id"],
+        installments=deposit_balance_installments(total_cents=100000, deposit_cents=25000),
+    )
+    assert plan["client_id"] is None and plan["project_id"] is None
+    assert all(i["client_id"] is None and i["project_id"] is None for i in plan["installments"])
+
+
 def test_progress_open_partial_paid(conn, settings):
     t = _tenant(conn)
     plan = create_payment_plan(

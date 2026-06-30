@@ -541,7 +541,7 @@ def project_task_toggle(request: Request, project_id: int, task_id: int):
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
-        toggle_task(conn, auth.tenant["id"], task_id)
+        toggle_task(conn, auth.tenant["id"], task_id, project_id=project_id)
     return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
 
@@ -551,7 +551,7 @@ def project_task_delete(request: Request, project_id: int, task_id: int):
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
-        delete_task(conn, auth.tenant["id"], task_id)
+        delete_task(conn, auth.tenant["id"], task_id, project_id=project_id)
     return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
 
@@ -599,7 +599,7 @@ def project_file_delete(request: Request, project_id: int, file_id: int):
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
-        delete_project_file(conn, storage, auth.tenant["id"], file_id)
+        delete_project_file(conn, storage, auth.tenant["id"], file_id, project_id=project_id)
     return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
 

@@ -2,7 +2,7 @@
 
 from conftest import CSRFClient, login_owner, onboard_studio
 
-from hestia.crm import create_client
+from hestia.crm import create_client, create_project
 from hestia.db import connect
 from hestia.email import list_emails
 from hestia.recurring import (
@@ -54,6 +54,18 @@ def test_negative_amount_floored(conn):
     t = _tenant(conn)
     p = create_recurring(conn, tenant_id=t["id"], title="R", amount_cents=-5)
     assert p["amount_cents"] == 0
+
+
+def test_create_drops_foreign_parent_ids(conn):
+    a = _tenant(conn, "A")
+    b = _tenant(conn, "B")
+    foreign_client = create_client(conn, tenant_id=a["id"], name="Foreign")
+    foreign_project = create_project(conn, tenant_id=a["id"], name="Foreign Project")
+    p = create_recurring(
+        conn, tenant_id=b["id"], title="Retainer", amount_cents=1000,
+        client_id=foreign_client["id"], project_id=foreign_project["id"],
+    )
+    assert p["client_id"] is None and p["project_id"] is None
 
 
 # ── Cadence advance + claim idempotency ───────────────────────────────────────

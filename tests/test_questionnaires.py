@@ -35,6 +35,18 @@ def test_create_with_items(conn):
     assert q["status"] == "draft" and q["client_name"] == "Sarah"
 
 
+def test_create_drops_foreign_parent_ids(conn):
+    a = _tenant(conn, "A")
+    b = _tenant(conn, "B")
+    foreign_client = create_client(conn, tenant_id=a["id"], name="Foreign")
+    foreign_project = create_project(conn, tenant_id=a["id"], name="Foreign Project")
+    q = create_questionnaire(
+        conn, tenant_id=b["id"], title="Intake", prompts=["Q?"],
+        client_id=foreign_client["id"], project_id=foreign_project["id"],
+    )
+    assert q["client_id"] is None and q["project_id"] is None
+
+
 def test_status_transitions(conn):
     t = _tenant(conn)
     q = create_questionnaire(conn, tenant_id=t["id"], title="Q", prompts=["A?"])

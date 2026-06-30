@@ -34,6 +34,18 @@ def test_create_and_join(conn):
     assert got["body"] == "The terms."
 
 
+def test_create_drops_foreign_parent_ids(conn):
+    a = _tenant(conn, "A")
+    b = _tenant(conn, "B")
+    foreign_client = create_client(conn, tenant_id=a["id"], name="Foreign")
+    foreign_project = create_project(conn, tenant_id=a["id"], name="Foreign Project")
+    ct = create_contract(
+        conn, tenant_id=b["id"], title="Agreement",
+        client_id=foreign_client["id"], project_id=foreign_project["id"],
+    )
+    assert ct["client_id"] is None and ct["project_id"] is None
+
+
 def test_status_transitions(conn):
     t = _tenant(conn)
     ct = create_contract(conn, tenant_id=t["id"], title="Agreement")

@@ -74,6 +74,18 @@ def test_delete_removes_row_and_blob(conn, storage):
         pass
 
 
+def test_delete_can_be_project_scoped(conn, storage):
+    t = _tenant(conn)
+    p1 = create_project(conn, tenant_id=t["id"], name="P1")
+    p2 = create_project(conn, tenant_id=t["id"], name="P2")
+    f = add_project_file(conn, storage, tenant_id=t["id"], project_id=p2["id"],
+                         filename="b.txt", fileobj=io.BytesIO(b"secret"))
+
+    assert delete_project_file(conn, storage, t["id"], f["id"], project_id=p1["id"]) is False
+    assert get_project_file(conn, t["id"], f["id"])["id"] == f["id"]
+    assert storage.open(f["storage_key"]) == b"secret"
+
+
 # ── client-scoped lookups (the portal download gate) ────────────────────────────
 
 
@@ -181,3 +193,28 @@ def test_http_download_is_tenant_scoped(client, app):
     login_owner(b_client, b)
     r = b_client.get(f"/projects/{a_pid}/files/{a_fid}")
     assert b"SECRET" not in r.content                                  # another studio can't fetch it
+
+
+def test_http_delete_requires_url_project(client, app):
+    creds = onboard_studio(client, email="pf-scope@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = _tid(conn, creds["email"])
+        p1 = create_project(conn, tenant_id=tid, name="P1")
+        p2 = create_project(conn, tenant_id=tid, name="P2")
+        f = add_project_file(conn, app.state.storage, tenant_id=tid, project_id=p2["id"],
+                             filename="b.txt", fileobj=io.BytesIO(b"secret"))
+        conn.commit()
+        p1_id, f_id, key = p1["id"], f["id"], f["storage_key"]
+    finally:
+        conn.close()
+
+    client.post(f"/projects/{p1_id}/files/{f_id}/delete")
+
+    conn = connect(app.state.settings.db_path)
+    try:
+        assert get_project_file(conn, _tid(conn, creds["email"]), f_id)["id"] == f_id
+        assert app.state.storage.open(key) == b"secret"
+    finally:
+        conn.close()

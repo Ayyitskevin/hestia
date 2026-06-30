@@ -14,6 +14,7 @@ import sqlite3
 
 from .config import Settings
 from .db import audit
+from .ownership import owned_client_id, owned_project_id
 
 CADENCES = {"weekly": "+7 days", "monthly": "+1 month", "yearly": "+1 year"}
 CADENCE_LABELS = {"weekly": "Weekly", "monthly": "Monthly", "yearly": "Yearly"}
@@ -42,6 +43,8 @@ def create_recurring(
     if not title:
         return None
     cadence = cadence if cadence in CADENCES else "monthly"
+    client_id = owned_client_id(conn, tenant_id, client_id)
+    project_id = owned_project_id(conn, tenant_id, project_id)
     # Floor the first run at today: a past 'Starting' date must not put the profile in
     # arrears and trigger a catch-up storm of back-dated invoices on the first sweep.
     cur = conn.execute(

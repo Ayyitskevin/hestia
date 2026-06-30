@@ -32,6 +32,14 @@ def test_request_creates_pending_with_token(conn):
     assert get_by_token(conn, tt["token"])["id"] == tt["id"]
 
 
+def test_request_drops_foreign_client_id(conn):
+    a = _tenant(conn, "A")
+    b = _tenant(conn, "B")
+    foreign = create_client(conn, tenant_id=a["id"], name="Foreign")
+    tt = request_testimonial(conn, tenant_id=b["id"], client_id=foreign["id"])
+    assert tt["client_id"] is None
+
+
 def test_submit_records_and_is_idempotent(conn):
     t = _tenant(conn)
     tt = request_testimonial(conn, tenant_id=t["id"])

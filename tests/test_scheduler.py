@@ -50,6 +50,18 @@ def test_create_with_options(conn):
     assert appt["client_name"] == "Sarah" and appt["project_name"] == "Wedding"
 
 
+def test_create_drops_foreign_parent_ids(conn):
+    a = _tenant(conn, "A")
+    b = _tenant(conn, "B")
+    foreign_client = create_client(conn, tenant_id=a["id"], name="Foreign")
+    foreign_project = create_project(conn, tenant_id=a["id"], name="Foreign Project")
+    appt = create_appointment(
+        conn, tenant_id=b["id"], title="Consult", options=[FUTURE],
+        client_id=foreign_client["id"], project_id=foreign_project["id"],
+    )
+    assert appt["client_id"] is None and appt["project_id"] is None
+
+
 def test_book_is_idempotent(conn, settings):
     t = _tenant(conn)
     c = create_client(conn, tenant_id=t["id"], name="Sarah", email="sarah@example.com")

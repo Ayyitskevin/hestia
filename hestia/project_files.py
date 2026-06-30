@@ -84,14 +84,24 @@ def get_client_file(conn: sqlite3.Connection, tenant_id: str, client_id: int,
 
 
 def delete_project_file(conn: sqlite3.Connection, storage: Storage, tenant_id: str,
-                        file_id: int) -> None:
-    """Remove a file (tenant-scoped). Drops the row, then the blob (best-effort)."""
+                        file_id: int, *, project_id: int | None = None) -> bool:
+    """Remove a file (tenant/project-scoped). Drops the row, then the blob best-effort."""
     f = get_project_file(conn, tenant_id, file_id)
     if not f:
-        return
-    conn.execute("DELETE FROM project_files WHERE id = ? AND tenant_id = ?", (file_id, tenant_id))
+        return False
+    if project_id is not None and f["project_id"] != project_id:
+        return False
+    sql = "DELETE FROM project_files WHERE id = ? AND tenant_id = ?"
+    params: list = [file_id, tenant_id]
+    if project_id is not None:
+        sql += " AND project_id = ?"
+        params.append(project_id)
+    cur = conn.execute(sql, params)
+    if cur.rowcount <= 0:
+        return False
     if f.get("storage_key"):
         try:
             storage.delete(f["storage_key"])
         except Exception:  # noqa: BLE001 - blob cleanup is best-effort; the row is gone
             pass
+    return True
