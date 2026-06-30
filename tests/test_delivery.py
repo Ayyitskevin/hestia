@@ -103,6 +103,23 @@ def test_token_cannot_reach_another_gallery(client, conn, storage):
     assert client.get(f"/d/{token1}/{secret['id']}").status_code == 404
 
 
+def test_token_cannot_reach_malformed_foreign_tenant_image(client, conn, storage):
+    t1, g = _gallery(conn, title="G1")
+    t2 = create_tenant(conn, name="Other", shoot_type="wedding")
+    token = enable_delivery(conn, t1["id"], g["id"])
+    storage.put("foreign/bad.jpg", io.BytesIO(b"FOREIGN"), "image/jpeg")
+    cur = conn.execute(
+        "INSERT INTO images (tenant_id, gallery_id, filename, storage_key, content_type) "
+        "VALUES (?, ?, 'bad.jpg', 'foreign/bad.jpg', 'image/jpeg')",
+        (t2["id"], g["id"]),
+    )
+    conn.commit()
+    bad_id = cur.lastrowid
+
+    assert client.get(f"/d/{token}/{bad_id}").status_code == 404
+    assert client.get(f"/d/{token}/{bad_id}/view").status_code == 404
+
+
 def test_bad_token_is_404(client):
     assert client.get("/d/nope").status_code == 404
     assert client.get("/d/nope/all.zip").status_code == 404

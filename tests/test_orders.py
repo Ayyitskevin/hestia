@@ -53,6 +53,14 @@ def test_create_order_from_bundle(conn, settings):
     assert inv["amount_cents"] == 12000 and inv["client_name"] == "Sarah"
 
 
+def test_create_order_rejects_offer_for_foreign_tenant(conn, settings):
+    t1, _g, offer, _ = _setup(conn, settings, name="A")
+    t2 = create_tenant(conn, name="B", shoot_type="wedding")
+    assert create_order(conn, settings, tenant=dict(t2), offer=offer, sku="print_set") is None
+    assert list_orders(conn, t1["id"]) == []
+    assert list_orders(conn, t2["id"]) == []
+
+
 def test_unknown_sku_returns_none(conn, settings):
     t, g, offer, _ = _setup(conn, settings)
     assert create_order(conn, settings, tenant=dict(t), offer=offer, sku="nope") is None
@@ -193,6 +201,27 @@ def test_http_offer_purchasable_and_fulfilled(client, app):
         conn.close()
     assert orders and orders[0]["status"] == "paid"
     assert fulfillments[orders[0]["id"]]["status"] == "submitted"
+
+
+def test_http_offer_rejects_malformed_foreign_gallery_reference(client, app):
+    t, _g, offer = _setup_http(app)
+    conn = connect(app.state.settings.db_path)
+    try:
+        other = create_tenant(conn, name="Other Studio", shoot_type="wedding")
+        foreign_gallery = create_gallery(conn, tenant_id=other["id"], title="Foreign")
+        conn.execute(
+            "UPDATE offers SET gallery_id = ? WHERE id = ?",
+            (foreign_gallery["id"], offer["id"]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert client.get(f"/s/{t['slug']}/{offer['token']}").status_code == 404
+    assert client.post(
+        f"/s/{t['slug']}/{offer['token']}/order",
+        data={"sku": "print_set"},
+    ).status_code == 404
 
 
 def test_http_owner_sees_orders(client, app):

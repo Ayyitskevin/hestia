@@ -36,6 +36,29 @@ def test_create_clamps_and_activates(conn):
     assert active and active["id"] == c["id"]
 
 
+def test_create_rejects_foreign_gallery(conn):
+    t1, t2 = _tenant(conn, "A"), _tenant(conn, "B")
+    g = create_gallery(conn, tenant_id=t1["id"], title="G")
+    assert create_campaign(conn, tenant_id=t2["id"], gallery_id=g["id"], headline="Bad",
+                           discount_pct=10, days=7) is None
+    assert get_active_campaign(conn, g["id"]) is None
+
+
+def test_active_campaign_ignores_malformed_foreign_gallery_row(conn):
+    t1, t2 = _tenant(conn, "A"), _tenant(conn, "B")
+    g = create_gallery(conn, tenant_id=t1["id"], title="G")
+    good = create_campaign(conn, tenant_id=t1["id"], gallery_id=g["id"], headline="Good",
+                           discount_pct=10, days=7)
+    conn.execute(
+        "INSERT INTO sales_campaigns (tenant_id, gallery_id, headline, discount_pct, ends_at) "
+        "VALUES (?, ?, 'Bad', 90, datetime('now', '+7 days'))",
+        (t2["id"], g["id"]),
+    )
+    assert get_active_campaign(conn, g["id"])["id"] == good["id"]
+    assert get_active_campaign(conn, g["id"], tenant_id=t1["id"])["id"] == good["id"]
+    assert get_active_campaign(conn, g["id"], tenant_id=t2["id"]) is None
+
+
 def test_launching_new_ends_prior(conn):
     t = _tenant(conn)
     g = create_gallery(conn, tenant_id=t["id"], title="G")

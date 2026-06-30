@@ -45,6 +45,17 @@ def test_offer_is_idempotent_same_token(conn):
     assert get_offer_by_token(conn, o1["token"])["gallery_id"] == gallery["id"]
 
 
+def test_offer_create_rejects_foreign_gallery(conn):
+    tenant, _gallery = _seed(conn)
+    other = create_tenant(conn, name="Other", shoot_type="wedding")
+    foreign_gallery = create_gallery(conn, tenant_id=other["id"], title="Other G")
+    conn.commit()
+    offer = create_or_update_offer(conn, tenant=tenant, gallery=foreign_gallery, run_id=None,
+                                   vision_summary=VISION, flags=flags_for("wedding"))
+    assert offer is None
+    assert conn.execute("SELECT COUNT(*) AS n FROM offers").fetchone()["n"] == 0
+
+
 def test_offer_total_matches_bundles(conn):
     tenant, gallery = _seed(conn)
     offer = create_or_update_offer(conn, tenant=tenant, gallery=gallery, run_id=None,

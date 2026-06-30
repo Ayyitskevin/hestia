@@ -166,7 +166,8 @@ def submit_selections(conn: sqlite3.Connection, *, tenant_id: str, gallery_id: i
         (gallery_id, tenant_id),
     ).fetchone()
     favs = conn.execute(
-        "SELECT COUNT(*) AS n FROM image_favorites WHERE gallery_id = ?", (gallery_id,)
+        "SELECT COUNT(*) AS n FROM image_favorites WHERE gallery_id = ? AND tenant_id = ?",
+        (gallery_id, tenant_id),
     ).fetchone()
     if g:
         emit_event(conn, tenant_id=tenant_id, event="gallery.selections_submitted",

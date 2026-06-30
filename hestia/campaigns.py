@@ -11,6 +11,7 @@ from __future__ import annotations
 import sqlite3
 
 from .db import audit
+from .ownership import owned_gallery_id
 
 MAX_DISCOUNT_PCT = 90
 
@@ -18,8 +19,10 @@ MAX_DISCOUNT_PCT = 90
 def create_campaign(
     conn: sqlite3.Connection, *, tenant_id: str, gallery_id: int,
     headline: str, discount_pct: int, days: int,
-) -> dict:
+) -> dict | None:
     """Launch a sale, ending any campaign already active on this gallery."""
+    if owned_gallery_id(conn, tenant_id, gallery_id) is None:
+        return None
     conn.execute(
         "UPDATE sales_campaigns SET status = 'ended' "
         "WHERE gallery_id = ? AND tenant_id = ? AND status = 'active'",
@@ -44,12 +47,25 @@ def get_campaign(conn: sqlite3.Connection, tenant_id: str, campaign_id: int) -> 
     return dict(row) if row else None
 
 
-def get_active_campaign(conn: sqlite3.Connection, gallery_id: int) -> dict | None:
+def get_active_campaign(
+    conn: sqlite3.Connection,
+    gallery_id: int,
+    *,
+    tenant_id: str | None = None,
+) -> dict | None:
     """The live campaign for a gallery (active and not past its deadline), if any."""
+    params: list = [gallery_id]
+    tenant_filter = ""
+    if tenant_id is not None:
+        tenant_filter = "AND c.tenant_id = ? "
+        params.append(tenant_id)
     row = conn.execute(
-        "SELECT * FROM sales_campaigns WHERE gallery_id = ? AND status = 'active' "
-        "AND ends_at > datetime('now') ORDER BY id DESC LIMIT 1",
-        (gallery_id,),
+        "SELECT c.* FROM sales_campaigns c "
+        "JOIN galleries g ON g.id = c.gallery_id AND g.tenant_id = c.tenant_id "
+        "WHERE c.gallery_id = ? AND c.status = 'active' "
+        f"{tenant_filter}"
+        "AND c.ends_at > datetime('now') ORDER BY c.id DESC LIMIT 1",
+        params,
     ).fetchone()
     return dict(row) if row else None
 

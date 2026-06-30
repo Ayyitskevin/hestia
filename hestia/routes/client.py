@@ -54,6 +54,13 @@ def _hero_urls(conn, storage: Storage, tenant_id: str, image_ids: list[int]) -> 
     return out
 
 
+def _offer_gallery_owned(conn, offer: dict, tenant_id: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM galleries WHERE id = ? AND tenant_id = ?",
+        (offer["gallery_id"], tenant_id),
+    ).fetchone() is not None
+
+
 @router.get("/s/{slug}/{token}")
 def public_offer(request: Request, slug: str, token: str):
     """Public, shareable client offer — what the photographer sends the client."""
@@ -62,7 +69,10 @@ def public_offer(request: Request, slug: str, token: str):
     with db_conn(request) as conn:
         offer = get_offer_by_token(conn, token)
         tenant = get_tenant_by_slug(conn, slug)
-        if not offer or not tenant or offer["tenant_id"] != tenant["id"]:
+        if (
+            not offer or not tenant or offer["tenant_id"] != tenant["id"]
+            or not _offer_gallery_owned(conn, offer, tenant["id"])
+        ):
             return render(request, "offer_missing.html", auth=None, status_code=404)
         storage = storage_of(request)
         heroes = _hero_urls(conn, storage, tenant["id"], offer["hero_images"])
@@ -74,7 +84,7 @@ def public_offer(request: Request, slug: str, token: str):
                       for i in favs]
         fav_pkg = favorites_package(len(favs))
         # Live: a running sale discounts the prices and adds urgency.
-        campaign = get_active_campaign(conn, offer["gallery_id"])
+        campaign = get_active_campaign(conn, offer["gallery_id"], tenant_id=tenant["id"])
         pct = campaign["discount_pct"] if campaign else 0
         if pct:
             offer["bundles"] = [discount_bundle(b, pct) for b in offer["bundles"]]
@@ -93,7 +103,10 @@ def offer_order(request: Request, slug: str, token: str, sku: str = Form(...)):
     with db_conn(request) as conn:
         offer = get_offer_by_token(conn, token)
         tenant = get_tenant_by_slug(conn, slug)
-        if not offer or not tenant or offer["tenant_id"] != tenant["id"]:
+        if (
+            not offer or not tenant or offer["tenant_id"] != tenant["id"]
+            or not _offer_gallery_owned(conn, offer, tenant["id"])
+        ):
             return render(request, "offer_missing.html", auth=None, status_code=404)
         result = create_order(conn, settings, tenant=dict(tenant), offer=offer, sku=sku)
         if not result:
@@ -121,8 +134,8 @@ def client_gallery(request: Request, slug: str, gallery_slug: str):
             o = get_offer_for_gallery(conn, tenant["id"], gallery["id"])
             if o:
                 offer = offer_public_url(settings_of(request), slug, o["token"])
-            favorites = favorite_image_ids(conn, gallery["id"])
-            comments = comments_by_image(conn, gallery["id"])
+            favorites = favorite_image_ids(conn, gallery["id"], tenant_id=tenant["id"])
+            comments = comments_by_image(conn, gallery["id"], tenant_id=tenant["id"])
             alts = alt_text_map(conn, gallery["id"])      # AI captions for accessible/SEO alt text
     return render(request, "client_gallery.html", auth=None, tenant=tenant, gallery=gallery,
                   images=images, unlocked=unlocked, storage=storage_of(request), offer_url=offer,
@@ -152,7 +165,7 @@ def client_submit_selections(request: Request, slug: str, gallery_slug: str):
         if gallery and unlocked and submit_selections(
             conn, tenant_id=tenant["id"], gallery_id=gallery["id"]
         ):
-            count = favorite_count(conn, gallery["id"])
+            count = favorite_count(conn, gallery["id"], tenant_id=tenant["id"])
             to = owner_digest_recipient(conn, tenant["id"])
             if to:                                  # notify() also no-ops on empty recipient
                 who = gallery["client_name"] or "Your client"

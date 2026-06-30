@@ -112,9 +112,9 @@ def gallery_detail(request: Request, gallery_id: int):
         project = get_project(conn, auth.tenant["id"], gallery["project_id"]) if gallery.get("project_id") else None
         album = get_album_for_gallery(conn, auth.tenant["id"], gallery_id)
         product_set = get_set_for_gallery(conn, auth.tenant["id"], gallery_id)
-        favorites = favorite_image_ids(conn, gallery_id)
+        favorites = favorite_image_ids(conn, gallery_id, tenant_id=auth.tenant["id"])
         comments = comments_for_gallery(conn, auth.tenant["id"], gallery_id)
-        campaign = get_active_campaign(conn, gallery_id)
+        campaign = get_active_campaign(conn, gallery_id, tenant_id=auth.tenant["id"])
         orders = list_orders(conn, auth.tenant["id"], gallery_id=gallery_id)
         fulfillments = list_fulfillments(conn, auth.tenant["id"],
                                          order_ids=[o["id"] for o in orders])
@@ -256,6 +256,8 @@ def gallery_campaign_end(request: Request, gallery_id: int):
         auth = _require_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
+        if not get_gallery(conn, auth.tenant["id"], gallery_id):
+            return RedirectResponse("/galleries", status_code=303)
         end_campaign(conn, auth.tenant["id"], gallery_id)
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 

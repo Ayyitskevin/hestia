@@ -104,6 +104,26 @@ def test_tenant_isolation(conn, storage):
     assert comments_for_gallery(conn, t2["id"], g1["id"]) == []
 
 
+def test_tenant_scoped_reads_ignore_malformed_rows(conn, storage):
+    t1, t2 = _tenant(conn, "A"), _tenant(conn, "B")
+    g1 = create_gallery(conn, tenant_id=t1["id"], title="G1")
+    img = _img(conn, storage, t1["id"], g1["id"])
+    conn.execute(
+        "INSERT INTO image_favorites (tenant_id, gallery_id, image_id) VALUES (?, ?, ?)",
+        (t2["id"], g1["id"], img["id"]),
+    )
+    conn.execute(
+        "INSERT INTO image_comments (tenant_id, gallery_id, image_id, body) VALUES (?, ?, ?, ?)",
+        (t2["id"], g1["id"], img["id"], "foreign"),
+    )
+
+    assert favorite_image_ids(conn, g1["id"], tenant_id=t1["id"]) == set()
+    assert favorite_count(conn, g1["id"], tenant_id=t1["id"]) == 0
+    assert comments_by_image(conn, g1["id"], tenant_id=t1["id"]) == {}
+    assert list_favorites(conn, t2["id"], g1["id"]) == []
+    assert comments_for_gallery(conn, t2["id"], g1["id"]) == []
+
+
 def _published_gallery_with_image(app, *, pin=None):
     """Set up a published gallery with one image directly in the app's DB."""
     conn = connect(app.state.settings.db_path)

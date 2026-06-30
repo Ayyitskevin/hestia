@@ -18,6 +18,7 @@ import sqlite3
 from .config import Settings
 from .crypto import new_session_token
 from .features import FeatureFlags
+from .ownership import owned_gallery_id
 
 # Hardcoded catalog (cents). A real deployment would make this per-tenant.
 CATALOG = {
@@ -101,7 +102,9 @@ def create_or_update_offer(
     run_id: int | None,
     vision_summary: dict,
     flags: FeatureFlags,
-) -> dict:
+) -> dict | None:
+    if owned_gallery_id(conn, tenant["id"], gallery["id"]) is None:
+        return None
     bundles = build_bundles(flags, vision_summary)
     hero_images = vision_summary.get("hero_image_ids", [])
     title = f"{gallery['title']} — print & album collection"

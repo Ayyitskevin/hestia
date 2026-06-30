@@ -27,8 +27,8 @@ def toggle_favorite(
     if not image_in_gallery(conn, tenant_id, gallery_id, image_id):
         return None
     existing = conn.execute(
-        "SELECT id FROM image_favorites WHERE gallery_id = ? AND image_id = ?",
-        (gallery_id, image_id),
+        "SELECT id FROM image_favorites WHERE gallery_id = ? AND image_id = ? AND tenant_id = ?",
+        (gallery_id, image_id, tenant_id),
     ).fetchone()
     if existing:
         conn.execute("DELETE FROM image_favorites WHERE id = ?", (existing["id"],))
@@ -40,24 +40,42 @@ def toggle_favorite(
     return True
 
 
-def favorite_image_ids(conn: sqlite3.Connection, gallery_id: int) -> set[int]:
-    rows = conn.execute(
-        "SELECT image_id FROM image_favorites WHERE gallery_id = ?", (gallery_id,)
-    ).fetchall()
+def favorite_image_ids(
+    conn: sqlite3.Connection,
+    gallery_id: int,
+    *,
+    tenant_id: str | None = None,
+) -> set[int]:
+    sql = "SELECT image_id FROM image_favorites WHERE gallery_id = ?"
+    params: list = [gallery_id]
+    if tenant_id is not None:
+        sql += " AND tenant_id = ?"
+        params.append(tenant_id)
+    rows = conn.execute(sql, params).fetchall()
     return {r["image_id"] for r in rows}
 
 
-def favorite_count(conn: sqlite3.Connection, gallery_id: int) -> int:
-    row = conn.execute(
-        "SELECT COUNT(*) AS n FROM image_favorites WHERE gallery_id = ?", (gallery_id,)
-    ).fetchone()
+def favorite_count(
+    conn: sqlite3.Connection,
+    gallery_id: int,
+    *,
+    tenant_id: str | None = None,
+) -> int:
+    sql = "SELECT COUNT(*) AS n FROM image_favorites WHERE gallery_id = ?"
+    params: list = [gallery_id]
+    if tenant_id is not None:
+        sql += " AND tenant_id = ?"
+        params.append(tenant_id)
+    row = conn.execute(sql, params).fetchone()
     return row["n"] if row else 0
 
 
 def list_favorites(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> list[dict]:
     """The favorited images (joined), for the owner's proofing view."""
     rows = conn.execute(
-        "SELECT i.* FROM image_favorites f JOIN images i ON i.id = f.image_id "
+        "SELECT i.* FROM image_favorites f "
+        "JOIN images i ON i.id = f.image_id AND i.tenant_id = f.tenant_id "
+        "AND i.gallery_id = f.gallery_id "
         "WHERE f.gallery_id = ? AND f.tenant_id = ? ORDER BY i.position, i.id",
         (gallery_id, tenant_id),
     ).fetchall()
@@ -82,11 +100,20 @@ def add_comment(
     return dict(row)
 
 
-def comments_by_image(conn: sqlite3.Connection, gallery_id: int) -> dict[int, list[dict]]:
+def comments_by_image(
+    conn: sqlite3.Connection,
+    gallery_id: int,
+    *,
+    tenant_id: str | None = None,
+) -> dict[int, list[dict]]:
     """Map image_id → its comments (oldest first), for the client gallery view."""
-    rows = conn.execute(
-        "SELECT * FROM image_comments WHERE gallery_id = ? ORDER BY id", (gallery_id,)
-    ).fetchall()
+    sql = "SELECT * FROM image_comments WHERE gallery_id = ?"
+    params: list = [gallery_id]
+    if tenant_id is not None:
+        sql += " AND tenant_id = ?"
+        params.append(tenant_id)
+    sql += " ORDER BY id"
+    rows = conn.execute(sql, params).fetchall()
     out: dict[int, list[dict]] = {}
     for r in rows:
         out.setdefault(r["image_id"], []).append(dict(r))
@@ -96,7 +123,9 @@ def comments_by_image(conn: sqlite3.Connection, gallery_id: int) -> dict[int, li
 def comments_for_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> list[dict]:
     """All comments (newest first, with the frame filename), for the owner view."""
     rows = conn.execute(
-        "SELECT c.*, i.filename FROM image_comments c JOIN images i ON i.id = c.image_id "
+        "SELECT c.*, i.filename FROM image_comments c "
+        "JOIN images i ON i.id = c.image_id AND i.tenant_id = c.tenant_id "
+        "AND i.gallery_id = c.gallery_id "
         "WHERE c.gallery_id = ? AND c.tenant_id = ? ORDER BY c.id DESC",
         (gallery_id, tenant_id),
     ).fetchall()

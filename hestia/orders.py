@@ -20,11 +20,17 @@ from .proofing import favorite_count
 from .sales import favorites_package
 
 
-def _resolve_bundle(conn: sqlite3.Connection, offer: dict, sku: str) -> dict | None:
+def _resolve_bundle(
+    conn: sqlite3.Connection,
+    offer: dict,
+    sku: str,
+    *,
+    tenant_id: str | None = None,
+) -> dict | None:
     """The orderable item for ``sku`` — a stored offer bundle, or the live
     favorites package (whose price depends on the current favorite count)."""
     if sku == "favorites":
-        return favorites_package(favorite_count(conn, offer["gallery_id"]))
+        return favorites_package(favorite_count(conn, offer["gallery_id"], tenant_id=tenant_id))
     return next((b for b in offer.get("bundles", []) if b.get("sku") == sku), None)
 
 
@@ -44,11 +50,18 @@ def create_order(conn: sqlite3.Connection, settings: Settings, *, tenant: dict, 
                  sku: str) -> dict | None:
     """Create an order + its invoice. Returns ``{order, invoice}`` or None for an
     unknown/unavailable sku."""
-    bundle = _resolve_bundle(conn, offer, sku)
+    if offer.get("tenant_id") != tenant["id"]:
+        return None
+    if not conn.execute(
+        "SELECT 1 FROM galleries WHERE id = ? AND tenant_id = ?",
+        (offer["gallery_id"], tenant["id"]),
+    ).fetchone():
+        return None
+    bundle = _resolve_bundle(conn, offer, sku, tenant_id=tenant["id"])
     if not bundle:
         return None
     amount = bundle["price_cents"]
-    campaign = get_active_campaign(conn, offer["gallery_id"])
+    campaign = get_active_campaign(conn, offer["gallery_id"], tenant_id=tenant["id"])
     if campaign and campaign["discount_pct"]:
         amount = apply_discount(amount, campaign["discount_pct"])
     client_id, project_id = _client_project_for_gallery(conn, tenant["id"], offer["gallery_id"])

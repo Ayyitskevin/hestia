@@ -25,3 +25,14 @@ def owned_project_id(conn: sqlite3.Connection, tenant_id: str, project_id: int |
         (project_id, tenant_id),
     ).fetchone()
     return project_id if row else None
+
+
+def owned_gallery_id(conn: sqlite3.Connection, tenant_id: str, gallery_id: int | None) -> int | None:
+    """Return the gallery id only if it belongs to the tenant."""
+    if gallery_id is None:
+        return None
+    row = conn.execute(
+        "SELECT 1 FROM galleries WHERE id = ? AND tenant_id = ?",
+        (gallery_id, tenant_id),
+    ).fetchone()
+    return gallery_id if row else None
