@@ -5,7 +5,7 @@ import io
 from conftest import login_owner, onboard_studio
 
 from hestia.contracts import create_contract, send_contract
-from hestia.crm import assign_gallery_to_project, create_client, create_project
+from hestia.crm import assign_gallery_to_project, create_client, create_project, list_projects
 from hestia.db import connect
 from hestia.delivery import enable_delivery
 from hestia.galleries import create_gallery, publish_gallery
@@ -80,6 +80,21 @@ def test_assemble_aggregates_client_items(conn, settings):
     assert data["invoices"][0]["pay_url"]
     titles = [g["title"] for g in data["galleries"]]
     assert "Wedding Gallery" in titles and "Draft Gallery" not in titles
+
+
+def test_project_gallery_count_ignores_foreign_gallery_rows(conn):
+    owner = _tenant(conn, "Owner")
+    foreign = _tenant(conn, "Foreign")
+    c = create_client(conn, tenant_id=owner["id"], name="Sarah")
+    p = create_project(conn, tenant_id=owner["id"], name="Wedding", client_id=c["id"])
+    # Malformed legacy row: a foreign-tenant gallery points at this tenant's project id.
+    create_gallery(conn, tenant_id=foreign["id"], title="Foreign", client_name="")
+    conn.execute(
+        "UPDATE galleries SET project_id = ? WHERE tenant_id = ?",
+        (p["id"], foreign["id"]),
+    )
+    projects = list_projects(conn, owner["id"], client_id=c["id"])
+    assert projects[0]["gallery_count"] == 0
 
 
 def test_portal_surfaces_download_and_review(conn, settings):

@@ -6,7 +6,7 @@
     <h1>{{ pack.body.headline }}</h1>
     <span class="muted">
       {{ pack.title }} ·
-      <a href="/projects/{{ pack.project_id }}">project</a> ·
+      {% if pack.project_id %}<a href="/projects/{{ pack.project_id }}">project</a> ·{% endif %}
       drafted by <span class="pill">{{ pack.backend }}</span> ·
       <span class="pill {{ 'on' if pack.status == 'approved' else 'off' }}">{{ pack.status }}</span>
     </span>

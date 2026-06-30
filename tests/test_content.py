@@ -11,6 +11,7 @@ from hestia.content import (
     XaiContent,
     build_content,
     generate_pack,
+    get_pack,
     list_packs,
     project_keywords,
     recipes_for,
@@ -85,6 +86,21 @@ def test_tenant_isolation(conn, storage, settings):
     t2 = create_tenant(conn, name="Other", shoot_type="food")
     conn.commit()
     assert list_packs(conn, t2["id"]) == []
+
+
+def test_pack_reads_hide_foreign_project_link(conn):
+    owner = create_tenant(conn, name="Owner", shoot_type="food")
+    foreign = create_tenant(conn, name="Foreign", shoot_type="food")
+    foreign_project = create_project(conn, tenant_id=foreign["id"], name="Foreign Project")
+    cur = conn.execute(
+        "INSERT INTO content_packs (tenant_id, project_id, title, body_json) "
+        "VALUES (?, ?, 'Malformed pack', ?)",
+        (owner["id"], foreign_project["id"], json.dumps({"headline": "Oops"})),
+    )
+    pack = get_pack(conn, owner["id"], cur.lastrowid)
+    assert pack["project_id"] is None
+    assert pack["project_name"] is None
+    assert list_packs(conn, owner["id"], project_id=foreign_project["id"]) == []
 
 
 def test_http_generate_and_view(client):

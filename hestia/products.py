@@ -118,7 +118,7 @@ def generate_product_set(
 ) -> dict:
     from .galleries import list_images
 
-    images = list_images(conn, gallery["id"])
+    images = list_images(conn, gallery["id"], tenant_id=tenant["id"])
     if not images:
         raise ValueError("gallery has no product images")
     presets = [PRESETS_BY_KEY[k] for k in (preset_keys or []) if k in PRESETS_BY_KEY] or PRESETS

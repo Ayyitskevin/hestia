@@ -136,14 +136,15 @@ def generate_album(
 
     # Exclude culled/hidden frames — the album is a client deliverable, so it should never
     # arrange a frame the owner removed from the gallery (and the client review serves these).
-    images = list_images(conn, gallery["id"], include_hidden=False)
+    images = list_images(conn, gallery["id"], include_hidden=False, tenant_id=tenant["id"])
     if not images:
         raise AlbumError("gallery has no images to arrange")
 
     # Pull vision scores (may be absent if the gallery wasn't processed yet).
     rows = conn.execute(
-        "SELECT image_id, hero_potential, shot_type FROM image_analyses WHERE gallery_id = ?",
-        (gallery["id"],),
+        "SELECT image_id, hero_potential, shot_type FROM image_analyses "
+        "WHERE gallery_id = ? AND tenant_id = ?",
+        (gallery["id"], tenant["id"]),
     ).fetchall()
     scores = {r["image_id"]: dict(r) for r in rows}
     enriched = []
@@ -184,14 +185,20 @@ def _hydrate(row: dict) -> dict:
 
 def get_album(conn: sqlite3.Connection, tenant_id: str, album_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT * FROM albums WHERE id = ? AND tenant_id = ?", (album_id, tenant_id)
+        "SELECT a.* FROM albums a "
+        "JOIN galleries g ON g.id = a.gallery_id AND g.tenant_id = a.tenant_id "
+        "WHERE a.id = ? AND a.tenant_id = ?",
+        (album_id, tenant_id),
     ).fetchone()
     return _hydrate(dict(row)) if row else None
 
 
 def get_album_for_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT * FROM albums WHERE tenant_id = ? AND gallery_id = ?", (tenant_id, gallery_id)
+        "SELECT a.* FROM albums a "
+        "JOIN galleries g ON g.id = a.gallery_id AND g.tenant_id = a.tenant_id "
+        "WHERE a.tenant_id = ? AND a.gallery_id = ?",
+        (tenant_id, gallery_id),
     ).fetchone()
     return _hydrate(dict(row)) if row else None
 
@@ -202,8 +209,9 @@ def album_status_for_gallery(conn: sqlite3.Connection, tenant_id: str,
     album: 'approved' | 'changes' (client asked for edits) | 'review' (shared, awaiting) |
     'draft' (not yet shared). Tenant-scoped, lightweight (no spread hydration)."""
     row = conn.execute(
-        "SELECT approved_at, change_request, review_token FROM albums "
-        "WHERE tenant_id = ? AND gallery_id = ?",
+        "SELECT a.approved_at, a.change_request, a.review_token FROM albums a "
+        "JOIN galleries g ON g.id = a.gallery_id AND g.tenant_id = a.tenant_id "
+        "WHERE a.tenant_id = ? AND a.gallery_id = ?",
         (tenant_id, gallery_id),
     ).fetchone()
     if not row:
@@ -225,7 +233,10 @@ def enable_album_review(conn: sqlite3.Connection, tenant_id: str, album_id: int)
     the mint only writes when the token is still empty, so two concurrent 'share' requests
     can't strand the first link — the loser reads back the winner's token."""
     row = conn.execute(
-        "SELECT review_token FROM albums WHERE id = ? AND tenant_id = ?", (album_id, tenant_id)
+        "SELECT a.review_token FROM albums a "
+        "JOIN galleries g ON g.id = a.gallery_id AND g.tenant_id = a.tenant_id "
+        "WHERE a.id = ? AND a.tenant_id = ?",
+        (album_id, tenant_id),
     ).fetchone()
     if not row:
         return None
@@ -240,7 +251,10 @@ def enable_album_review(conn: sqlite3.Connection, tenant_id: str, album_id: int)
     if cur.rowcount:
         return token
     fresh = conn.execute(
-        "SELECT review_token FROM albums WHERE id = ? AND tenant_id = ?", (album_id, tenant_id)
+        "SELECT a.review_token FROM albums a "
+        "JOIN galleries g ON g.id = a.gallery_id AND g.tenant_id = a.tenant_id "
+        "WHERE a.id = ? AND a.tenant_id = ?",
+        (album_id, tenant_id),
     ).fetchone()
     return fresh["review_token"] if fresh else None
 
@@ -248,7 +262,12 @@ def enable_album_review(conn: sqlite3.Connection, tenant_id: str, album_id: int)
 def get_album_by_review_token(conn: sqlite3.Connection, token: str) -> dict | None:
     if not token:
         return None
-    row = conn.execute("SELECT * FROM albums WHERE review_token = ?", (token,)).fetchone()
+    row = conn.execute(
+        "SELECT a.* FROM albums a "
+        "JOIN galleries g ON g.id = a.gallery_id AND g.tenant_id = a.tenant_id "
+        "WHERE a.review_token = ?",
+        (token,),
+    ).fetchone()
     return _hydrate(dict(row)) if row else None
 
 
@@ -257,13 +276,14 @@ def approve_album(conn: sqlite3.Connection, token: str) -> bool:
     -act: the guarded UPDATE only matches a not-yet-approved album, so just the FIRST approval
     wins (rowcount == 1); a double-submit or a re-opened link is a no-op that returns False and
     never re-stamps ``approved_at``."""
-    if not token:
+    album = get_album_by_review_token(conn, token)
+    if not album:
         return False
     cur = conn.execute(
         "UPDATE albums SET approved_at = datetime('now'), updated_at = datetime('now'), "
         "change_request = NULL, change_requested_at = NULL "
-        "WHERE review_token = ? AND approved_at IS NULL",
-        (token,),
+        "WHERE id = ? AND tenant_id = ? AND approved_at IS NULL",
+        (album["id"], album["tenant_id"]),
     )
     if cur.rowcount != 1:
         return False
@@ -283,12 +303,13 @@ def request_album_changes(conn: sqlite3.Connection, token: str, note: str) -> bo
     already-approved album (the review page hides the form once approved). The latest note
     wins; the album stays editable."""
     text = (note or "").strip()
-    if not token or not text:
+    album = get_album_by_review_token(conn, token)
+    if not album or not text:
         return False
     cur = conn.execute(
         "UPDATE albums SET change_request = ?, change_requested_at = datetime('now'), "
-        "updated_at = datetime('now') WHERE review_token = ? AND approved_at IS NULL",
-        (text, token),
+        "updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND approved_at IS NULL",
+        (text, album["id"], album["tenant_id"]),
     )
     if cur.rowcount != 1:
         return False
@@ -316,6 +337,11 @@ def set_spread_hero(conn: sqlite3.Connection, tenant_id: str, album_id: int, pos
         return False
     if album.get("approved_at"):
         return False        # locked: the client approved this layout, don't edit it
+    if not conn.execute(
+        "SELECT 1 FROM images WHERE id = ? AND tenant_id = ? AND gallery_id = ?",
+        (image_id, tenant_id, album["gallery_id"]),
+    ).fetchone():
+        return False
     changed = False
     for sp in album["spreads"]:
         if sp["position"] == position and image_id in sp["photo_ids"]:
@@ -374,7 +400,7 @@ def album_spreads_display(conn: sqlite3.Connection, album: dict, url_builder) ->
             img = get_image(conn, album["tenant_id"], iid)
             # Skip a frame culled (hidden) after the album was generated — it stays in
             # spreads_json but must not render, matching the photo route's hidden=0 gate.
-            if img and not img["hidden"]:
+            if img and img["gallery_id"] == album["gallery_id"] and not img["hidden"]:
                 photos.append({"id": iid, "url": url_builder(img),
                                "filename": img["filename"], "is_hero": iid == sp["hero_image_id"]})
         out.append({"position": sp["position"], "photos": photos})

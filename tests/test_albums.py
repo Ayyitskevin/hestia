@@ -2,15 +2,20 @@
 
 import dataclasses
 import io
+import json
 
 from conftest import login_owner, onboard_studio
 
 from hestia.albums import (
     MockArranger,
     XaiArranger,
+    album_spreads_display,
+    approve_album,
     build_arranger,
     generate_album,
+    get_album_by_review_token,
     get_album_for_gallery,
+    request_album_changes,
     validate_and_repair,
 )
 from hestia.galleries import add_image, create_gallery
@@ -90,6 +95,36 @@ def test_tenant_isolation(conn, storage, settings):
     t2 = create_tenant(conn, name="Other", shoot_type="wedding")
     conn.commit()
     assert get_album_for_gallery(conn, t2["id"], g1["id"]) is None
+
+
+def test_review_token_rejects_album_with_foreign_gallery(conn, storage):
+    t1, g1, _ = _gallery_with_images(conn, storage, n=1)
+    t2 = create_tenant(conn, name="Other", shoot_type="wedding")
+    conn.execute(
+        "INSERT INTO albums (tenant_id, gallery_id, title, review_token, spreads_json) "
+        "VALUES (?, ?, 'Bad album', 'bad-review-token', '[]')",
+        (t2["id"], g1["id"]),
+    )
+    assert get_album_by_review_token(conn, "bad-review-token") is None
+    assert approve_album(conn, "bad-review-token") is False
+    assert request_album_changes(conn, "bad-review-token", "Please fix") is False
+
+
+def test_spread_display_ignores_images_outside_album_gallery(conn, storage, settings):
+    t, g, ids = _gallery_with_images(conn, storage, n=1)
+    other_gallery = create_gallery(conn, tenant_id=t["id"], title="Other Gallery")
+    other = add_image(conn, storage, tenant_id=t["id"], gallery_id=other_gallery["id"],
+                      filename="other.jpg", fileobj=io.BytesIO(b"other-image-bytes"))
+    album = generate_album(conn, settings, tenant=t, gallery=g)
+    conn.execute(
+        "UPDATE albums SET spreads_json = ? WHERE id = ?",
+        (json.dumps([{"position": 1, "hero_image_id": ids[0],
+                      "photo_ids": [ids[0], other["id"]]}]), album["id"]),
+    )
+    album = get_album_for_gallery(conn, t["id"], g["id"])
+    spreads = album_spreads_display(conn, album, lambda img: f"/img/{img['id']}")
+    assert [p["id"] for p in spreads[0]["photos"]] == [ids[0]]
+    assert "other.jpg" not in json.dumps(spreads)
 
 
 def test_http_generate_and_view(client):

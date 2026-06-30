@@ -216,7 +216,8 @@ def get_project(conn: sqlite3.Connection, tenant_id: str, project_id: int) -> di
 def list_projects(conn: sqlite3.Connection, tenant_id: str, *, client_id: int | None = None) -> list[dict]:
     sql = (
         "SELECT p.*, c.name AS client_name, "
-        "       (SELECT COUNT(*) FROM galleries g WHERE g.project_id = p.id) AS gallery_count "
+        "       (SELECT COUNT(*) FROM galleries g "
+        "        WHERE g.project_id = p.id AND g.tenant_id = p.tenant_id) AS gallery_count "
         "  FROM projects p LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = p.tenant_id "
         " WHERE p.tenant_id = ?"
     )

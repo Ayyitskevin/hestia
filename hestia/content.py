@@ -17,6 +17,7 @@ import json
 import sqlite3
 
 from .config import Settings
+from .ownership import mask_invalid_project_id
 
 # recipe slug → (label, applicable shoot types or None for all)
 RECIPES = {
@@ -176,10 +177,15 @@ def generate_pack(
 
 
 def list_packs(conn: sqlite3.Connection, tenant_id: str, *, project_id: int | None = None) -> list[dict]:
-    sql = "SELECT * FROM content_packs WHERE tenant_id = ?"
+    sql = (
+        "SELECT cp.*, p.id AS valid_project_id, p.name AS project_name "
+        "FROM content_packs cp "
+        "LEFT JOIN projects p ON p.id = cp.project_id AND p.tenant_id = cp.tenant_id "
+        "WHERE cp.tenant_id = ?"
+    )
     params: list = [tenant_id]
     if project_id is not None:
-        sql += " AND project_id = ?"
+        sql += " AND p.id = ?"
         params.append(project_id)
     sql += " ORDER BY created_at DESC"
     return [_hydrate(dict(r)) for r in conn.execute(sql, params).fetchall()]
@@ -187,7 +193,11 @@ def list_packs(conn: sqlite3.Connection, tenant_id: str, *, project_id: int | No
 
 def get_pack(conn: sqlite3.Connection, tenant_id: str, pack_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT * FROM content_packs WHERE id = ? AND tenant_id = ?", (pack_id, tenant_id)
+        "SELECT cp.*, p.id AS valid_project_id, p.name AS project_name "
+        "FROM content_packs cp "
+        "LEFT JOIN projects p ON p.id = cp.project_id AND p.tenant_id = cp.tenant_id "
+        "WHERE cp.id = ? AND cp.tenant_id = ?",
+        (pack_id, tenant_id),
     ).fetchone()
     return _hydrate(dict(row)) if row else None
 
@@ -201,5 +211,6 @@ def approve_pack(conn: sqlite3.Connection, tenant_id: str, pack_id: int) -> None
 
 
 def _hydrate(row: dict) -> dict:
+    row = mask_invalid_project_id(row)
     row["body"] = json.loads(row.pop("body_json") or "{}")
     return row
