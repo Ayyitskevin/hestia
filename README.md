@@ -90,7 +90,7 @@ six services in a trench coat.
 ## Quickstart
 
 ```bash
-python3.12 -m venv .venv && . .venv/bin/activate
+python3.12 -m venv .venv && . .venv/bin/activate   # matches .python-version + CI
 pip install -e ".[dev]"
 cp .env.example .env            # set real secrets; chmod 600 .env
 bash scripts/start-hestia.sh    # → http://127.0.0.1:8500
@@ -135,9 +135,10 @@ bash scripts/ci-smoke.sh        # ruff + pytest + /healthz boot
 bash scripts/dogfood-hestia.sh  # boot the app, drive the magic moment, assert an offer
 ```
 
-CI runs both on every push ([`.github/workflows/test.yml`](.github/workflows/test.yml)).
-Tested invariants include tenant isolation, offer idempotency, and safe mock-provider
-operation with no keys.
+Run the local gate from the Python 3.12 virtualenv installed with `.[dev]`; the S3
+storage tests need the `moto` dev extra. CI runs both commands on every push
+([`.github/workflows/test.yml`](.github/workflows/test.yml)). Tested invariants include
+tenant isolation, offer idempotency, and safe mock-provider operation with no keys.
 
 ## Roadmap
 

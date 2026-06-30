@@ -3,9 +3,11 @@
 import io
 import json
 
+import pytest
+
 from hestia.galleries import add_image, create_gallery
 from hestia.tenants import create_tenant
-from hestia.vision import MockVisionProvider, analyze_gallery
+from hestia.vision import MockVisionProvider, VisionError, analyze_gallery
 
 
 def test_mock_provider_deterministic():
@@ -49,3 +51,15 @@ def test_reanalyze_is_idempotent_upsert(conn, storage, settings):
     analyze_gallery(conn, storage, settings, tenant_id=tenant["id"], gallery_id=gallery["id"])
     rows = conn.execute("SELECT COUNT(*) AS n FROM image_analyses").fetchone()["n"]
     assert rows == 4  # upsert, not duplicate
+
+
+def test_analyze_gallery_rejects_gallery_outside_tenant(conn, storage, settings):
+    owner, gallery = _seed_gallery(conn, storage, n=2)
+    other = create_tenant(conn, name="Other Studio", shoot_type="portrait")
+    conn.commit()
+
+    with pytest.raises(VisionError, match="gallery not found"):
+        analyze_gallery(conn, storage, settings, tenant_id=other["id"], gallery_id=gallery["id"])
+    assert conn.execute(
+        "SELECT COUNT(*) AS n FROM image_analyses WHERE tenant_id = ?", (owner["id"],)
+    ).fetchone()["n"] == 0

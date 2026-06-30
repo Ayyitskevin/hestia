@@ -92,6 +92,13 @@ def test_set_image_hidden_roundtrip_and_tenant_scoped(conn, storage):
     other = create_tenant(conn, name="Intruder", shoot_type="portrait")
     set_image_hidden(conn, other["id"], ids["a"], True)
     assert ids["a"] in {im["id"] for im in list_images(conn, g["id"], include_hidden=False)}
+    # a route-level/gallery-scoped call cannot mutate another gallery in the same tenant
+    g2 = create_gallery(conn, tenant_id=t["id"], title="Other Gallery")
+    other_img = _img(conn, storage, t["id"], g2["id"], "other.jpg")
+    assert set_image_hidden(conn, t["id"], other_img["id"], True, gallery_id=g["id"]) is False
+    assert other_img["id"] in {
+        im["id"] for im in list_images(conn, g2["id"], include_hidden=False)
+    }
 
 
 # ── public surfaces: hidden frames are gone from delivery & the client gallery ─
@@ -164,6 +171,21 @@ def test_owner_hide_unhide_route(client, conn, storage):
     assert conn.execute("SELECT hidden FROM images WHERE id = ?", (iid,)).fetchone()["hidden"] == 1
     client.post(f"/galleries/{gid}/images/{iid}/unhide")
     assert conn.execute("SELECT hidden FROM images WHERE id = ?", (iid,)).fetchone()["hidden"] == 0
+
+
+def test_owner_hide_route_cannot_mutate_same_tenant_other_gallery(client, conn, storage):
+    creds = onboard_studio(client, email="same-tenant-hide@studio.test")
+    login_owner(client, creds)
+    tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+    g1 = create_gallery(conn, tenant_id=tid, title="Visible Gallery")
+    g2 = create_gallery(conn, tenant_id=tid, title="Other Gallery")
+    other = _img(conn, storage, tid, g2["id"], "other.jpg")
+    conn.commit()
+
+    client.post(f"/galleries/{g1['id']}/images/{other['id']}/hide")
+    assert conn.execute("SELECT hidden FROM images WHERE id = ?", (other["id"],)).fetchone()[
+        "hidden"
+    ] == 0
 
 
 def test_owner_cannot_cull_or_hide_foreign_gallery(client, conn, storage):

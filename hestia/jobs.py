@@ -17,12 +17,15 @@ All timestamps use SQLite's ``datetime('now')`` so comparisons stay consistent.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
 
 from .config import Settings
 from .db import get_db
+
+log = logging.getLogger("hestia.jobs")
 
 # kind -> handler(settings, payload)
 HANDLERS: dict[str, Callable] = {}
@@ -278,25 +281,30 @@ def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_slee
             try:
                 reclaim_stale(db_path)
             except Exception:  # noqa: BLE001 - never let reclaim kill the worker
-                pass
+                log.warning("worker reclaim failed", extra={"action": "jobs.reclaim"},
+                            exc_info=True)
             last_reclaim = time.monotonic()
         if time.monotonic() - last_remind >= remind_interval:
             try:
                 _remind_overdue(db_path, settings)
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
-                pass
+                log.warning("worker overdue-reminder sweep failed",
+                            extra={"action": "jobs.remind_overdue"}, exc_info=True)
             try:
                 _remind_pending_documents(db_path, settings)
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
-                pass
+                log.warning("worker document-reminder sweep failed",
+                            extra={"action": "jobs.remind_documents"}, exc_info=True)
             try:
                 _send_owner_digests(db_path, settings)
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
-                pass
+                log.warning("worker owner-digest sweep failed",
+                            extra={"action": "jobs.owner_digest"}, exc_info=True)
             try:
                 _generate_recurring(db_path, settings)
             except Exception:  # noqa: BLE001 - a billing miss must never kill the worker
-                pass
+                log.warning("worker recurring-invoice sweep failed",
+                            extra={"action": "jobs.recurring"}, exc_info=True)
             last_remind = time.monotonic()
         try:
             kind = run_next(db_path, settings)

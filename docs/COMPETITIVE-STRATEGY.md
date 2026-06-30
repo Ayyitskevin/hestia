@@ -22,11 +22,12 @@ offer — where the same vision signal that culls also auto-builds the offer, dr
 the album, and seeds the marketing pack. Aftershoot attacks from the AI-tool side
 inward; Hestia owns the business-OS side it doesn't touch.
 
-**The credibility hole:** Hestia today has no contracts, e-sign, scheduling,
-questionnaires, payment plans, client portal, or automations. It is a strong
-delivery + offer engine that a working photographer **cannot yet run their business
-on.** Closing that booking-side gap — before Aftershoot extends upstream — is the
-priority.
+**The credibility hole has moved:** Hestia's booking-side table stakes are now built
+on `main` — contracts, e-sign, scheduling, questionnaires, payment plans, portal, and
+automations all exist on the shared spine. The remaining gap is competitive depth in
+`vision`: credible cull/duplicate/blink parity and live style-profile validation, so
+the AI signal that powers offers, albums, and retention is strong enough to compete
+with dedicated after-the-shoot tools.
 
 ## The prioritized build roadmap
 

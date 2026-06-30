@@ -353,7 +353,7 @@ def gallery_image_hide(request: Request, gallery_id: int, image_id: int):
             return RedirectResponse("/login", status_code=303)
         if not get_gallery(conn, auth.tenant["id"], gallery_id):
             return RedirectResponse("/galleries", status_code=303)
-        set_image_hidden(conn, auth.tenant["id"], image_id, True)
+        set_image_hidden(conn, auth.tenant["id"], image_id, True, gallery_id=gallery_id)
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
 
@@ -366,7 +366,7 @@ def gallery_image_unhide(request: Request, gallery_id: int, image_id: int):
             return RedirectResponse("/login", status_code=303)
         if not get_gallery(conn, auth.tenant["id"], gallery_id):
             return RedirectResponse("/galleries", status_code=303)
-        set_image_hidden(conn, auth.tenant["id"], image_id, False)
+        set_image_hidden(conn, auth.tenant["id"], image_id, False, gallery_id=gallery_id)
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
 

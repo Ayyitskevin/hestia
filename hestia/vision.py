@@ -229,7 +229,12 @@ def analyze_gallery(
     from .galleries import list_images
 
     provider = provider or build_provider(settings)
-    images = list_images(conn, gallery_id)
+    if not conn.execute(
+        "SELECT 1 FROM galleries WHERE id = ? AND tenant_id = ?",
+        (gallery_id, tenant_id),
+    ).fetchone():
+        raise VisionError("gallery not found for tenant")
+    images = list_images(conn, gallery_id, tenant_id=tenant_id)
     if not images:
         raise VisionError("gallery has no images to analyze")
 

@@ -230,14 +230,20 @@ def add_image(
 
 
 def list_images(conn: sqlite3.Connection, gallery_id: int, *,
-                include_hidden: bool = True) -> list[dict]:
+                include_hidden: bool = True, tenant_id: str | None = None) -> list[dict]:
     """Images in a gallery. ``include_hidden`` defaults True (the owner sees every frame,
-    culled ones marked); the client gallery and delivery pass False to drop culled frames."""
+    culled ones marked); the client gallery and delivery pass False to drop culled frames.
+    ``tenant_id`` is optional for legacy callers that have already resolved the gallery, but
+    lower-level engines should pass it so a global gallery id is never trusted alone."""
     sql = "SELECT * FROM images WHERE gallery_id = ?"
+    params: list = [gallery_id]
+    if tenant_id is not None:
+        sql += " AND tenant_id = ?"
+        params.append(tenant_id)
     if not include_hidden:
         sql += " AND hidden = 0"
     sql += " ORDER BY position, id"
-    return [dict(r) for r in conn.execute(sql, (gallery_id,)).fetchall()]
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
 def image_count(conn: sqlite3.Connection, gallery_id: int, *, include_hidden: bool = True) -> int:
@@ -248,12 +254,26 @@ def image_count(conn: sqlite3.Connection, gallery_id: int, *, include_hidden: bo
     return row["n"] if row else 0
 
 
-def set_image_hidden(conn: sqlite3.Connection, tenant_id: str, image_id: int, hidden: bool) -> None:
-    """Hide (cull) or restore a single image — tenant-scoped, reversible."""
-    conn.execute(
-        "UPDATE images SET hidden = ? WHERE id = ? AND tenant_id = ?",
-        (1 if hidden else 0, image_id, tenant_id),
-    )
+def set_image_hidden(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    image_id: int,
+    hidden: bool,
+    *,
+    gallery_id: int | None = None,
+) -> bool:
+    """Hide (cull) or restore a single image — tenant-scoped, reversible.
+
+    Owner routes pass ``gallery_id`` too, so an image id from another gallery in the same
+    studio cannot be paired with the current URL's gallery id and mutated accidentally.
+    """
+    sql = "UPDATE images SET hidden = ? WHERE id = ? AND tenant_id = ?"
+    params: list = [1 if hidden else 0, image_id, tenant_id]
+    if gallery_id is not None:
+        sql += " AND gallery_id = ?"
+        params.append(gallery_id)
+    cur = conn.execute(sql, params)
+    return cur.rowcount > 0
 
 
 def set_cover_image(conn: sqlite3.Connection, tenant_id: str, gallery_id: int, image_id: int) -> bool:

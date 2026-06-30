@@ -1,7 +1,10 @@
 """Durable job queue — enqueue, atomic claim, retry/backoff, reclaim, dispatch."""
 
+import logging
+
 from conftest import login_owner, onboard_studio
 
+from hestia import jobs as jobs_mod
 from hestia.db import get_db
 from hestia.jobs import (
     claim_next,
@@ -11,6 +14,7 @@ from hestia.jobs import (
     reclaim_stale,
     register,
     run_next,
+    run_worker,
 )
 
 # Test handlers, registered once at import. Unique kinds avoid colliding with
@@ -111,6 +115,52 @@ def test_reclaim_stale_requeues_only_orphans(db_path):
     assert reclaim_stale(db_path, older_than_seconds=900) == 1
     assert _job(db_path, stale)["status"] == "queued"
     assert _job(db_path, fresh)["status"] == "running"  # recent job left alone
+
+
+def test_worker_logs_periodic_sweep_failure(monkeypatch, db_path, settings):
+    records = []
+
+    class Capture(logging.Handler):
+        def emit(self, record):  # noqa: D102
+            records.append(record)
+
+    class StopAfterOneIdle:
+        def __init__(self):
+            self.done = False
+
+        def is_set(self):
+            return self.done
+
+        def wait(self, _timeout):
+            self.done = True
+
+    def boom(_db_path):
+        raise RuntimeError("reclaim exploded")
+
+    logger = logging.getLogger("hestia.jobs")
+    handler = Capture()
+    old_level = logger.level
+    logger.addHandler(handler)
+    logger.setLevel(logging.WARNING)
+    try:
+        monkeypatch.setattr(jobs_mod, "reclaim_stale", boom)
+        monkeypatch.setattr(jobs_mod, "run_next", lambda _db_path, _settings: None)
+        run_worker(
+            db_path,
+            settings,
+            StopAfterOneIdle(),
+            idle_sleep=0,
+            reclaim_interval=0,
+            remind_interval=10**12,
+        )
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(old_level)
+
+    assert any(
+        r.action == "jobs.reclaim" and r.exc_info and "reclaim exploded" in str(r.exc_info[1])
+        for r in records
+    )
 
 
 def test_list_jobs_is_tenant_scoped(db_path):
