@@ -61,6 +61,21 @@ def test_create_drops_project_for_wrong_same_tenant_client(conn):
     assert ct["project_name"] is None
 
 
+def test_reads_hide_malformed_same_tenant_project_link(conn):
+    t = _tenant(conn)
+    sarah = create_client(conn, tenant_id=t["id"], name="Sarah")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    bob_project = create_project(conn, tenant_id=t["id"], name="Bob shoot", client_id=bob["id"])
+    ct = create_contract(conn, tenant_id=t["id"], title="Agreement", client_id=sarah["id"])
+    conn.execute("UPDATE contracts SET project_id = ? WHERE id = ?", (bob_project["id"], ct["id"]))
+    got = get_contract(conn, t["id"], ct["id"])
+    public = get_contract_by_token(conn, ct["token"])
+    assert got["client_id"] == sarah["id"]
+    assert got["project_id"] is None and got["project_name"] is None
+    assert public["project_id"] is None and public["project_name"] is None
+    assert list_contracts(conn, t["id"], project_id=bob_project["id"]) == []
+
+
 def test_status_transitions(conn):
     t = _tenant(conn)
     ct = create_contract(conn, tenant_id=t["id"], title="Agreement")

@@ -18,7 +18,7 @@ from .config import Settings
 from .crypto import new_session_token
 from .db import audit
 from .email import notify
-from .ownership import normalize_client_project_ids
+from .ownership import mask_invalid_project_id, normalize_client_project_ids
 
 QUESTIONNAIRE_STATUSES = ("draft", "sent", "completed", "void")
 
@@ -62,17 +62,19 @@ def _items(conn: sqlite3.Connection, tenant_id: str, qid: int) -> list[dict]:
 def get_questionnaire(conn: sqlite3.Connection, tenant_id: str, qid: int) -> dict | None:
     row = conn.execute(
         """
-        SELECT q.*, c.name AS client_name, c.email AS client_email, p.name AS project_name
+        SELECT q.*, c.name AS client_name, c.email AS client_email,
+               p.id AS valid_project_id, p.name AS project_name
           FROM questionnaires q
           LEFT JOIN clients c ON c.id = q.client_id AND c.tenant_id = q.tenant_id
           LEFT JOIN projects p ON p.id = q.project_id AND p.tenant_id = q.tenant_id
+           AND (q.client_id IS NULL OR p.client_id = q.client_id)
          WHERE q.id = ? AND q.tenant_id = ?
         """,
         (qid, tenant_id),
     ).fetchone()
     if not row:
         return None
-    q = dict(row)
+    q = mask_invalid_project_id(dict(row))
     q["items"] = _items(conn, tenant_id, qid)
     return q
 
@@ -80,17 +82,18 @@ def get_questionnaire(conn: sqlite3.Connection, tenant_id: str, qid: int) -> dic
 def get_questionnaire_by_token(conn: sqlite3.Connection, token: str) -> dict | None:
     row = conn.execute(
         """
-        SELECT q.*, c.name AS client_name, p.name AS project_name
+        SELECT q.*, c.name AS client_name, p.id AS valid_project_id, p.name AS project_name
           FROM questionnaires q
           LEFT JOIN clients c ON c.id = q.client_id AND c.tenant_id = q.tenant_id
           LEFT JOIN projects p ON p.id = q.project_id AND p.tenant_id = q.tenant_id
+           AND (q.client_id IS NULL OR p.client_id = q.client_id)
          WHERE q.token = ?
         """,
         (token,),
     ).fetchone()
     if not row:
         return None
-    q = dict(row)
+    q = mask_invalid_project_id(dict(row))
     q["items"] = _items(conn, q["tenant_id"], q["id"])
     return q
 
@@ -100,22 +103,23 @@ def list_questionnaires(
     project_id: int | None = None, client_id: int | None = None,
 ) -> list[dict]:
     sql = (
-        "SELECT q.*, c.name AS client_name, p.name AS project_name, "
+        "SELECT q.*, c.name AS client_name, p.id AS valid_project_id, p.name AS project_name, "
         "       (SELECT COUNT(*) FROM questionnaire_items qi WHERE qi.questionnaire_id = q.id) AS item_count "
         "  FROM questionnaires q "
         "  LEFT JOIN clients c ON c.id = q.client_id AND c.tenant_id = q.tenant_id "
         "  LEFT JOIN projects p ON p.id = q.project_id AND p.tenant_id = q.tenant_id "
+        "   AND (q.client_id IS NULL OR p.client_id = q.client_id) "
         " WHERE q.tenant_id = ?"
     )
     params: list = [tenant_id]
     if project_id is not None:
-        sql += " AND q.project_id = ?"
+        sql += " AND p.id = ?"
         params.append(project_id)
     if client_id is not None:
         sql += " AND q.client_id = ?"
         params.append(client_id)
     sql += " ORDER BY q.created_at DESC"
-    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    return [mask_invalid_project_id(dict(r)) for r in conn.execute(sql, params).fetchall()]
 
 
 def send_questionnaire(conn: sqlite3.Connection, tenant_id: str, qid: int) -> None:

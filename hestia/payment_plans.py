@@ -17,7 +17,7 @@ import sqlite3
 from .config import Settings
 from .db import audit
 from .invoices import create_invoice, money, tax_for
-from .ownership import normalize_client_project_ids
+from .ownership import mask_invalid_project_id, normalize_client_project_ids
 
 PLAN_STATUSES = ("active", "void")
 
@@ -107,17 +107,19 @@ def _progress(total_cents: int, installments: list[dict]) -> dict:
 def get_payment_plan(conn: sqlite3.Connection, tenant_id: str, plan_id: int) -> dict | None:
     row = conn.execute(
         """
-        SELECT pp.*, c.name AS client_name, c.email AS client_email, p.name AS project_name
+        SELECT pp.*, c.name AS client_name, c.email AS client_email,
+               p.id AS valid_project_id, p.name AS project_name
           FROM payment_plans pp
           LEFT JOIN clients c ON c.id = pp.client_id AND c.tenant_id = pp.tenant_id
           LEFT JOIN projects p ON p.id = pp.project_id AND p.tenant_id = pp.tenant_id
+           AND (pp.client_id IS NULL OR p.client_id = pp.client_id)
          WHERE pp.id = ? AND pp.tenant_id = ?
         """,
         (plan_id, tenant_id),
     ).fetchone()
     if not row:
         return None
-    plan = dict(row)
+    plan = mask_invalid_project_id(dict(row))
     plan["installments"] = installments_for_plan(conn, tenant_id, plan_id)
     plan.update(_progress(plan["total_cents"], plan["installments"]))
     plan["total_display"] = money(plan["total_cents"], plan.get("currency", "usd"))
@@ -131,15 +133,16 @@ def list_payment_plans(
     project_id: int | None = None, client_id: int | None = None,
 ) -> list[dict]:
     sql = (
-        "SELECT pp.*, c.name AS client_name, p.name AS project_name "
+        "SELECT pp.*, c.name AS client_name, p.id AS valid_project_id, p.name AS project_name "
         "  FROM payment_plans pp "
         "  LEFT JOIN clients c ON c.id = pp.client_id AND c.tenant_id = pp.tenant_id "
         "  LEFT JOIN projects p ON p.id = pp.project_id AND p.tenant_id = pp.tenant_id "
+        "   AND (pp.client_id IS NULL OR p.client_id = pp.client_id) "
         " WHERE pp.tenant_id = ?"
     )
     params: list = [tenant_id]
     if project_id is not None:
-        sql += " AND pp.project_id = ?"
+        sql += " AND p.id = ?"
         params.append(project_id)
     if client_id is not None:
         sql += " AND pp.client_id = ?"
@@ -147,7 +150,7 @@ def list_payment_plans(
     sql += " ORDER BY pp.created_at DESC"
     plans = []
     for r in conn.execute(sql, params).fetchall():
-        plan = dict(r)
+        plan = mask_invalid_project_id(dict(r))
         installments = installments_for_plan(conn, tenant_id, plan["id"])
         plan.update(_progress(plan["total_cents"], installments))
         plan["total_display"] = money(plan["total_cents"], plan.get("currency", "usd"))

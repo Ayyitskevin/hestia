@@ -62,6 +62,26 @@ def test_create_drops_project_for_wrong_same_tenant_client(conn):
     assert q["project_name"] is None
 
 
+def test_reads_hide_malformed_same_tenant_project_link(conn):
+    t = _tenant(conn)
+    sarah = create_client(conn, tenant_id=t["id"], name="Sarah")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    bob_project = create_project(conn, tenant_id=t["id"], name="Bob shoot", client_id=bob["id"])
+    q = create_questionnaire(
+        conn, tenant_id=t["id"], title="Intake", prompts=["Q?"], client_id=sarah["id"],
+    )
+    conn.execute(
+        "UPDATE questionnaires SET project_id = ? WHERE id = ?",
+        (bob_project["id"], q["id"]),
+    )
+    got = get_questionnaire(conn, t["id"], q["id"])
+    public = get_questionnaire_by_token(conn, q["token"])
+    assert got["client_id"] == sarah["id"]
+    assert got["project_id"] is None and got["project_name"] is None
+    assert public["project_id"] is None and public["project_name"] is None
+    assert list_questionnaires(conn, t["id"], project_id=bob_project["id"]) == []
+
+
 def test_status_transitions(conn):
     t = _tenant(conn)
     q = create_questionnaire(conn, tenant_id=t["id"], title="Q", prompts=["A?"])

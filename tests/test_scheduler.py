@@ -77,6 +77,26 @@ def test_create_drops_project_for_wrong_same_tenant_client(conn):
     assert appt["project_name"] is None
 
 
+def test_reads_hide_malformed_same_tenant_project_link(conn):
+    t = _tenant(conn)
+    sarah = create_client(conn, tenant_id=t["id"], name="Sarah")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    bob_project = create_project(conn, tenant_id=t["id"], name="Bob shoot", client_id=bob["id"])
+    appt = create_appointment(
+        conn, tenant_id=t["id"], title="Consult", options=[FUTURE], client_id=sarah["id"],
+    )
+    conn.execute(
+        "UPDATE appointments SET project_id = ? WHERE id = ?",
+        (bob_project["id"], appt["id"]),
+    )
+    got = get_appointment(conn, t["id"], appt["id"])
+    public = get_appointment_by_token(conn, appt["token"])
+    assert got["client_id"] == sarah["id"]
+    assert got["project_id"] is None and got["project_name"] is None
+    assert public["project_id"] is None and public["project_name"] is None
+    assert list_appointments(conn, t["id"], project_id=bob_project["id"]) == []
+
+
 def test_book_is_idempotent(conn, settings):
     t = _tenant(conn)
     c = create_client(conn, tenant_id=t["id"], name="Sarah", email="sarah@example.com")

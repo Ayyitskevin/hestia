@@ -81,6 +81,25 @@ def test_create_plan_drops_project_for_wrong_same_tenant_client(conn, settings):
                for i in plan["installments"])
 
 
+def test_plan_reads_hide_malformed_same_tenant_project_link(conn, settings):
+    t = _tenant(conn)
+    sarah = create_client(conn, tenant_id=t["id"], name="Sarah")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    bob_project = create_project(conn, tenant_id=t["id"], name="Bob shoot", client_id=bob["id"])
+    plan = create_payment_plan(
+        conn, settings, tenant_id=t["id"], title="Sarah Plan", client_id=sarah["id"],
+        installments=deposit_balance_installments(total_cents=100000, deposit_cents=25000),
+    )
+    conn.execute(
+        "UPDATE payment_plans SET project_id = ? WHERE id = ?",
+        (bob_project["id"], plan["id"]),
+    )
+    got = get_payment_plan(conn, t["id"], plan["id"])
+    assert got["client_id"] == sarah["id"]
+    assert got["project_id"] is None and got["project_name"] is None
+    assert list_payment_plans(conn, t["id"], project_id=bob_project["id"]) == []
+
+
 def test_progress_open_partial_paid(conn, settings):
     t = _tenant(conn)
     plan = create_payment_plan(

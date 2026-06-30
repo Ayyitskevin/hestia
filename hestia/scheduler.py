@@ -22,7 +22,7 @@ from .crypto import new_session_token
 from .db import audit
 from .email import notify
 from .jobs import enqueue, register
-from .ownership import normalize_client_project_ids
+from .ownership import mask_invalid_project_id, normalize_client_project_ids
 
 APPOINTMENT_KINDS = ("consultation", "shoot", "call", "other")
 KIND_LABELS = {
@@ -97,17 +97,19 @@ def _options(conn: sqlite3.Connection, tenant_id: str, appt_id: int) -> list[dic
 def get_appointment(conn: sqlite3.Connection, tenant_id: str, appt_id: int) -> dict | None:
     row = conn.execute(
         """
-        SELECT a.*, c.name AS client_name, c.email AS client_email, p.name AS project_name
+        SELECT a.*, c.name AS client_name, c.email AS client_email,
+               p.id AS valid_project_id, p.name AS project_name
           FROM appointments a
           LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id
           LEFT JOIN projects p ON p.id = a.project_id AND p.tenant_id = a.tenant_id
+           AND (a.client_id IS NULL OR p.client_id = a.client_id)
          WHERE a.id = ? AND a.tenant_id = ?
         """,
         (appt_id, tenant_id),
     ).fetchone()
     if not row:
         return None
-    a = dict(row)
+    a = mask_invalid_project_id(dict(row))
     a["options"] = _options(conn, tenant_id, appt_id)
     a["kind_label"] = KIND_LABELS.get(a["kind"], a["kind"])
     a["status_label"] = STATUS_LABELS.get(a["status"], a["status"])
@@ -119,17 +121,18 @@ def get_appointment_by_token(conn: sqlite3.Connection, token: str) -> dict | Non
     # client booking — keep it out of the public book/cancel/calendar flow entirely.
     row = conn.execute(
         """
-        SELECT a.*, c.name AS client_name, p.name AS project_name
+        SELECT a.*, c.name AS client_name, p.id AS valid_project_id, p.name AS project_name
           FROM appointments a
           LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id
           LEFT JOIN projects p ON p.id = a.project_id AND p.tenant_id = a.tenant_id
+           AND (a.client_id IS NULL OR p.client_id = a.client_id)
          WHERE a.token = ? AND a.kind != 'blocked'
         """,
         (token,),
     ).fetchone()
     if not row:
         return None
-    a = dict(row)
+    a = mask_invalid_project_id(dict(row))
     a["options"] = _options(conn, a["tenant_id"], a["id"])
     a["kind_label"] = KIND_LABELS.get(a["kind"], a["kind"])
     a["status_label"] = STATUS_LABELS.get(a["status"], a["status"])
@@ -147,16 +150,17 @@ def list_appointments(
     project_id: int | None = None, client_id: int | None = None,
 ) -> list[dict]:
     sql = (
-        "SELECT a.*, c.name AS client_name, p.name AS project_name, "
+        "SELECT a.*, c.name AS client_name, p.id AS valid_project_id, p.name AS project_name, "
         "       (SELECT COUNT(*) FROM appointment_options o WHERE o.appointment_id = a.id) AS option_count "
         "  FROM appointments a "
         "  LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id "
         "  LEFT JOIN projects p ON p.id = a.project_id AND p.tenant_id = a.tenant_id "
+        "   AND (a.client_id IS NULL OR p.client_id = a.client_id) "
         " WHERE a.tenant_id = ?"
     )
     params: list = [tenant_id]
     if project_id is not None:
-        sql += " AND a.project_id = ?"
+        sql += " AND p.id = ?"
         params.append(project_id)
     if client_id is not None:
         sql += " AND a.client_id = ?"
@@ -166,7 +170,7 @@ def list_appointments(
             "a.starts_at, a.created_at DESC")
     out = []
     for r in conn.execute(sql, params).fetchall():
-        a = dict(r)
+        a = mask_invalid_project_id(dict(r))
         a["kind_label"] = KIND_LABELS.get(a["kind"], a["kind"])
         a["status_label"] = STATUS_LABELS.get(a["status"], a["status"])
         out.append(a)

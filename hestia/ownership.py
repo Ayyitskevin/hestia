@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import sqlite3
 
+_MISSING = object()
+
 
 def owned_client_id(conn: sqlite3.Connection, tenant_id: str, client_id: int | None) -> int | None:
     """Return the client id only if it belongs to the tenant."""
@@ -45,6 +47,14 @@ def normalize_client_project_ids(
     if not row or row["client_id"] != client_id:
         project_id = None
     return client_id, project_id
+
+
+def mask_invalid_project_id(row: dict) -> dict:
+    """Replace a stored project id with the validated join id when selected."""
+    valid_project_id = row.pop("valid_project_id", _MISSING)
+    if valid_project_id is not _MISSING:
+        row["project_id"] = valid_project_id
+    return row
 
 
 def owned_gallery_id(conn: sqlite3.Connection, tenant_id: str, gallery_id: int | None) -> int | None:

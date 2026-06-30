@@ -167,3 +167,19 @@ def test_invoice_create_drops_project_for_wrong_same_tenant_client(conn, setting
     assert inv["project_id"] is None
     assert inv["client_name"] == "Sarah"
     assert inv["project_name"] is None
+
+
+def test_invoice_reads_hide_malformed_same_tenant_project_link(conn, settings):
+    t = _tenant(conn)
+    sarah = create_client(conn, tenant_id=t["id"], name="Sarah")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    bob_project = create_project(conn, tenant_id=t["id"], name="Bob shoot", client_id=bob["id"])
+    inv = create_invoice(
+        conn, settings, tenant_id=t["id"], title="Balance", amount_cents=10000,
+        client_id=sarah["id"],
+    )
+    conn.execute("UPDATE invoices SET project_id = ? WHERE id = ?", (bob_project["id"], inv["id"]))
+    got = get_invoice(conn, t["id"], inv["id"])
+    assert got["client_id"] == sarah["id"]
+    assert got["project_id"] is None and got["project_name"] is None
+    assert list_invoices(conn, t["id"], project_id=bob_project["id"]) == []

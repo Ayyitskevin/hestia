@@ -17,7 +17,7 @@ from .config import Settings
 from .crypto import new_session_token
 from .db import audit
 from .email import notify
-from .ownership import normalize_client_project_ids
+from .ownership import mask_invalid_project_id, normalize_client_project_ids
 
 CONTRACT_STATUSES = ("draft", "sent", "signed", "void")
 
@@ -50,29 +50,32 @@ def create_contract(
 def get_contract(conn: sqlite3.Connection, tenant_id: str, contract_id: int) -> dict | None:
     row = conn.execute(
         """
-        SELECT ct.*, c.name AS client_name, c.email AS client_email, p.name AS project_name
+        SELECT ct.*, c.name AS client_name, c.email AS client_email,
+               p.id AS valid_project_id, p.name AS project_name
           FROM contracts ct
           LEFT JOIN clients c ON c.id = ct.client_id AND c.tenant_id = ct.tenant_id
           LEFT JOIN projects p ON p.id = ct.project_id AND p.tenant_id = ct.tenant_id
+           AND (ct.client_id IS NULL OR p.client_id = ct.client_id)
          WHERE ct.id = ? AND ct.tenant_id = ?
         """,
         (contract_id, tenant_id),
     ).fetchone()
-    return dict(row) if row else None
+    return mask_invalid_project_id(dict(row)) if row else None
 
 
 def get_contract_by_token(conn: sqlite3.Connection, token: str) -> dict | None:
     row = conn.execute(
         """
-        SELECT ct.*, c.name AS client_name, p.name AS project_name
+        SELECT ct.*, c.name AS client_name, p.id AS valid_project_id, p.name AS project_name
           FROM contracts ct
           LEFT JOIN clients c ON c.id = ct.client_id AND c.tenant_id = ct.tenant_id
           LEFT JOIN projects p ON p.id = ct.project_id AND p.tenant_id = ct.tenant_id
+           AND (ct.client_id IS NULL OR p.client_id = ct.client_id)
          WHERE ct.token = ?
         """,
         (token,),
     ).fetchone()
-    return dict(row) if row else None
+    return mask_invalid_project_id(dict(row)) if row else None
 
 
 def list_contracts(
@@ -80,21 +83,22 @@ def list_contracts(
     project_id: int | None = None, client_id: int | None = None,
 ) -> list[dict]:
     sql = (
-        "SELECT ct.*, c.name AS client_name, p.name AS project_name "
+        "SELECT ct.*, c.name AS client_name, p.id AS valid_project_id, p.name AS project_name "
         "  FROM contracts ct "
         "  LEFT JOIN clients c ON c.id = ct.client_id AND c.tenant_id = ct.tenant_id "
         "  LEFT JOIN projects p ON p.id = ct.project_id AND p.tenant_id = ct.tenant_id "
+        "   AND (ct.client_id IS NULL OR p.client_id = ct.client_id) "
         " WHERE ct.tenant_id = ?"
     )
     params: list = [tenant_id]
     if project_id is not None:
-        sql += " AND ct.project_id = ?"
+        sql += " AND p.id = ?"
         params.append(project_id)
     if client_id is not None:
         sql += " AND ct.client_id = ?"
         params.append(client_id)
     sql += " ORDER BY ct.created_at DESC"
-    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    return [mask_invalid_project_id(dict(r)) for r in conn.execute(sql, params).fetchall()]
 
 
 def send_contract(conn: sqlite3.Connection, tenant_id: str, contract_id: int) -> None:

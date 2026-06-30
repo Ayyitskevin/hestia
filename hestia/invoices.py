@@ -16,7 +16,7 @@ from .config import Settings
 from .crypto import new_session_token
 from .db import audit
 from .email import notify
-from .ownership import normalize_client_project_ids
+from .ownership import mask_invalid_project_id, normalize_client_project_ids
 
 INVOICE_STATUSES = ("draft", "sent", "paid", "void")
 
@@ -127,12 +127,14 @@ def tax_for(amount_cents: int, rate_bps: int) -> int:
 def get_invoice(conn: sqlite3.Connection, tenant_id: str, invoice_id: int) -> dict | None:
     row = conn.execute(
         """
-        SELECT i.*, c.name AS client_name, c.email AS client_email, p.name AS project_name
+        SELECT i.*, c.name AS client_name, c.email AS client_email,
+               p.id AS valid_project_id, p.name AS project_name
           FROM invoices i
           -- tenant-match the joins: an invoice carrying another studio's client_id /
           -- project_id (IDs are global) must not surface that studio's name or email
           LEFT JOIN clients c ON c.id = i.client_id AND c.tenant_id = i.tenant_id
           LEFT JOIN projects p ON p.id = i.project_id AND p.tenant_id = i.tenant_id
+           AND (i.client_id IS NULL OR p.client_id = i.client_id)
          WHERE i.id = ? AND i.tenant_id = ?
         """,
         (invoice_id, tenant_id),
@@ -151,7 +153,7 @@ def list_invoices(
     status: str | None = None,
 ) -> list[dict]:
     sql = (
-        "SELECT i.*, c.name AS client_name, p.name AS project_name, "
+        "SELECT i.*, c.name AS client_name, p.id AS valid_project_id, p.name AS project_name, "
         # an invoice still 'sent' past its due_date is overdue; date() yields NULL
         # for the free-text due dates owners may type, so those are never "overdue"
         "  CASE WHEN i.status = 'sent' AND date(i.due_date) IS NOT NULL "
@@ -163,11 +165,12 @@ def list_invoices(
         # surface another studio's client or project name in this list
         "  FROM invoices i LEFT JOIN clients c ON c.id = i.client_id AND c.tenant_id = i.tenant_id "
         "  LEFT JOIN projects p ON p.id = i.project_id AND p.tenant_id = i.tenant_id "
+        "   AND (i.client_id IS NULL OR p.client_id = i.client_id) "
         "  WHERE i.tenant_id = ?"
     )
     params: list = [tenant_id]
     if project_id is not None:
-        sql += " AND i.project_id = ?"
+        sql += " AND p.id = ?"
         params.append(project_id)
     if client_id is not None:
         sql += " AND i.client_id = ?"
@@ -272,6 +275,7 @@ def record_offline_payment(conn: sqlite3.Connection, tenant_id: str, invoice_id:
 
 
 def _hydrate(row: dict) -> dict:
+    row = mask_invalid_project_id(row)
     cur = row.get("currency", "usd")
     tax = int(row.get("tax_cents") or 0)            # rows that don't select it → no tax
     row["amount_display"] = money(row["amount_cents"], cur)   # the pre-tax subtotal
