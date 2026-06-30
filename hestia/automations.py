@@ -34,6 +34,7 @@ TRIGGERS: dict[str, str] = {
     "album.changes_requested": "Client requested album changes",
     "appointment.confirmed": "Appointment confirmed",
     "appointment.canceled": "Appointment canceled",
+    "booking.requested": "Booking requested (awaiting confirmation)",
 }
 
 ACTIONS: dict[str, str] = {
@@ -177,6 +178,14 @@ RETENTION_RECIPES = {
         "body": ("Hi {client_name},\n\nWe're sorry {title} didn't work out this time. If your "
                  "plans change, we'd love to find a new time that suits you — just reply and "
                  "we'll get you back on the calendar.\n\nWarmly,\n{studio_name}"),
+    },
+    "booking_followup": {
+        "name": "Booking-request follow-up", "trigger": "booking.requested", "delay_days": 1,
+        "subject": "Following up on your {title} request, {client_name}",
+        "body": ("Hi {client_name},\n\nThanks again for your interest in a {title} with "
+                 "{studio_name}! We're finalizing the details and will confirm your time soon. "
+                 "In the meantime, reply with any questions — we'd love to tell you more about "
+                 "what to expect.\n\nWarmly,\n{studio_name}"),
     },
 }
 

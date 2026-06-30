@@ -177,4 +177,11 @@ def request_booking(
         invoice = get_invoice(conn, tenant_id, invoice["id"])
     audit(conn, actor="public", action="booking.confirmed" if (confirm and when) else "booking.requested",
           tenant_id=tenant_id, detail=f"{booking_type['title']} · {when or 'no time given'} · {email or who}")
+    if not (confirm and when):
+        # A proposed request fires no appointment.confirmed (that's only on a confirmed slot),
+        # so emit booking.requested here — the hook studios use to follow up on a new request.
+        from .automations import emit_event
+        emit_event(conn, tenant_id=tenant_id, event="booking.requested",
+                   context={"client_id": client["id"], "project_id": project["id"],
+                            "title": booking_type["title"]})
     return {"project": project, "appointment": appt, "client": client, "invoice": invoice}
