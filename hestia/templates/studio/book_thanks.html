@@ -14,6 +14,7 @@
       <h1>You're booked!</h1>
       <p class="muted">Your <strong>{{ booking_title }}</strong> with {{ tenant.name }} is confirmed —
         a confirmation is on its way to your inbox.</p>
+      {% if calendar_url %}<p><a class="btn" href="{{ calendar_url }}">📅 Add to calendar</a></p>{% endif %}
       {% else %}
       <h1>Request received</h1>
       <p class="muted">Thanks! We've got your request for <strong>{{ booking_title }}</strong> —
