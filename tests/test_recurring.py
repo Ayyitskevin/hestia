@@ -68,6 +68,19 @@ def test_create_drops_foreign_parent_ids(conn):
     assert p["client_id"] is None and p["project_id"] is None
 
 
+def test_create_drops_project_for_wrong_same_tenant_client(conn):
+    t = _tenant(conn)
+    sarah = create_client(conn, tenant_id=t["id"], name="Sarah")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    bob_project = create_project(conn, tenant_id=t["id"], name="Bob shoot", client_id=bob["id"])
+    p = create_recurring(
+        conn, tenant_id=t["id"], title="Retainer", amount_cents=1000,
+        client_id=sarah["id"], project_id=bob_project["id"],
+    )
+    assert p["client_id"] == sarah["id"]
+    assert p["project_id"] is None
+
+
 # ── Cadence advance + claim idempotency ───────────────────────────────────────
 
 

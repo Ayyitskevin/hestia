@@ -17,7 +17,7 @@ import sqlite3
 from .config import Settings
 from .db import audit
 from .invoices import create_invoice, money, tax_for
-from .ownership import owned_client_id, owned_project_id
+from .ownership import normalize_client_project_ids
 
 PLAN_STATUSES = ("active", "void")
 
@@ -46,8 +46,7 @@ def create_payment_plan(
         for i in installments
         if int(i.get("amount_cents", 0)) > 0
     ]
-    client_id = owned_client_id(conn, tenant_id, client_id)
-    project_id = owned_project_id(conn, tenant_id, project_id)
+    client_id, project_id = normalize_client_project_ids(conn, tenant_id, client_id, project_id)
     total = sum(i["amount_cents"] for i in clean)
     cur = conn.execute(
         """

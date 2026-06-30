@@ -17,7 +17,7 @@ from .config import Settings
 from .crypto import new_session_token
 from .db import audit
 from .email import notify
-from .ownership import owned_client_id, owned_project_id
+from .ownership import normalize_client_project_ids
 
 CONTRACT_STATUSES = ("draft", "sent", "signed", "void")
 
@@ -33,8 +33,7 @@ def create_contract(
     signer_name: str = "",
     signer_email: str = "",
 ) -> dict:
-    client_id = owned_client_id(conn, tenant_id, client_id)
-    project_id = owned_project_id(conn, tenant_id, project_id)
+    client_id, project_id = normalize_client_project_ids(conn, tenant_id, client_id, project_id)
     token = new_session_token()[:28]
     cur = conn.execute(
         """

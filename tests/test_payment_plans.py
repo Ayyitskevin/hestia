@@ -65,6 +65,22 @@ def test_create_plan_drops_foreign_parent_ids(conn, settings):
     assert all(i["client_id"] is None and i["project_id"] is None for i in plan["installments"])
 
 
+def test_create_plan_drops_project_for_wrong_same_tenant_client(conn, settings):
+    t = _tenant(conn)
+    sarah = create_client(conn, tenant_id=t["id"], name="Sarah")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    bob_project = create_project(conn, tenant_id=t["id"], name="Bob shoot", client_id=bob["id"])
+    plan = create_payment_plan(
+        conn, settings, tenant_id=t["id"], title="Sarah Plan",
+        client_id=sarah["id"], project_id=bob_project["id"],
+        installments=deposit_balance_installments(total_cents=100000, deposit_cents=25000),
+    )
+    assert plan["client_id"] == sarah["id"]
+    assert plan["project_id"] is None
+    assert all(i["client_id"] == sarah["id"] and i["project_id"] is None
+               for i in plan["installments"])
+
+
 def test_progress_open_partial_paid(conn, settings):
     t = _tenant(conn)
     plan = create_payment_plan(

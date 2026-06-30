@@ -152,3 +152,18 @@ def test_invoice_create_drops_foreign_client_and_project(client, app):
     finally:
         conn.close()
     assert row["client_id"] is None and row["project_id"] is None          # both foreign refs dropped
+
+
+def test_invoice_create_drops_project_for_wrong_same_tenant_client(conn, settings):
+    t = _tenant(conn)
+    sarah = create_client(conn, tenant_id=t["id"], name="Sarah")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    bob_project = create_project(conn, tenant_id=t["id"], name="Bob shoot", client_id=bob["id"])
+    inv = create_invoice(
+        conn, settings, tenant_id=t["id"], title="Balance", amount_cents=10000,
+        client_id=sarah["id"], project_id=bob_project["id"],
+    )
+    assert inv["client_id"] == sarah["id"]
+    assert inv["project_id"] is None
+    assert inv["client_name"] == "Sarah"
+    assert inv["project_name"] is None

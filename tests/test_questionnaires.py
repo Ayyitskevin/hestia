@@ -47,6 +47,21 @@ def test_create_drops_foreign_parent_ids(conn):
     assert q["client_id"] is None and q["project_id"] is None
 
 
+def test_create_drops_project_for_wrong_same_tenant_client(conn):
+    t = _tenant(conn)
+    sarah = create_client(conn, tenant_id=t["id"], name="Sarah")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    bob_project = create_project(conn, tenant_id=t["id"], name="Bob shoot", client_id=bob["id"])
+    q = create_questionnaire(
+        conn, tenant_id=t["id"], title="Intake", prompts=["Q?"],
+        client_id=sarah["id"], project_id=bob_project["id"],
+    )
+    assert q["client_id"] == sarah["id"]
+    assert q["project_id"] is None
+    assert q["client_name"] == "Sarah"
+    assert q["project_name"] is None
+
+
 def test_status_transitions(conn):
     t = _tenant(conn)
     q = create_questionnaire(conn, tenant_id=t["id"], title="Q", prompts=["A?"])
