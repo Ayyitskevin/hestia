@@ -281,6 +281,23 @@ def test_gallery_sales_excludes_draft_and_is_tenant_scoped(conn):
     assert rep2["total_galleries"] == 0 and rep2["total_revenue_cents"] == 0   # tenant scoped
 
 
+def test_gallery_sales_favorites_are_tenant_matched(conn, storage):
+    t1 = create_tenant(conn, name="A", shoot_type="wedding")
+    t2 = create_tenant(conn, name="B", shoot_type="wedding")
+    g = create_gallery(conn, tenant_id=t1["id"], title="Pub")
+    publish_gallery(conn, t1["id"], g["id"])
+    img = add_image(conn, storage, tenant_id=t1["id"], gallery_id=g["id"], filename="a.jpg",
+                    fileobj=io.BytesIO(b"x"))
+    conn.execute(
+        "INSERT INTO image_favorites (tenant_id, gallery_id, image_id) VALUES (?, ?, ?)",
+        (t2["id"], g["id"], img["id"]),
+    )
+    conn.commit()
+
+    rep = gallery_sales(conn, t1["id"])
+    assert rep["rows"][0]["favorites"] == 0
+
+
 # ── top clients ────────────────────────────────────────────────────────────────
 
 

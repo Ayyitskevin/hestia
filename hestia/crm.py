@@ -355,7 +355,8 @@ def project_pipeline(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     rows = conn.execute(
         "SELECT p.id, p.name, p.status, p.shoot_type, p.event_date, c.name AS client_name, "
         "  COALESCE((SELECT SUM(amount_cents) FROM invoices i WHERE i.project_id = p.id "
-        "            AND i.tenant_id = p.tenant_id AND i.status = 'paid'), 0) AS collected_cents "
+        "            AND i.tenant_id = p.tenant_id AND i.status = 'paid' "
+        "            AND (i.client_id IS NULL OR p.client_id = i.client_id)), 0) AS collected_cents "
         "FROM projects p LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = p.tenant_id "
         "WHERE p.tenant_id = ? ORDER BY p.created_at DESC",
         (tenant_id,),

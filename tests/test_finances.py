@@ -167,6 +167,48 @@ def test_project_pnl_subqueries_are_tenant_scoped(conn, settings):
     assert row["profit_cents"] == 100000                         # foreign expense excluded too
 
 
+def test_project_revenue_ignores_mismatched_client_project_invoice(conn, settings):
+    """A paid invoice belongs in tenant-wide cash totals, but it must not inflate a
+    project whose client does not match the invoice client."""
+    t = create_tenant(conn, name="Mismatch", shoot_type="wedding")
+    sarah = create_client(conn, tenant_id=t["id"], name="Sarah")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    shoot = create_project(conn, tenant_id=t["id"], name="Bob Shoot", client_id=bob["id"],
+                           shoot_type="wedding", status="booked")
+    mismatched = _paid_invoice(conn, settings, tenant_id=t["id"], cents=100000,
+                               client_id=sarah["id"])
+    conn.execute("UPDATE invoices SET project_id = ? WHERE id = ?", (shoot["id"], mismatched["id"]))
+    _paid_invoice(conn, settings, tenant_id=t["id"], cents=200000,
+                  project_id=shoot["id"], client_id=bob["id"])
+    conn.commit()
+
+    assert revenue_total(conn, t["id"]) == 300000
+    assert revenue_total(conn, t["id"], project_id=shoot["id"]) == 200000
+    assert profit_summary(conn, t["id"], project_id=shoot["id"])["revenue_cents"] == 200000
+    row = next(r for r in project_pnl(conn, t["id"]) if r["name"] == "Bob Shoot")
+    assert row["revenue"] == "$2,000.00"
+    assert row["profit_cents"] == 200000
+
+
+def test_expense_reads_ignore_foreign_project_link(conn):
+    """A stale expense.project_id that points at another tenant is still this tenant's
+    expense, but project-scoped reads should not attribute it to that project."""
+    mine = create_tenant(conn, name="Mine", shoot_type="wedding")
+    theirs = create_tenant(conn, name="Theirs", shoot_type="wedding")
+    foreign = create_project(conn, tenant_id=theirs["id"], name="Foreign Project",
+                             shoot_type="wedding", status="booked")
+    e = create_expense(conn, tenant_id=mine["id"], amount_cents=7500, category="gear")
+    conn.execute("UPDATE expenses SET project_id = ? WHERE id = ?", (foreign["id"], e["id"]))
+    conn.commit()
+
+    rows = list_expenses(conn, mine["id"])
+    assert rows[0]["project_id"] is None
+    assert rows[0]["project_name"] is None
+    assert expenses_total(conn, mine["id"]) == 7500
+    assert list_expenses(conn, mine["id"], project_id=foreign["id"]) == []
+    assert expenses_total(conn, mine["id"], project_id=foreign["id"]) == 0
+
+
 # --- HTTP -------------------------------------------------------------------
 
 def test_finances_page_add_and_delete(client, app):

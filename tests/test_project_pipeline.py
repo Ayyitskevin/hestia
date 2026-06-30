@@ -30,6 +30,25 @@ def test_pipeline_groups_by_stage_with_collected(conn, settings):
     assert by["delivered"]["projects"][0]["name"] == "Done1"
 
 
+def test_pipeline_collected_ignores_mismatched_client_project_invoice(conn, settings):
+    t = create_tenant(conn, name="P", shoot_type="wedding")
+    sarah = create_client(conn, tenant_id=t["id"], name="Sarah")
+    bob = create_client(conn, tenant_id=t["id"], name="Bob")
+    done = create_project(conn, tenant_id=t["id"], name="Done", client_id=bob["id"], status="delivered")
+    wrong = create_invoice(conn, settings, tenant_id=t["id"], title="Wrong", amount_cents=100000,
+                           client_id=sarah["id"])
+    conn.execute("UPDATE invoices SET status = 'paid', project_id = ? WHERE id = ?", (done["id"], wrong["id"]))
+    valid = create_invoice(conn, settings, tenant_id=t["id"], title="Right", amount_cents=50000,
+                           client_id=bob["id"], project_id=done["id"])
+    conn.execute("UPDATE invoices SET status = 'paid' WHERE id = ?", (valid["id"],))
+    conn.commit()
+
+    by = {s["stage"]: s for s in project_pipeline(conn, t["id"])}
+    assert by["delivered"]["count"] == 1
+    assert by["delivered"]["collected_cents"] == 50000
+    assert by["delivered"]["projects"][0]["collected_display"] == "$500.00"
+
+
 def test_pipeline_is_tenant_scoped(conn):
     a = create_tenant(conn, name="A", shoot_type="wedding")
     b = create_tenant(conn, name="B", shoot_type="wedding")

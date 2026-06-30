@@ -11,7 +11,7 @@ from __future__ import annotations
 import sqlite3
 
 from .invoices import money
-from .ownership import owned_project_id
+from .ownership import mask_invalid_project_id, owned_project_id
 
 EXPENSE_CATEGORIES = (
     "second_shooter", "gear", "travel", "software", "albums_prints",
@@ -75,18 +75,18 @@ def import_expenses(conn: sqlite3.Connection, *, tenant_id: str, rows: list[dict
 
 def list_expenses(conn: sqlite3.Connection, tenant_id: str, *, project_id: int | None = None,
                   limit: int = 200) -> list[dict]:
-    base = ("SELECT e.*, p.name AS project_name FROM expenses e "
+    base = ("SELECT e.*, p.id AS valid_project_id, p.name AS project_name FROM expenses e "
             # tenant-match the join too, so a stray project_id can't surface a
             # different studio's project name
             "LEFT JOIN projects p ON p.id = e.project_id AND p.tenant_id = e.tenant_id "
             "WHERE e.tenant_id = ? ")
     params: list = [tenant_id]
     if project_id is not None:
-        base += "AND e.project_id = ? "
+        base += "AND p.id = ? "
         params.append(project_id)
     base += "ORDER BY e.id DESC LIMIT ?"
     params.append(limit)
-    out = [dict(r) for r in conn.execute(base, params).fetchall()]
+    out = [mask_invalid_project_id(dict(r)) for r in conn.execute(base, params).fetchall()]
     for e in out:
         e["amount_display"] = money(e["amount_cents"])
     return out
@@ -105,8 +105,9 @@ def expenses_total(conn: sqlite3.Connection, tenant_id: str, *, project_id: int 
     if project_id is None:
         return _scalar(conn, "SELECT COALESCE(SUM(amount_cents), 0) AS total FROM expenses "
                        "WHERE tenant_id = ?", (tenant_id,))
-    return _scalar(conn, "SELECT COALESCE(SUM(amount_cents), 0) AS total FROM expenses "
-                   "WHERE tenant_id = ? AND project_id = ?", (tenant_id, project_id))
+    return _scalar(conn, "SELECT COALESCE(SUM(e.amount_cents), 0) AS total FROM expenses e "
+                   "JOIN projects p ON p.id = e.project_id AND p.tenant_id = e.tenant_id "
+                   "WHERE e.tenant_id = ? AND p.id = ?", (tenant_id, project_id))
 
 
 def revenue_total(conn: sqlite3.Connection, tenant_id: str, *, project_id: int | None = None) -> int:
@@ -126,8 +127,10 @@ def revenue_total(conn: sqlite3.Connection, tenant_id: str, *, project_id: int |
         orders = _scalar(conn, "SELECT COALESCE(SUM(amount_cents), 0) AS total FROM orders "
                          "WHERE tenant_id = ? AND status = 'paid'", (tenant_id,))
         return inv + orders
-    return _scalar(conn, "SELECT COALESCE(SUM(amount_cents), 0) AS total FROM invoices "
-                   "WHERE tenant_id = ? AND project_id = ? AND status = 'paid'", (tenant_id, project_id))
+    return _scalar(conn, "SELECT COALESCE(SUM(i.amount_cents), 0) AS total FROM invoices i "
+                   "JOIN projects p ON p.id = i.project_id AND p.tenant_id = i.tenant_id "
+                   "WHERE i.tenant_id = ? AND p.id = ? AND i.status = 'paid' "
+                   "AND (i.client_id IS NULL OR p.client_id = i.client_id)", (tenant_id, project_id))
 
 
 def profit_summary(conn: sqlite3.Connection, tenant_id: str, *, project_id: int | None = None) -> dict:
@@ -173,7 +176,8 @@ def project_pnl(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 50) ->
         # invoice/expense must never be attributed to this project's P&L.
         "  COALESCE((SELECT SUM(amount_cents) FROM invoices i "
         "            WHERE i.project_id = p.id AND i.tenant_id = p.tenant_id "
-        "              AND i.status = 'paid'), 0) AS revenue, "
+        "              AND i.status = 'paid' "
+        "              AND (i.client_id IS NULL OR p.client_id = i.client_id)), 0) AS revenue, "
         "  COALESCE((SELECT SUM(amount_cents) FROM expenses e "
         "            WHERE e.project_id = p.id AND e.tenant_id = p.tenant_id), 0) AS expenses "
         "FROM projects p WHERE p.tenant_id = ?",

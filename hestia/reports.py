@@ -194,7 +194,8 @@ def gallery_sales(conn: sqlite3.Connection, tenant_id: str) -> dict:
     tenant-matched. Sorted by revenue. Read-only, tenant-scoped."""
     rows = conn.execute(
         "SELECT g.id, g.title, COALESCE(g.view_count, 0) AS views, "
-        "  (SELECT COUNT(*) FROM image_favorites f WHERE f.gallery_id = g.id) AS favorites, "
+        "  (SELECT COUNT(*) FROM image_favorites f "
+        "   WHERE f.gallery_id = g.id AND f.tenant_id = g.tenant_id) AS favorites, "
         "  COALESCE(SUM(CASE WHEN o.status = 'paid' THEN 1 ELSE 0 END), 0) AS orders, "
         "  COALESCE(SUM(CASE WHEN o.status = 'paid' THEN o.amount_cents ELSE 0 END), 0) AS revenue "
         "FROM galleries g "
