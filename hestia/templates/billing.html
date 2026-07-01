@@ -26,7 +26,10 @@
     <span class="health-item"><span class="svc">$40</span> <span class="url">flat</span></span>
   </div>
   {% if plan.plan == 'studio' %}
-    <button class="btn secondary" type="button" disabled>Your plan</button>
+    <form method="post" action="/settings/billing/portal">
+      {% include "_csrf.html" %}
+      <button class="btn" type="submit">Manage billing</button>
+    </form>
   {% else %}
     <form method="post" action="/settings/billing/subscribe">
       {% include "_csrf.html" %}

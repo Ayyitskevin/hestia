@@ -34,6 +34,12 @@ class SubscribeResult:
     simulated: bool = False
 
 
+@dataclass
+class PortalResult:
+    url: str
+    simulated: bool = False
+
+
 # ── data access ─────────────────────────────────────────────────────────────
 
 
@@ -71,6 +77,9 @@ class MockSubscriptions:
     def subscribe(self, *, tenant: dict, plan: str, success_url: str) -> SubscribeResult:
         # No external call; the plan "activates" immediately and we return to billing.
         return SubscribeResult(url=success_url, activated=True, simulated=True)
+
+    def portal(self, *, tenant: dict, subscription: dict | None, return_url: str) -> PortalResult:
+        return PortalResult(url=return_url, simulated=True)
 
 
 class StripeSubscriptions:
@@ -114,6 +123,24 @@ class StripeSubscriptions:
             raise SubscriptionError(f"stripe checkout failed: {exc}") from exc
         return SubscribeResult(url=body["url"], activated=False)
 
+    def portal(self, *, tenant: dict, subscription: dict | None, return_url: str) -> PortalResult:
+        import httpx
+
+        if not self.settings.stripe_secret_key:
+            raise SubscriptionError("stripe subscription backend needs a secret key")
+        customer = ((subscription or {}).get("provider_ref") or "").strip()
+        if not customer.startswith("cus_"):
+            raise SubscriptionError("stripe billing portal needs a customer reference")
+        data = {"customer": customer, "return_url": return_url}
+        try:
+            resp = httpx.post("https://api.stripe.com/v1/billing_portal/sessions", data=data,
+                              auth=(self.settings.stripe_secret_key, ""), timeout=30)
+            resp.raise_for_status()
+            body = resp.json()
+        except Exception as exc:  # noqa: BLE001
+            raise SubscriptionError(f"stripe billing portal failed: {exc}") from exc
+        return PortalResult(url=body["url"])
+
 
 def build_subscriptions(settings: Settings):
     if settings.subscription_backend == "stripe":
@@ -139,7 +166,7 @@ def subscription_from_event(payload: bytes) -> tuple[str, str, str] | None:
     tenant_id, plan = meta.get("tenant_id"), meta.get("plan")
     if not tenant_id or plan not in PLANS:
         return None
-    return tenant_id, plan, obj.get("subscription") or obj.get("id") or ""
+    return tenant_id, plan, obj.get("customer") or obj.get("subscription") or obj.get("id") or ""
 
 
 def canceled_tenant_from_event(payload: bytes) -> str | None:

@@ -125,6 +125,12 @@ booking types, service packages, an intake questionnaire, and draft site copy fo
 wedding, food & beverage, or real-estate studios. Optional demo data creates one
 sample lead so new customers can see the full workflow immediately.
 
+Studio owners manage the hosted account from `/settings/account`: owner email,
+public studio URLs, current plan, and billing actions. In mock mode, billing actions
+stay local and deterministic; with `HESTIA_SUBSCRIPTION_BACKEND=stripe`, the same
+control opens Stripe's customer billing portal for payment method and cancellation
+self-service.
+
 ## Mock-first provider seams
 
 Everything runs with **no external keys** by default. Each integration is a seam that
