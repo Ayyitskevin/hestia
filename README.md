@@ -92,6 +92,7 @@ Hestia is ready for a simple solo-founder hosted launch:
 - Optional wildcard studio subdomains
 - Stripe subscriptions locked to the flat $40/month plan
 - Operator trial conversion cockpit for activation and churn-risk signals
+- First-party signup attribution from the public demo and pricing pages
 - Mock-first provider seams for safe local and staging runs
 
 ```bash
@@ -230,9 +231,10 @@ bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
 
 The test suite covers tenant isolation, hosted routing, public demo and pricing
-pages, flat-plan billing, signup, onboarding presets, trial conversion analytics,
-custom domains, proposal accept flows, offer idempotency, public tokens, payments,
-client portal flows, and safe mock-provider operation.
+pages, first-party signup attribution, flat-plan billing, signup, onboarding
+presets, trial conversion analytics, custom domains, proposal accept flows, offer
+idempotency, public tokens, payments, client portal flows, and safe mock-provider
+operation.
 
 `scripts/hosted-preflight.sh` reads the same `.env`/environment values as the app
 and fails on hosted blockers: default secrets, non-HTTPS public URL, missing hosted

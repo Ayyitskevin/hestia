@@ -14,7 +14,23 @@
   <div class="card"><div class="label">Trial ready</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.trial_ready }}</div></div>
   <div class="card"><div class="label">Trialing</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.trialing }}</div></div>
   <div class="card"><div class="label">Stalled</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.stalled }}</div></div>
+  <div class="card"><div class="label">Pricing signups</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.pricing_signups }}</div></div>
+  <div class="card"><div class="label">Demo signups</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.demo_signups }}</div></div>
 </div>
+
+{% if cockpit.summary.source_breakdown %}
+<div class="card" style="margin-top:18px">
+  <h3>Signup sources</h3>
+  <div class="health-strip">
+    {% for source in cockpit.summary.source_breakdown %}
+      <div class="health-item">
+        <span class="svc">{{ source.label }}</span>
+        <span class="url">{{ source.count }}</span>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 {% if cockpit.studios %}
 <div class="card" style="margin-top:18px">
@@ -23,6 +39,7 @@
       <tr>
         <th>Studio</th>
         <th>Trial</th>
+        <th>Source</th>
         <th>Activation</th>
         <th>Commercial signals</th>
         <th>Risk</th>
@@ -39,6 +56,10 @@
         <td>
           <span class="pill {{ 'on' if s.trial_state in ('trialing', 'active') else 'off' }}">{{ s.trial_label }}</span><br>
           <span class="muted">{{ s.owner_email or 'no owner email' }}{% if not s.owner_verified %} · unverified{% endif %}</span>
+        </td>
+        <td>
+          <span class="pill">{{ s.signup_source_label }}</span><br>
+          <span class="muted mono">{{ s.signup_landing_path or 'unknown' }}</span>
         </td>
         <td>
           <strong>{{ s.activation_done }}/{{ s.activation_total }}</strong>

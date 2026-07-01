@@ -48,6 +48,8 @@
       · {{ conversion.activation_done }}/{{ conversion.activation_total }} activated ({{ conversion.activation_percent }}%)</p>
     <p><strong>{{ conversion.next_action }}</strong></p>
     <p class="hint">{{ conversion.risk }} risk · {{ conversion.risk_reason }}</p>
+    <p class="muted">Signup source: <span class="pill">{{ conversion.signup_source_label }}</span>
+      <span class="mono">{{ conversion.signup_landing_path or 'unknown' }}</span></p>
     <p class="muted">{{ conversion.proposals_sent }} proposals · {{ conversion.published_galleries }} published galleries · {{ conversion.money_links }} money links</p>
     <a class="btn ghost" href="/admin/trials">Open trial cockpit</a>
   </div>

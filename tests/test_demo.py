@@ -57,7 +57,7 @@ def test_pricing_public_flat_plan_conversion_page(client):
     assert "14-day free trial" in text
     assert "No setup fee. No tiers. Cancel anytime." in text
     assert "One bill instead of 5-7 separate subscriptions." in text
-    assert 'href="/signup"' in page.text
+    assert 'href="/signup?source=pricing&amp;path=/pricing"' in page.text
     assert 'href="/demo"' in page.text
 
 
@@ -67,3 +67,11 @@ def test_public_navigation_links_to_demo_and_pricing(client):
     assert page.status_code == 200
     assert 'href="/demo"' in page.text
     assert 'href="/pricing"' in page.text
+    assert 'href="/signup?source=landing&amp;path=/"' in page.text
+
+
+def test_demo_links_tag_signup_attribution(client):
+    page = client.get("/demo/food")
+
+    assert page.status_code == 200
+    assert 'href="/signup?source=demo&amp;path=/demo/food"' in page.text

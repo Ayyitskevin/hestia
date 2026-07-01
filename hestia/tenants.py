@@ -22,11 +22,41 @@ from .crypto import (
 from .features import flags_for, normalize_shoot_type
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
+_SIGNUP_SOURCE_RE = re.compile(r"[^a-z0-9_-]+")
+_SIGNUP_SOURCES = {"landing", "pricing", "demo"}
+_SIGNUP_PATHS = {"/", "/pricing", "/demo", "/demo/wedding", "/demo/food", "/demo/real-estate"}
 
 
 def slugify(value: str) -> str:
     slug = _SLUG_RE.sub("-", value.strip().lower()).strip("-")
     return slug or "studio"
+
+
+def signup_attribution(source: str | None, landing_path: str | None) -> dict:
+    """Sanitize first-party signup attribution before it reaches tenant storage."""
+    path = _normalize_signup_path(landing_path)
+    source_norm = _SIGNUP_SOURCE_RE.sub("-", (source or "").strip().lower()).strip("-_")[:40]
+    if source_norm not in _SIGNUP_SOURCES:
+        source_norm = _source_from_path(path)
+    return {"source": source_norm, "landing_path": path}
+
+
+def _normalize_signup_path(value: str | None) -> str:
+    raw = (value or "").strip().split("?", 1)[0].split("#", 1)[0]
+    if not raw.startswith("/") or raw.startswith("//"):
+        return ""
+    raw = raw[:80]
+    return raw if raw in _SIGNUP_PATHS else ""
+
+
+def _source_from_path(path: str) -> str:
+    if path == "/pricing":
+        return "pricing"
+    if path.startswith("/demo"):
+        return "demo"
+    if path == "/":
+        return "landing"
+    return ""
 
 
 # ── Tenants (studios) ───────────────────────────────────────────────────────
@@ -39,6 +69,8 @@ def create_tenant(
     shoot_type: str,
     slug: str | None = None,
     plan: str = "beta",
+    signup_source: str | None = None,
+    signup_landing_path: str | None = None,
 ) -> dict:
     tenant_id = uuid.uuid4().hex
     base_slug = slugify(slug or name)
@@ -47,9 +79,20 @@ def create_tenant(
     while conn.execute("SELECT 1 FROM tenants WHERE slug = ?", (slug_final,)).fetchone():
         slug_final = f"{base_slug}-{n}"
         n += 1
+    attribution = signup_attribution(signup_source, signup_landing_path)
     conn.execute(
-        "INSERT INTO tenants (id, slug, name, shoot_type, plan) VALUES (?, ?, ?, ?, ?)",
-        (tenant_id, slug_final, name, normalize_shoot_type(shoot_type), plan),
+        "INSERT INTO tenants "
+        "(id, slug, name, shoot_type, plan, signup_source, signup_landing_path) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            tenant_id,
+            slug_final,
+            name,
+            normalize_shoot_type(shoot_type),
+            plan,
+            attribution["source"],
+            attribution["landing_path"],
+        ),
     )
     return get_tenant(conn, tenant_id)
 

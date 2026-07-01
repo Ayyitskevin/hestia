@@ -82,6 +82,7 @@ a:hover { text-decoration: underline; }
 .grid { display: grid; gap: 18px; }
 .grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.grid.cols-4 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 main { padding: 36px 0 64px; }
 
 /* Forms */

@@ -29,7 +29,8 @@ def test_trial_conversion_cockpit_prioritizes_stalled_studios(conn, settings):
     _owner(conn, ready["id"], "ready@example.com")
     apply_preset(conn, ready["id"], "wedding", include_demo=False)
 
-    trialing = create_tenant(conn, name="Active Trial", shoot_type="wedding")
+    trialing = create_tenant(conn, name="Active Trial", shoot_type="wedding",
+                             signup_source="pricing", signup_landing_path="/pricing")
     _owner(conn, trialing["id"], "trial@example.com")
     apply_plan(conn, trialing["id"], plan="studio", status="trialing", provider="mock")
     conn.commit()
@@ -40,12 +41,15 @@ def test_trial_conversion_cockpit_prioritizes_stalled_studios(conn, settings):
     assert cockpit["summary"]["total"] == 3
     assert cockpit["summary"]["trial_ready"] == 2
     assert cockpit["summary"]["trialing"] == 1
+    assert cockpit["summary"]["pricing_signups"] == 1
     assert cockpit["studios"][0]["name"] == "Stalled Studio"
     assert by_name["Stalled Studio"]["risk"] == "high"
     assert by_name["Stalled Studio"]["next_action"] == "Verify owner email"
     assert by_name["Preset Ready"]["next_action"] == "Start trial checkout"
     assert by_name["Active Trial"]["trial_state"] == "trialing"
     assert by_name["Active Trial"]["trial_days_left"] <= settings.trial_days
+    assert by_name["Active Trial"]["signup_source_label"] == "Pricing"
+    assert {"label": "Pricing", "count": 1} in cockpit["summary"]["source_breakdown"]
 
 
 def test_trial_conversion_for_tenant_counts_commercial_signals(conn, settings):
@@ -75,7 +79,8 @@ def test_trial_conversion_for_tenant_counts_commercial_signals(conn, settings):
 
 
 def test_admin_trial_conversion_pages_render(app, conn):
-    tenant = create_tenant(conn, name="Admin Trial", shoot_type="wedding")
+    tenant = create_tenant(conn, name="Admin Trial", shoot_type="wedding",
+                           signup_source="demo", signup_landing_path="/demo/food")
     _owner(conn, tenant["id"], "admintrial@example.com", verified=0)
     conn.commit()
     admin = CSRFClient(app)
@@ -85,6 +90,8 @@ def test_admin_trial_conversion_pages_render(app, conn):
     assert trials.status_code == 200
     assert "Trial conversion" in trials.text
     assert "Admin Trial" in trials.text
+    assert "Demo" in trials.text
+    assert "/demo/food" in trials.text
     assert "Verify owner email" in trials.text
     assert 'href="/admin/tenants/' in trials.text
 
@@ -94,4 +101,6 @@ def test_admin_trial_conversion_pages_render(app, conn):
     detail = admin.get(f"/admin/tenants/{tenant['id']}")
     assert detail.status_code == 200
     assert "Trial conversion" in detail.text
+    assert "Signup source" in detail.text
+    assert "/demo/food" in detail.text
     assert "Open trial cockpit" in detail.text

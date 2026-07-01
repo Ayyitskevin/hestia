@@ -7,7 +7,7 @@
     <h1>{{ tour.headline }}</h1>
     <p class="lead">{{ tour.summary }}</p>
     <div class="form-actions">
-      <a class="btn" href="/signup">Start 14-day free trial</a>
+      <a class="btn" href="/signup?source=demo&amp;path=/demo/{{ tour.key }}">Start 14-day free trial</a>
       <a class="btn secondary" href="/login">Sign in</a>
     </div>
     <p class="muted">$40/month after trial. No tiers. Cancel anytime.</p>
@@ -66,7 +66,7 @@
   <h2>Launch a professional studio OS in minutes.</h2>
   <p class="muted">Pick a niche preset, open the trial cockpit, and start running inquiry to revenue from one place.</p>
   <div class="form-actions">
-    <a class="btn" href="/signup">Start 14-day free trial</a>
+    <a class="btn" href="/signup?source=demo&amp;path=/demo/{{ tour.key }}">Start 14-day free trial</a>
     <a class="btn secondary" href="/pricing">See pricing</a>
     <a class="btn ghost" href="/">Back to overview</a>
   </div>

@@ -48,6 +48,7 @@ from ..tenants import (
     get_user_by_email,
     mark_user_verified,
     set_user_password,
+    signup_attribution,
     tenant_flags,
 )
 from ..testimonials import featured_testimonials
@@ -136,22 +137,30 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
 
 
 @router.get("/signup")
-def signup_form(request: Request):
+def signup_form(request: Request, source: str = "", path: str = ""):
     if not settings_of(request).signup_enabled:
         return RedirectResponse("/login", status_code=303)
-    return render(request, "signup.html", auth=None, sent=False, error=None)
+    attribution = signup_attribution(source, path)
+    return render(request, "signup.html", auth=None, sent=False, error=None,
+                  signup_source=attribution["source"],
+                  signup_landing_path=attribution["landing_path"])
 
 
 @router.post("/signup")
 def signup_submit(request: Request, name: str = Form(...), email: str = Form(...),
-                  password: str = Form(...), shoot_type: str = Form("other")):
+                  password: str = Form(...), shoot_type: str = Form("other"),
+                  signup_source: str = Form(""), signup_landing_path: str = Form("")):
     settings = settings_of(request)
     if not settings.signup_enabled:
         return RedirectResponse("/login", status_code=303)
     enforce(request, "signup")
 
+    attribution = signup_attribution(signup_source, signup_landing_path)
+
     def _again(error: str):
-        return render(request, "signup.html", auth=None, sent=False, error=error)
+        return render(request, "signup.html", auth=None, sent=False, error=error,
+                      signup_source=attribution["source"],
+                      signup_landing_path=attribution["landing_path"])
 
     with db_conn(request) as conn:
         email_norm = email.strip().lower()
@@ -159,7 +168,9 @@ def signup_submit(request: Request, name: str = Form(...), email: str = Form(...
             return _again("Choose a password of at least 8 characters.")
         if get_user_by_email(conn, email_norm):
             return _again("That email is already registered — try signing in instead.")
-        tenant = create_tenant(conn, name=name, shoot_type=shoot_type)
+        tenant = create_tenant(conn, name=name, shoot_type=shoot_type,
+                               signup_source=attribution["source"],
+                               signup_landing_path=attribution["landing_path"])
         user = create_user(conn, tenant_id=tenant["id"], email=email_norm,
                            password=password, role="owner", verified=0)
         token = create_verification(conn, settings, user_id=user["id"])

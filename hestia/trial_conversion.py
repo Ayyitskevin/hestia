@@ -29,6 +29,7 @@ def trial_conversion_cockpit(
         for tenant in list_tenants(conn)[: max(1, int(limit))]
     ]
     studios.sort(key=lambda s: (s["risk_rank"], s["activation_percent"], s["created_at"]))
+    source_counts = _source_counts(studios)
     return {
         "studios": studios,
         "summary": {
@@ -37,6 +38,9 @@ def trial_conversion_cockpit(
             "trialing": sum(1 for s in studios if s["trial_state"] == "trialing"),
             "active": sum(1 for s in studios if s["trial_state"] == "active"),
             "stalled": sum(1 for s in studios if s["risk"] in ("high", "medium")),
+            "pricing_signups": sum(1 for s in studios if s["signup_source"] == "pricing"),
+            "demo_signups": sum(1 for s in studios if s["signup_source"] == "demo"),
+            "source_breakdown": source_counts,
         },
     }
 
@@ -79,6 +83,9 @@ def trial_conversion_for_tenant(
         "shoot_type": tenant.get("shoot_type") or "other",
         "plan": tenant.get("plan") or "beta",
         "created_at": tenant.get("created_at") or "",
+        "signup_source": tenant.get("signup_source") or "",
+        "signup_source_label": _source_label(tenant.get("signup_source")),
+        "signup_landing_path": tenant.get("signup_landing_path") or "",
         "owner_email": owner.get("email") or "",
         "owner_verified": verified,
         "trial_state": trial_state,
@@ -96,6 +103,26 @@ def trial_conversion_for_tenant(
         "setup_next": setup.get("next"),
         **signals,
     }
+
+
+def _source_counts(studios: list[dict]) -> list[dict]:
+    counts: dict[str, int] = {}
+    for studio in studios:
+        label = studio["signup_source_label"]
+        counts[label] = counts.get(label, 0) + 1
+    return [
+        {"label": label, "count": count}
+        for label, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
+def _source_label(source: str | None) -> str:
+    labels = {
+        "landing": "Landing",
+        "pricing": "Pricing",
+        "demo": "Demo",
+    }
+    return labels.get((source or "").strip().lower(), "Direct / unknown")
 
 
 def _owner(conn: sqlite3.Connection, tenant_id: str) -> dict:

@@ -14,6 +14,8 @@
     {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
     <form method="post" action="/signup">
       {% include "_csrf.html" %}
+      <input type="hidden" name="signup_source" value="{{ signup_source or '' }}">
+      <input type="hidden" name="signup_landing_path" value="{{ signup_landing_path or '' }}">
       <label for="name">Studio name</label>
       <input type="text" id="name" name="name" placeholder="Kevin Lee Photography" required autofocus>
       <label for="shoot_type">What do you shoot?</label>

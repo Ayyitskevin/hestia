@@ -38,6 +38,14 @@ def test_signup_form_renders_when_enabled(settings):
     assert "No tiers" in r.text
 
 
+def test_signup_form_preserves_public_attribution(settings):
+    r = _client(settings).get("/signup?source=pricing&path=/pricing")
+
+    assert r.status_code == 200
+    assert 'name="signup_source" value="pricing"' in r.text
+    assert 'name="signup_landing_path" value="/pricing"' in r.text
+
+
 # ── happy path ──────────────────────────────────────────────────────────────
 
 
@@ -51,6 +59,44 @@ def test_signup_creates_unverified_owner_and_emails_link(settings, conn):
     assert user is not None and user["verified"] == 0
     mail = conn.execute("SELECT body FROM emails WHERE to_addr = 'new@studio.com'").fetchone()
     assert mail is not None and "/verify/" in mail["body"]
+
+
+def test_signup_records_sanitized_first_party_attribution(settings, conn):
+    c = _client(settings)
+    r = c.post("/signup", data={
+        "name": "Attributed Studio",
+        "email": "attributed@studio.com",
+        "password": "password123",
+        "shoot_type": "wedding",
+        "signup_source": "PRICING!!",
+        "signup_landing_path": "/pricing?ignored=1",
+    })
+
+    assert r.status_code == 200
+    tenant = conn.execute(
+        "SELECT signup_source, signup_landing_path FROM tenants WHERE name = ?",
+        ("Attributed Studio",),
+    ).fetchone()
+    assert tenant["signup_source"] == "pricing"
+    assert tenant["signup_landing_path"] == "/pricing"
+
+
+def test_signup_rejects_external_attribution_path(settings, conn):
+    c = _client(settings)
+    c.post("/signup", data={
+        "name": "Unknown Source",
+        "email": "unknownsource@studio.com",
+        "password": "password123",
+        "signup_source": "https://evil.example",
+        "signup_landing_path": "//evil.example/pricing",
+    })
+
+    tenant = conn.execute(
+        "SELECT signup_source, signup_landing_path FROM tenants WHERE name = ?",
+        ("Unknown Source",),
+    ).fetchone()
+    assert tenant["signup_source"] == ""
+    assert tenant["signup_landing_path"] == ""
 
 
 def test_unverified_owner_cannot_log_in(settings):
