@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import sqlite3
 
+from . import messaging
 from .automations import emit_event
 from .config import Settings
 from .contracts import create_contract, send_contract, void_contract
 from .crypto import new_session_token
 from .db import audit
+from .email import notify
 from .invoices import add_invoice_items, create_invoice, money, send_invoice, void_invoice
 from .ownership import mask_invalid_project_id, normalize_client_project_ids
 from .packages import get_package
@@ -129,6 +131,42 @@ def list_proposals(
     return [_hydrate(dict(r)) for r in conn.execute(sql, params).fetchall()]
 
 
+def proposal_followups(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    *,
+    limit: int = 8,
+) -> dict:
+    """Proposal conversion bottlenecks for the dashboard/list pages.
+
+    ``awaiting_acceptance`` catches sent proposals that have not been accepted.
+    ``finish_booking`` catches accepted proposals whose linked contract or invoice
+    is still incomplete.
+    """
+    rows = [
+        _hydrate(dict(r)) for r in conn.execute(
+            _proposal_select()
+            + " WHERE pr.tenant_id = ? AND pr.status IN ('sent', 'accepted') "
+            "   AND (pr.status = 'sent' OR ct.status != 'signed' OR i.status != 'paid') "
+            " ORDER BY CASE WHEN pr.status = 'accepted' THEN 0 ELSE 1 END, pr.created_at ASC "
+            " LIMIT ?",
+            (tenant_id, limit),
+        ).fetchall()
+    ]
+    awaiting = [r for r in rows if r["status"] == "sent"]
+    finish = [r for r in rows if r["status"] == "accepted"]
+    open_cents = sum(int(r.get("invoice_amount_cents") or 0)
+                     for r in rows if r.get("invoice_status") != "paid")
+    currency = next((r.get("invoice_currency") for r in rows if r.get("invoice_currency")), "usd")
+    return {
+        "awaiting_acceptance": awaiting,
+        "finish_booking": finish,
+        "total": len(rows),
+        "open_value_cents": open_cents,
+        "open_value": money(open_cents, currency),
+    }
+
+
 def send_proposal(conn: sqlite3.Connection, tenant_id: str, proposal_id: int) -> dict | None:
     """Publish a proposal link and make its linked sign/pay links live.
 
@@ -147,6 +185,74 @@ def send_proposal(conn: sqlite3.Connection, tenant_id: str, proposal_id: int) ->
     audit(conn, actor="owner", action="proposal.sent", tenant_id=tenant_id,
           detail=proposal["title"])
     return get_proposal(conn, tenant_id, proposal_id)
+
+
+def send_proposal_reminder(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    proposal: dict,
+) -> str | None:
+    """Email the client the single proposal link. Returns send status or None."""
+    to = (proposal.get("accepted_email") or proposal.get("client_email") or "").strip()
+    if not to:
+        return None
+    trow = conn.execute("SELECT name FROM tenants WHERE id = ?", (proposal["tenant_id"],)).fetchone()
+    ctx = {
+        "client": proposal.get("accepted_name") or proposal.get("client_name") or "there",
+        "studio": trow["name"] if trow else "your photographer",
+        "title": proposal["title"],
+        "proposal_url": proposal_public_url(settings, proposal["token"]),
+    }
+    msg = messaging.render(conn, proposal["tenant_id"], "proposal_reminder", ctx)
+    return notify(conn, settings, to=to, subject=msg["subject"], body=msg["body"],
+                  tenant_id=proposal["tenant_id"])
+
+
+def record_proposal_reminder(conn: sqlite3.Connection, tenant_id: str, proposal_id: int) -> bool:
+    """Atomically stamp an actionable proposal reminder.
+
+    A proposal is actionable while it is sent-but-unaccepted, or accepted but the
+    linked contract is not signed or linked invoice is not paid. The recipient
+    guard prevents counting a reminder that cannot be sent.
+    """
+    cur = conn.execute(
+        """
+        UPDATE proposals
+           SET last_reminder_at = datetime('now'), reminder_count = reminder_count + 1
+         WHERE id = ? AND tenant_id = ?
+           AND (
+                status = 'sent'
+                OR (
+                    status = 'accepted'
+                    AND (
+                        EXISTS (
+                            SELECT 1 FROM contracts ct
+                             WHERE ct.id = proposals.contract_id
+                               AND ct.tenant_id = proposals.tenant_id
+                               AND ct.status != 'signed'
+                        )
+                        OR EXISTS (
+                            SELECT 1 FROM invoices i
+                             WHERE i.id = proposals.invoice_id
+                               AND i.tenant_id = proposals.tenant_id
+                               AND i.status != 'paid'
+                        )
+                    )
+                )
+           )
+           AND (
+                TRIM(COALESCE(accepted_email, '')) <> ''
+                OR EXISTS (
+                    SELECT 1 FROM clients c
+                     WHERE c.id = proposals.client_id
+                       AND c.tenant_id = proposals.tenant_id
+                       AND TRIM(COALESCE(c.email, '')) <> ''
+                )
+           )
+        """,
+        (proposal_id, tenant_id),
+    )
+    return cur.rowcount == 1
 
 
 def accept_proposal(
@@ -229,6 +335,19 @@ def _hydrate(row: dict) -> dict:
     row["package_price_display"] = money(price, currency)
     row["package_deposit_display"] = money(deposit, currency) if deposit else ""
     row["invoice_amount_display"] = money(due, currency)
+    row["needs_signature"] = row.get("status") == "accepted" and row.get("contract_status") != "signed"
+    row["needs_payment"] = row.get("status") == "accepted" and row.get("invoice_status") != "paid"
+    row["needs_acceptance"] = row.get("status") == "sent"
+    row["needs_followup"] = bool(row["needs_acceptance"] or row["needs_signature"] or row["needs_payment"])
+    missing = []
+    if row["needs_acceptance"]:
+        missing.append("acceptance")
+    if row["needs_signature"]:
+        missing.append("signature")
+    if row["needs_payment"]:
+        missing.append("payment")
+    row["followup_label"] = "Needs " + " + ".join(missing) if missing else "Complete"
+    row["reminder_email"] = (row.get("accepted_email") or row.get("client_email") or "").strip()
     return row
 
 

@@ -14,6 +14,9 @@
     {% if proposal.status in ('draft', 'sent') %}
       <form method="post" action="/proposals/{{ proposal.id }}/send">{% include "_csrf.html" %}<button class="btn" type="submit">{{ 'Re-send' if proposal.status == 'sent' else 'Publish proposal' }}</button></form>
     {% endif %}
+    {% if proposal.needs_followup and proposal.reminder_email %}
+      <form method="post" action="/proposals/{{ proposal.id }}/remind">{% include "_csrf.html" %}<button class="btn ghost" type="submit">{{ 'Remind again' if proposal.reminder_count else 'Remind client' }}</button></form>
+    {% endif %}
     {% if proposal.status not in ('accepted', 'void') %}
       <form method="post" action="/proposals/{{ proposal.id }}/void">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Void</button></form>
     {% endif %}
@@ -22,6 +25,9 @@
 
 {% if proposal.status == 'accepted' %}
 <div class="alert ok">Accepted by <strong>{{ proposal.accepted_name }}</strong> on {{ proposal.accepted_at }}.</div>
+{% endif %}
+{% if proposal.needs_followup %}
+<div class="alert">Follow-up: {{ proposal.followup_label }}{% if proposal.reminder_count %} · reminded {{ proposal.reminder_count }} time{{ '' if proposal.reminder_count == 1 else 's' }}{% endif %}</div>
 {% endif %}
 
 <div class="grid-2">

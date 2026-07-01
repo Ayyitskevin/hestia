@@ -130,6 +130,22 @@
         {% endfor %}
       </div>
       {% endif %}
+      {% if attention.proposal_acceptance %}
+      <div class="stack" style="gap:6px">
+        <div class="label">Proposal follow-up · {{ attention.proposal_acceptance|length }}</div>
+        {% for p in attention.proposal_acceptance %}
+        <div><a href="/proposals/{{ p.id }}">{{ p.title }}</a>{% if p.client_name %} <span class="muted">· {{ p.client_name }}</span>{% endif %} <span class="muted">· {{ p.invoice_amount_display }}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if attention.proposal_booking %}
+      <div class="stack" style="gap:6px">
+        <div class="label">Finish booking · {{ attention.proposal_booking|length }}</div>
+        {% for p in attention.proposal_booking %}
+        <div><a href="/proposals/{{ p.id }}">{{ p.title }}</a> <span class="muted">· {{ p.followup_label }}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
       {% if attention.awaiting_questionnaire %}
       <div class="stack" style="gap:6px">
         <div class="label">📋 Awaiting response · {{ attention.awaiting_questionnaire|length }}</div>

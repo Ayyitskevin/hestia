@@ -8,6 +8,7 @@ from fastapi.responses import RedirectResponse
 from ..auth import context_from_session
 from ..contracts import contract_public_url
 from ..crm import get_client, get_project, list_clients, list_projects
+from ..db import audit
 from ..email import notify
 from ..invoices import invoice_public_url
 from ..packages import get_package, list_packages
@@ -17,8 +18,11 @@ from ..proposals import (
     get_proposal,
     get_proposal_by_token,
     list_proposals,
+    proposal_followups,
     proposal_public_url,
+    record_proposal_reminder,
     send_proposal,
+    send_proposal_reminder,
     void_proposal,
 )
 from ..ratelimit import enforce
@@ -57,8 +61,9 @@ def proposals_list(request: Request, status: str = ""):
         if not auth:
             return RedirectResponse("/login", status_code=303)
         proposals = list_proposals(conn, auth.tenant["id"], status=status or None)
+        followups = proposal_followups(conn, auth.tenant["id"], limit=200)
     return render(request, "proposals/proposals.html", auth=auth, proposals=proposals,
-                  active_status=status)
+                  active_status=status, followups=followups)
 
 
 @router.get("/new")
@@ -152,6 +157,23 @@ def proposal_send(request: Request, proposal_id: int):
                     "and pay the booking invoice from that link."
                 ),
             )
+    return RedirectResponse(f"/proposals/{proposal_id}", status_code=303)
+
+
+@router.post("/{proposal_id}/remind")
+def proposal_remind(request: Request, proposal_id: int):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        tid = auth.tenant["id"]
+        if record_proposal_reminder(conn, tid, proposal_id):
+            proposal = get_proposal(conn, tid, proposal_id)
+            if proposal and send_proposal_reminder(conn, settings, proposal):
+                audit(conn, actor="owner", action="proposal.reminded", tenant_id=tid,
+                      detail=f"{proposal['title']} · reminder #{proposal['reminder_count']}")
+        conn.commit()
     return RedirectResponse(f"/proposals/{proposal_id}", status_code=303)
 
 

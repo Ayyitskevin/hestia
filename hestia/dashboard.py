@@ -12,6 +12,7 @@ from .config import Settings
 from .email import notify
 from .invoices import accounts_receivable, money
 from .presets import preset_applied
+from .proposals import proposal_followups
 from .reports import monthly_pnl
 
 
@@ -33,6 +34,8 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         # plan_id IS NULL: installments live under their payment plan, not this list,
         # so they don't get double-counted here and under /payment-plans
         "WHERE i.tenant_id = ? AND i.status IN ('draft', 'sent') AND i.plan_id IS NULL "
+        "AND NOT EXISTS (SELECT 1 FROM proposals pr WHERE pr.invoice_id = i.id "
+        "                AND pr.tenant_id = i.tenant_id AND pr.status IN ('sent', 'accepted')) "
         "ORDER BY is_overdue DESC, i.id DESC LIMIT ?",
         (tenant_id, limit))]
     for inv in unpaid:
@@ -65,6 +68,8 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         "SELECT ct.id, ct.title, c.name AS client_name FROM contracts ct "
         "LEFT JOIN clients c ON c.id = ct.client_id AND c.tenant_id = ct.tenant_id "
         "WHERE ct.tenant_id = ? AND ct.status = 'sent' "
+        "AND NOT EXISTS (SELECT 1 FROM proposals pr WHERE pr.contract_id = ct.id "
+        "                AND pr.tenant_id = ct.tenant_id AND pr.status IN ('sent', 'accepted')) "
         "ORDER BY ct.created_at ASC LIMIT ?",  # oldest unsigned first
         (tenant_id, limit))]
 
@@ -75,6 +80,7 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         "WHERE q.tenant_id = ? AND q.status = 'sent' "
         "ORDER BY q.created_at ASC LIMIT ?",
         (tenant_id, limit))]
+    proposal_followup = proposal_followups(conn, tenant_id, limit=limit)
 
     return {
         "leads": leads,
@@ -83,8 +89,12 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         "to_deliver": to_deliver,
         "awaiting_contract": awaiting_contract,
         "awaiting_questionnaire": awaiting_questionnaire,
+        "proposal_acceptance": proposal_followup["awaiting_acceptance"],
+        "proposal_booking": proposal_followup["finish_booking"],
+        "proposal_followup": proposal_followup,
         "total": (len(leads) + len(unpaid) + len(upcoming) + len(to_deliver)
-                  + len(awaiting_contract) + len(awaiting_questionnaire)),
+                  + len(awaiting_contract) + len(awaiting_questionnaire)
+                  + proposal_followup["total"]),
     }
 
 
@@ -308,6 +318,10 @@ def build_owner_digest(conn: sqlite3.Connection, tenant_id: str,
     section("\U0001f4e6", "Ready to deliver", att["to_deliver"], lambda x: x["title"])
     section("✍️", "Awaiting signature", att["awaiting_contract"],
             lambda x: x["title"] + (f" — {x['client_name']}" if x.get("client_name") else ""))
+    section("Proposal follow-up", "Awaiting proposal acceptance", att["proposal_acceptance"],
+            lambda x: x["title"] + (f" — {x['client_name']}" if x.get("client_name") else ""))
+    section("Finish booking", "Accepted proposals to finish", att["proposal_booking"],
+            lambda x: f"{x['title']} — {x['followup_label']}")
     section("\U0001f4cb", "Awaiting questionnaire", att["awaiting_questionnaire"],
             lambda x: x["title"] + (f" — {x['client_name']}" if x.get("client_name") else ""))
     section("\U0001f91d", "Reconnect", reconnect,

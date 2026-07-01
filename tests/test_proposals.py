@@ -13,7 +13,10 @@ from hestia.proposals import (
     create_proposal,
     get_proposal,
     list_proposals,
+    proposal_followups,
+    record_proposal_reminder,
     send_proposal,
+    send_proposal_reminder,
 )
 from hestia.tenants import create_tenant
 
@@ -96,6 +99,28 @@ def test_proposal_tenant_isolation(conn, settings):
                            title="Cross-tenant") is None
 
 
+def test_proposal_reminder_records_and_sends(conn, settings):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Sarah", email="sarah@example.com")
+    pkg = create_package(conn, tenant_id=t["id"], name="Wedding Collection",
+                         price_cents=350000, deposit_cents=100000)
+    proposal = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                               title="Reminder proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], proposal["id"])
+
+    assert proposal_followups(conn, t["id"])["total"] == 1
+    assert record_proposal_reminder(conn, t["id"], proposal["id"]) is True
+    reminded = get_proposal(conn, t["id"], proposal["id"])
+    assert reminded["reminder_count"] == 1 and reminded["last_reminder_at"]
+    assert send_proposal_reminder(conn, settings, reminded) == "recorded"
+    assert any(proposal["token"] in m["body"] for m in list_emails(conn, t["id"]))
+
+    accept_proposal(conn, token=proposal["token"], accepted_name="Sarah")
+    conn.execute("UPDATE contracts SET status='signed' WHERE id=?", (proposal["contract_id"],))
+    conn.execute("UPDATE invoices SET status='paid' WHERE id=?", (proposal["invoice_id"],))
+    assert record_proposal_reminder(conn, t["id"], proposal["id"]) is False
+
+
 def test_http_proposal_publish_and_accept_flow(client, app):
     creds = onboard_studio(client, name="Lens Studio", email="lens@example.com")
     login_owner(client, creds)
@@ -146,6 +171,9 @@ def test_http_proposal_publish_and_accept_flow(client, app):
     client.post(f"/proposals/{proposal_id}/send")
     detail = client.get(f"/proposals/{proposal_id}")
     assert f"/proposal/{token}" in detail.text
+    assert "Remind client" in detail.text
+    client.post(f"/proposals/{proposal_id}/remind")
+    assert "reminded 1 time" in client.get(f"/proposals/{proposal_id}").text
     page = public.get(f"/proposal/{token}")
     assert page.status_code == 200
     assert "Wedding Collection" in page.text and "$1,000.00 due to reserve" in page.text

@@ -16,6 +16,8 @@ from hestia.dashboard import (
 )
 from hestia.email import list_emails
 from hestia.invoices import create_invoice
+from hestia.packages import create_package
+from hestia.proposals import accept_proposal, create_proposal, send_proposal
 from hestia.studio import upsert_profile
 from hestia.tenants import create_tenant, create_user
 
@@ -54,6 +56,28 @@ def test_digest_lists_actionable_items(conn, settings):
     assert "Digest Studio" in digest["subject"]
     assert "New leads" in digest["body"] and "Summer Wedding" in digest["body"]
     assert "Unpaid invoices" in digest["body"] and "Deposit" in digest["body"]
+
+
+def test_digest_lists_proposal_followups(conn, settings):
+    t = _studio(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Jordan Lee", email="j@x.com")
+    pkg = create_package(conn, tenant_id=t["id"], name="Wedding Collection",
+                         price_cents=400000, deposit_cents=100000)
+    waiting = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                              title="Waiting proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], waiting["id"])
+    accepted = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                               title="Accepted proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], accepted["id"])
+    accept_proposal(conn, token=accepted["token"], accepted_name="Jordan Lee")
+    conn.commit()
+
+    digest = build_owner_digest(conn, t["id"], settings)
+    assert digest is not None
+    assert "Awaiting proposal acceptance" in digest["body"]
+    assert "Waiting proposal" in digest["body"]
+    assert "Accepted proposals to finish" in digest["body"]
+    assert "Accepted proposal" in digest["body"]
 
 
 def test_send_claims_once_then_cools_down(conn, settings):

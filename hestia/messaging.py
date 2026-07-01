@@ -99,6 +99,15 @@ TEMPLATES: dict[str, dict] = {
                  "Review and sign here:\n{sign_url}\n\nThank you!\n{studio}"),
         "variables": ["client", "studio", "title", "sign_url"],
     },
+    "proposal_reminder": {
+        "label": "Proposal reminder",
+        "subject": "{studio}: reminder for {title}",
+        "body": ("Hi {client},\n\nA friendly reminder from {studio}: your proposal for "
+                 "{title} is ready here:\n{proposal_url}\n\n"
+                 "That single page has the package details, agreement, and booking invoice "
+                 "so you can finish reserving your session.\n\nThank you!\n{studio}"),
+        "variables": ["client", "studio", "title", "proposal_url"],
+    },
     "questionnaire_send": {
         "label": "Questionnaire",
         "subject": "{studio}: a quick questionnaire — {title}",
@@ -233,6 +242,7 @@ def _sample_context(studio: str) -> dict:
         "calendar_url": "https://example.com/book/abc123/calendar.ics",
         "pay_url": "https://example.com/pay/abc123",
         "sign_url": "https://example.com/sign/abc123",
+        "proposal_url": "https://example.com/proposal/abc123",
         "fill_url": "https://example.com/q/abc123",
         "download_url": "https://example.com/download/abc123",
         "offer_url": "https://example.com/s/your-studio/abc123",

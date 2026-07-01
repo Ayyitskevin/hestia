@@ -26,7 +26,7 @@ full hosted operating system:
 |----------|-----------------|
 | Booking scheduler | Public booking pages, availability rules, confirmations, reminders |
 | CRM spreadsheet | Clients, projects, timelines, tags, notes, files, statements |
-| Proposal app | Package-backed proposals with one client link for quote, agreement, and deposit |
+| Proposal app | Package-backed proposals with one client link, follow-up reminders, agreement, and deposit |
 | Contract tool | Templates, sent agreements, typed e-signature, audit trail |
 | Intake forms | Questionnaires, reusable templates, client portal responses |
 | Gallery host | Native galleries, delivery links, proofing, favorites, comments |
@@ -146,6 +146,7 @@ Hestia is a modular monolith, not a bundle of disconnected services.
 | `crm` | Clients, projects, tags, files, timelines |
 | `scheduler` | Availability, booking, confirmations, reminders |
 | `proposals` | Package-backed proposals, accept flow, linked agreement + deposit invoice |
+| `dashboard` | Trial cockpit, launch path, proposal conversion follow-up, digest-ready attention queue |
 | `contracts` | Contract templates, sent agreements, e-signature |
 | `questionnaires` | Intake forms, answers, reusable templates |
 | `galleries` / `storage` | Gallery hosting, uploads, delivery |

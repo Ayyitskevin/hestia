@@ -15,10 +15,23 @@
   {% endfor %}
 </div>
 
+{% if followups and followups.total %}
+<div class="health-strip" style="margin-bottom:18px">
+  <div class="health-item"><span class="svc">{{ followups.total }}</span>
+    <span class="url">proposal follow-up{{ '' if followups.total == 1 else 's' }}</span></div>
+  <div class="health-item"><span class="svc">{{ followups.awaiting_acceptance|length }}</span>
+    <span class="url">awaiting acceptance</span></div>
+  <div class="health-item"><span class="svc">{{ followups.finish_booking|length }}</span>
+    <span class="url">accepted, not booked</span></div>
+  <div class="health-item"><span class="svc">{{ followups.open_value }}</span>
+    <span class="url">booking invoices open</span></div>
+</div>
+{% endif %}
+
 {% if proposals %}
 <div class="card">
   <table>
-    <thead><tr><th>Proposal</th><th>Client</th><th>Package</th><th>Status</th><th>Due now</th><th></th></tr></thead>
+    <thead><tr><th>Proposal</th><th>Client</th><th>Package</th><th>Status</th><th>Due now</th><th>Follow-up</th><th></th></tr></thead>
     <tbody>
       {% for p in proposals %}
       <tr>
@@ -30,6 +43,13 @@
         <td>{{ p.package_name or "—" }}</td>
         <td><span class="pill {{ 'on' if p.status == 'accepted' else 'off' }}">{{ p.status }}</span></td>
         <td>{{ p.invoice_amount_display }}</td>
+        <td class="muted">
+          {% if p.needs_followup %}
+            {{ p.followup_label }}{% if p.reminder_count %}<br><span style="font-size:.85rem">reminded {{ p.reminder_count }}x</span>{% endif %}
+          {% else %}
+            —
+          {% endif %}
+        </td>
         <td style="text-align:right"><a class="btn ghost" href="/proposals/{{ p.id }}">Open</a></td>
       </tr>
       {% endfor %}

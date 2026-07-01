@@ -13,6 +13,8 @@ from hestia.delivery import enable_delivery
 from hestia.features import flags_for
 from hestia.galleries import add_image, create_gallery, publish_gallery
 from hestia.invoices import create_invoice, send_invoice
+from hestia.packages import create_package
+from hestia.proposals import accept_proposal, create_proposal, proposal_followups, send_proposal
 from hestia.questionnaires import create_questionnaire, send_questionnaire
 from hestia.sales import create_or_update_offer
 from hestia.subscriptions import apply_plan, get_subscription
@@ -120,6 +122,38 @@ def test_needs_attention_surfaces_awaiting_client_actions(conn):
     assert a["total"] == 2                                         # only the two sent items
 
 
+def test_proposal_followups_surface_conversion_bottlenecks(conn, settings):
+    t = create_tenant(conn, name="Proposal Watch", shoot_type="wedding")
+    c = create_client(conn, tenant_id=t["id"], name="Pat", email="pat@example.com")
+    pkg = create_package(conn, tenant_id=t["id"], name="Wedding Collection",
+                         price_cents=400000, deposit_cents=100000)
+    waiting = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                              title="Waiting proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], waiting["id"])
+    accepted = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                               title="Accepted proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], accepted["id"])
+    accept_proposal(conn, token=accepted["token"], accepted_name="Pat")
+    done = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                           title="Booked proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], done["id"])
+    accept_proposal(conn, token=done["token"], accepted_name="Pat")
+    conn.execute("UPDATE contracts SET status='signed' WHERE id=?", (done["contract_id"],))
+    conn.execute("UPDATE invoices SET status='paid' WHERE id=?", (done["invoice_id"],))
+    conn.commit()
+
+    followups = proposal_followups(conn, t["id"])
+    assert [p["title"] for p in followups["awaiting_acceptance"]] == ["Waiting proposal"]
+    assert [p["title"] for p in followups["finish_booking"]] == ["Accepted proposal"]
+    assert followups["finish_booking"][0]["followup_label"] == "Needs signature + payment"
+    assert followups["open_value_cents"] == 200000
+
+    attention = needs_attention(conn, t["id"])
+    assert [p["title"] for p in attention["proposal_acceptance"]] == ["Waiting proposal"]
+    assert [p["title"] for p in attention["proposal_booking"]] == ["Accepted proposal"]
+    assert attention["total"] == 2
+
+
 def test_awaiting_client_actions_are_tenant_scoped(conn):
     a = create_tenant(conn, name="A", shoot_type="wedding")
     b = create_tenant(conn, name="B", shoot_type="wedding")
@@ -146,6 +180,26 @@ def test_dashboard_page_shows_awaiting_signature(client, app):
     page = client.get("/dashboard")
     assert page.status_code == 200
     assert "Awaiting signature" in page.text and "Please sign me" in page.text
+
+
+def test_dashboard_page_shows_proposal_followup(client, app):
+    creds = onboard_studio(client, name="Prop Dash", email="propdash@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Pat", email="pat@example.com")
+        pkg = create_package(conn, tenant_id=tid, name="Wedding Collection",
+                             price_cents=350000, deposit_cents=100000)
+        p = create_proposal(conn, app.state.settings, tenant_id=tid, package_id=pkg["id"],
+                            title="Follow this proposal", client_id=c["id"])
+        send_proposal(conn, tid, p["id"])
+        conn.commit()
+    finally:
+        conn.close()
+    page = client.get("/dashboard")
+    assert page.status_code == 200
+    assert "Proposal follow-up" in page.text and "Follow this proposal" in page.text
 
 
 def test_money_snapshot_reports_month_revenue_and_outstanding(conn, settings):
