@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 from .config import Settings
+from .db import audit
 from .email import notify
 from .interest import beta_interest_summary
 from .tenants import get_tenant
@@ -14,6 +15,7 @@ from .trial_conversion import trial_conversion_cockpit, trial_conversion_for_ten
 
 BETA_TARGET_STUDIOS = 5
 LAUNCH_NUDGE_COOLDOWN_DAYS = 3
+LAUNCH_DIGEST_COOLDOWN_DAYS = 7
 
 
 def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
@@ -120,6 +122,93 @@ def send_beta_launch_nudge(
     return {**followup, "email_status": status}
 
 
+def build_beta_launch_digest(conn: sqlite3.Connection, settings: Settings) -> dict:
+    kit = beta_launch_kit(conn, settings)
+    pipeline = kit["revenue_pipeline"]
+    paid = int(pipeline["paid"])
+    mrr = _price_label(settings, paid)
+    stalled = int(kit["summary"]["stalled"])
+    open_interest = int(kit["interest"]["open_total"])
+    subject = (
+        f"Hestia launch digest: {paid} paid, "
+        f"{stalled} stalled, {open_interest} open interest"
+    )
+    base = settings.public_url.rstrip("/") or "http://127.0.0.1:8500"
+    lines = [
+        "Hestia hosted launch snapshot",
+        "",
+        f"Current flat-plan MRR: {mrr}",
+        f"Pipeline bottleneck: {pipeline['bottleneck']['label']} "
+        f"({pipeline['bottleneck']['dropoff']} drop-off)",
+        "",
+        "Revenue pipeline",
+    ]
+    lines.extend(
+        f"- {stage['label']}: {stage['count']} "
+        f"({stage['percent']}% from prior, -{stage['dropoff']})"
+        for stage in pipeline["stages"]
+    )
+    lines.extend([
+        "",
+        "Beta interest",
+        f"- New in last 7 days: {kit['interest']['last_7_days']}",
+        f"- Open: {kit['interest']['open_total']}",
+        f"- Invited: {kit['interest']['invited_total']}",
+        f"- Converted: {kit['interest']['converted_total']}",
+        "",
+        "Founder checklist",
+    ])
+    lines.extend(
+        f"{item['rank']}. {item['label']} - {item['detail']}"
+        for item in kit["operating_checklist"]
+    )
+    lines.extend(["", "Follow up today"])
+    if kit["followups"]:
+        lines.extend(
+            f"- {item['name']}: {item['prompt']} ({item['risk']})"
+            for item in kit["followups"]
+        )
+    else:
+        lines.append("- No urgent follow-ups.")
+    lines.extend([
+        "",
+        f"Open launch kit: {base}/admin/launch",
+        f"Trial cockpit: {base}/admin/trials",
+    ])
+    return {"subject": subject, "body": "\n".join(lines), "kit": kit}
+
+
+def send_beta_launch_digest(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    *,
+    force: bool = False,
+    cooldown_days: int = LAUNCH_DIGEST_COOLDOWN_DAYS,
+    actor: str = "system",
+) -> dict:
+    to = _launch_digest_recipient(settings)
+    if not to:
+        return {"sent": False, "status": "missing", "to": ""}
+    if not force and _launch_digest_recent(conn, cooldown_days=cooldown_days):
+        return {"sent": False, "status": "cooldown", "to": to}
+    digest = build_beta_launch_digest(conn, settings)
+    status = notify(
+        conn,
+        settings,
+        to=to,
+        subject=digest["subject"],
+        body=digest["body"],
+        signed=False,
+    )
+    audit(conn, actor=actor, action="launch.digest_sent", detail=f"{to}:{status or ''}")
+    return {
+        "sent": True,
+        "status": status or "sent",
+        "to": to,
+        "subject": digest["subject"],
+    }
+
+
 def _launch_nudge_activity(
     conn: sqlite3.Connection,
     *,
@@ -146,6 +235,24 @@ def _launch_nudge_activity(
             "nudge_cooling_down": bool(row["cooling_down"]),
         }
     return activity
+
+
+def _launch_digest_recipient(settings: Settings) -> str:
+    return (settings.smtp_from or settings.smtp_user or "").strip()
+
+
+def _launch_digest_recent(conn: sqlite3.Connection, *, cooldown_days: int) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1
+          FROM audit_log
+         WHERE action = 'launch.digest_sent'
+           AND datetime(created_at) >= datetime('now', ?)
+         LIMIT 1
+        """,
+        (f"-{max(0, int(cooldown_days))} days",),
+    ).fetchone()
+    return bool(row)
 
 
 def _operating_checklist(

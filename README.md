@@ -95,6 +95,7 @@ Hestia is ready for a simple solo-founder hosted launch:
 - First-party signup attribution from the public demo and pricing pages
 - Public beta interest capture with private invite links and interest-to-trial conversion tracking
 - Beta revenue pipeline from interest to paid $40/month account
+- Founder weekly launch digest for pipeline, stalled studios, beta interest, and paid MRR
 - Mock-first provider seams for safe local and staging runs
 
 ```bash
@@ -189,7 +190,7 @@ Useful URLs:
 - `/settings/account` hosted account, URLs, custom domain, billing actions
 - `/settings/billing` flat plan billing page
 - `/admin` operator admin with `HESTIA_API_TOKEN`
-- `/admin/launch` beta launch kit with founder operating checklist, beta revenue pipeline, beta interest leads, private invite emails, cohort summary, tagged invite links, CSV export, cooldown-safe trial nudges, and owner follow-up queue
+- `/admin/launch` beta launch kit with founder operating checklist, beta revenue pipeline, weekly launch digest, beta interest leads, private invite emails, cohort summary, tagged invite links, CSV export, cooldown-safe trial nudges, and owner follow-up queue
 - `/admin/trials` trial conversion cockpit for stalled and activated studios; tenant detail includes a beta conversion timeline
 - `/healthz` liveness
 - `/readyz` readiness
@@ -237,7 +238,7 @@ bash scripts/hosted-preflight.sh --url https://yourdomain.com
 
 The test suite covers tenant isolation, hosted routing, public demo and pricing
 pages, first-party signup attribution, private beta invites, beta launch kit, flat-plan billing, signup,
-onboarding presets, beta revenue pipeline, trial conversion analytics, custom domains, proposal accept
+onboarding presets, beta revenue pipeline, founder weekly launch digest, trial conversion analytics, custom domains, proposal accept
 flows, offer idempotency, public tokens, payments, client portal flows, and safe
 mock-provider operation.
 

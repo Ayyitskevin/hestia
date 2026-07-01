@@ -185,6 +185,7 @@ def test_worker_runs_proposal_reminder_sweep(monkeypatch, db_path, settings):
         lambda _db_path, _settings: calls.append("proposals") or 0,
     )
     monkeypatch.setattr(jobs_mod, "_send_owner_digests", lambda _db_path, _settings: 0)
+    monkeypatch.setattr(jobs_mod, "_send_launch_digest", lambda _db_path, _settings: 0)
     monkeypatch.setattr(jobs_mod, "_generate_recurring", lambda _db_path, _settings: 0)
     monkeypatch.setattr(jobs_mod, "run_next", lambda _db_path, _settings: None)
 

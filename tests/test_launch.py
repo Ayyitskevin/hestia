@@ -9,7 +9,12 @@ from hestia.interest import (
     record_beta_interest,
     send_beta_interest_invite,
 )
-from hestia.launch import beta_launch_export_rows, beta_launch_kit
+from hestia.launch import (
+    beta_launch_export_rows,
+    beta_launch_kit,
+    build_beta_launch_digest,
+    send_beta_launch_digest,
+)
 from hestia.main import create_app
 from hestia.presets import apply_preset
 from hestia.subscriptions import apply_plan
@@ -137,6 +142,52 @@ def test_beta_launch_kit_tracks_revenue_pipeline(conn, settings):
     assert pipeline["mrr_cents"] == 4000
 
 
+def test_beta_launch_digest_summarizes_pipeline_and_cooldown(conn, settings):
+    settings = dataclasses.replace(settings, smtp_from="founder@hestia.test")
+    record_beta_interest(
+        conn,
+        settings,
+        name="Digest Lead",
+        studio_name="Digest Lead Studio",
+        email="digest-lead@example.com",
+        shoot_type="wedding",
+    )
+    paid = create_tenant(conn, name="Paid Digest", shoot_type="wedding",
+                         signup_source="pricing", signup_landing_path="/pricing")
+    _owner(conn, paid["id"], "paid-digest@example.com")
+    apply_preset(conn, paid["id"], "wedding", include_demo=False)
+    apply_plan(conn, paid["id"], plan="studio", status="active", provider="mock")
+    conn.commit()
+
+    digest = build_beta_launch_digest(conn, settings)
+
+    assert digest["subject"] == "Hestia launch digest: 1 paid, 0 stalled, 1 open interest"
+    assert "Current flat-plan MRR: $40/month" in digest["body"]
+    assert "Revenue pipeline" in digest["body"]
+    assert "- Paid: 1" in digest["body"]
+    assert "Beta interest" in digest["body"]
+    assert "Open launch kit:" in digest["body"]
+
+    sent = send_beta_launch_digest(conn, settings, actor="system")
+    repeat = send_beta_launch_digest(conn, settings, actor="system")
+    forced = send_beta_launch_digest(conn, settings, force=True, actor="admin")
+
+    assert sent["sent"] and sent["to"] == "founder@hestia.test"
+    assert repeat == {"sent": False, "status": "cooldown", "to": "founder@hestia.test"}
+    assert forced["sent"]
+    emails = conn.execute(
+        "SELECT * FROM emails WHERE to_addr = ? AND subject LIKE 'Hestia launch digest:%'",
+        ("founder@hestia.test",),
+    ).fetchall()
+    assert len(emails) == 2
+    audits = conn.execute(
+        "SELECT actor, action, detail FROM audit_log WHERE action = 'launch.digest_sent' "
+        "ORDER BY id",
+    ).fetchall()
+    assert [row["actor"] for row in audits] == ["system", "admin"]
+    assert all("founder@hestia.test" in row["detail"] for row in audits)
+
+
 def test_admin_launch_page_renders_invites_and_followups(settings, conn):
     tenant = create_tenant(conn, name="Launch Admin", shoot_type="wedding",
                            signup_source="pricing", signup_landing_path="/pricing")
@@ -163,6 +214,7 @@ def test_admin_launch_page_renders_invites_and_followups(settings, conn):
     assert "5-studio beta checklist" in page.text
     assert "Pricing page" in page.text
     assert "Follow up today" in page.text
+    assert "Email digest" in page.text
     assert 'href="/admin/launch/export.csv"' in page.text
     assert "Launch Admin" in page.text
     assert "Send nudge" in page.text
@@ -195,6 +247,46 @@ def test_admin_launch_nudge_sends_email_and_records_audit(settings, conn):
     assert audit["action"] == "launch.nudge_sent"
     assert audit["detail"] == "nudge@example.com"
     assert "Nudge recorded" in admin.get("/admin/launch?nudge=sent").text
+
+
+def test_admin_launch_digest_sends_to_founder(settings, conn):
+    settings = dataclasses.replace(settings, smtp_from="founder@hestia.test")
+    tenant = create_tenant(conn, name="Digest Admin", shoot_type="wedding",
+                           signup_source="pricing", signup_landing_path="/pricing")
+    _owner(conn, tenant["id"], "digest-admin@example.com")
+    conn.commit()
+
+    app = create_app(settings)
+    admin = CSRFClient(app)
+    admin.post("/admin/login", data={"token": ADMIN_TOKEN})
+    response = admin.post("/admin/launch/digest", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/admin/launch?digest=sent"
+    email = conn.execute(
+        "SELECT * FROM emails WHERE to_addr = ? ORDER BY id DESC LIMIT 1",
+        ("founder@hestia.test",),
+    ).fetchone()
+    assert email["subject"].startswith("Hestia launch digest:")
+    assert "Revenue pipeline" in email["body"]
+    audit = conn.execute(
+        "SELECT actor, action, detail FROM audit_log WHERE action = 'launch.digest_sent'",
+    ).fetchone()
+    assert audit["actor"] == "admin"
+    assert "founder@hestia.test" in audit["detail"]
+    assert "Founder launch digest emailed" in admin.get("/admin/launch?digest=sent").text
+
+
+def test_admin_launch_digest_reports_missing_recipient(settings, conn):
+    app = create_app(settings)
+    admin = CSRFClient(app)
+    admin.post("/admin/login", data={"token": ADMIN_TOKEN})
+    response = admin.post("/admin/launch/digest", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/admin/launch?digest=missing"
+    assert conn.execute("SELECT COUNT(*) AS n FROM emails").fetchone()["n"] == 0
+    assert "Digest skipped: set SMTP" in admin.get("/admin/launch?digest=missing").text
 
 
 def test_admin_launch_nudge_cools_down_duplicate_sends(settings, conn):

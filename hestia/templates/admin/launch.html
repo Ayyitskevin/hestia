@@ -7,6 +7,10 @@
     <p class="muted">Source-tagged invite links and today's owner follow-up queue for the hosted $40/month studio plan.</p>
   </div>
   <div class="form-actions" style="margin-top:0">
+    <form method="post" action="/admin/launch/digest" style="display:inline">
+      {% include "_csrf.html" %}
+      <button class="btn secondary" type="submit">Email digest</button>
+    </form>
     <a class="btn secondary" href="/admin/launch/export.csv">Export CSV</a>
     <a class="btn ghost" href="/admin/trials">Trial cockpit</a>
   </div>
@@ -25,6 +29,13 @@
   <div class="alert">Invite skipped: that interest lead has already converted.</div>
 {% elif interest_notice == 'missing' %}
   <div class="alert">Invite skipped: that interest lead was not found.</div>
+{% endif %}
+{% if digest_notice == 'sent' %}
+  <div class="alert ok">Founder launch digest emailed through the Hestia email seam.</div>
+{% elif digest_notice == 'missing' %}
+  <div class="alert">Digest skipped: set SMTP from/user as the founder recipient.</div>
+{% elif digest_notice == 'cooldown' %}
+  <div class="alert">Digest skipped: the weekly launch digest was already sent recently.</div>
 {% endif %}
 
 <div class="grid cols-4" style="margin-top:18px">

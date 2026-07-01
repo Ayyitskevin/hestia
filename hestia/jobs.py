@@ -264,6 +264,20 @@ def _send_owner_digests(db_path: str | Path, settings: Settings) -> int:
         conn.close()
 
 
+def _send_launch_digest(db_path: str | Path, settings: Settings) -> int:
+    """Worker-cadence wrapper: email the founder/operator the hosted launch digest
+    on the launch module's weekly cooldown."""
+    from .db import connect
+    from .launch import send_beta_launch_digest
+    conn = connect(db_path)
+    try:
+        result = send_beta_launch_digest(conn, settings)
+        conn.commit()
+        return 1 if result["sent"] else 0
+    finally:
+        conn.close()
+
+
 def _generate_recurring(db_path: str | Path, settings: Settings) -> int:
     """Worker-cadence wrapper: generate any due recurring invoices. Each profile is claimed
     atomically (next_run_at advanced past today) and committed on its own inside
@@ -322,6 +336,11 @@ def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_slee
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
                 log.warning("worker owner-digest sweep failed",
                             extra={"action": "jobs.owner_digest"}, exc_info=True)
+            try:
+                _send_launch_digest(db_path, settings)
+            except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
+                log.warning("worker launch-digest sweep failed",
+                            extra={"action": "jobs.launch_digest"}, exc_info=True)
             try:
                 _generate_recurring(db_path, settings)
             except Exception:  # noqa: BLE001 - a billing miss must never kill the worker

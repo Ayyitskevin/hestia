@@ -29,7 +29,12 @@ from ..domains import custom_domain_summary, set_custom_domain_status
 from ..integrity import tenant_integrity_overview
 from ..interest import send_beta_interest_invite
 from ..jobs import failed_jobs, queue_stats, requeue_job, stale_jobs
-from ..launch import beta_launch_export_rows, beta_launch_kit, send_beta_launch_nudge
+from ..launch import (
+    beta_launch_export_rows,
+    beta_launch_kit,
+    send_beta_launch_digest,
+    send_beta_launch_nudge,
+)
 from ..ratelimit import enforce
 from ..tenants import (
     create_tenant,
@@ -157,7 +162,13 @@ def trials(request: Request):
 
 
 @router.get("/launch")
-def launch(request: Request, nudge: str = "", nudged: str = "", interest: str = ""):
+def launch(
+    request: Request,
+    nudge: str = "",
+    nudged: str = "",
+    interest: str = "",
+    digest: str = "",
+):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = _admin_ctx(request, conn)
@@ -172,6 +183,7 @@ def launch(request: Request, nudge: str = "", nudged: str = "", interest: str = 
         kit=kit,
         nudge_notice=nudge_notice,
         interest_notice=interest,
+        digest_notice=digest,
     )
 
 
@@ -242,6 +254,22 @@ def launch_interest_invite(request: Request, interest_id: int):
                 detail=result["email"],
             )
     return RedirectResponse(f"/admin/launch?interest={invite_status}", status_code=303)
+
+
+@router.post("/launch/digest")
+def launch_digest(request: Request):
+    settings = settings_of(request)
+    digest_status = "missing"
+    with db_conn(request) as conn:
+        auth = _admin_ctx(request, conn)
+        if not auth:
+            return _redirect_login()
+        result = send_beta_launch_digest(conn, settings, force=True, actor="admin")
+        if result["sent"]:
+            digest_status = "sent"
+        else:
+            digest_status = result["status"]
+    return RedirectResponse(f"/admin/launch?digest={digest_status}", status_code=303)
 
 
 @router.get("/system")
