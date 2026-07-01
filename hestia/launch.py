@@ -42,6 +42,33 @@ def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
     }
 
 
+def beta_launch_export_rows(conn: sqlite3.Connection, settings: Settings) -> list[dict]:
+    cockpit = trial_conversion_cockpit(conn, settings)
+    followups = {f["tenant_id"]: f for f in _followups(cockpit["studios"], limit=999)}
+    rows = []
+    for studio in cockpit["studios"]:
+        followup = followups.get(studio["tenant_id"]) or _followup(studio)
+        rows.append({
+            "studio": studio["name"],
+            "slug": studio["slug"],
+            "owner_email": studio["owner_email"],
+            "owner_verified": "yes" if studio["owner_verified"] else "no",
+            "source": studio["signup_source_label"],
+            "landing_path": studio["signup_landing_path"] or "",
+            "trial_state": studio["trial_state"],
+            "trial_label": studio["trial_label"],
+            "risk": studio["risk"],
+            "risk_reason": studio["risk_reason"],
+            "activation": f"{studio['activation_done']}/{studio['activation_total']}",
+            "activation_percent": studio["activation_percent"],
+            "next_action": studio["next_action"],
+            "owner_path": studio["next_href"],
+            "followup_prompt": followup["prompt"],
+            "mailto": followup["mailto"],
+        })
+    return rows
+
+
 def _invite_links(settings: Settings) -> list[dict]:
     base = settings.public_url.rstrip("/") or "http://127.0.0.1:8500"
     links = [

@@ -65,5 +65,29 @@ def test_admin_launch_page_renders_invites_and_followups(settings, conn):
     assert "5-studio beta checklist" in page.text
     assert "Pricing page" in page.text
     assert "Follow up today" in page.text
+    assert 'href="/admin/launch/export.csv"' in page.text
     assert "Launch Admin" in page.text
     assert 'href="/admin/launch"' in admin.get("/admin/tenants").text
+
+
+def test_admin_launch_export_csv_is_auth_gated_and_spreadsheet_safe(settings, conn):
+    tenant = create_tenant(conn, name="=Formula Studio", shoot_type="wedding",
+                           signup_source="pricing", signup_landing_path="/pricing")
+    _owner(conn, tenant["id"], "formula@example.com", verified=0)
+    conn.commit()
+
+    app = create_app(settings)
+    anon = CSRFClient(app)
+    assert anon.get("/admin/launch/export.csv", follow_redirects=False).status_code == 303
+
+    admin = CSRFClient(app)
+    admin.post("/admin/login", data={"token": ADMIN_TOKEN})
+    export = admin.get("/admin/launch/export.csv")
+
+    assert export.status_code == 200
+    assert export.headers["content-type"].startswith("text/csv")
+    assert "attachment; filename=\"hestia-beta-launch.csv\"" in export.headers["content-disposition"]
+    assert "studio,slug,owner_email,owner_verified,source" in export.text
+    assert "'=Formula Studio" in export.text
+    assert "formula@example.com" in export.text
+    assert "Verify owner email" in export.text
