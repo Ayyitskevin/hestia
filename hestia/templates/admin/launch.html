@@ -27,6 +27,59 @@
   <div class="card"><div class="label">Trialing or active</div><div style="font-size:1.8rem;font-weight:800">{{ kit.summary.trialing_or_active }}</div></div>
 </div>
 
+<section class="grid cols-4" style="margin-top:18px">
+  <div class="card stack">
+    <h3>Beta cohort</h3>
+    <p class="muted">{{ kit.cohort.window }} pulse for the $40/month acquisition funnel.</p>
+    {% for item in kit.cohort.pulse %}
+      <div class="launch-meter">
+        <strong>{{ item.label }}</strong>
+        <span class="pill">{{ item.count }}</span>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="card stack">
+    <h3>Source mix</h3>
+    {% for item in kit.cohort.sources %}
+      <div class="launch-meter">
+        <strong>{{ item.label }}</strong>
+        <span class="muted">{{ item.count }} · {{ item.percent }}%</span>
+      </div>
+    {% else %}
+      <p class="muted">No studios yet.</p>
+    {% endfor %}
+  </div>
+
+  <div class="card stack">
+    <h3>Risk / trial</h3>
+    {% for item in kit.cohort.risks %}
+      <div class="launch-meter">
+        <strong>{{ item.label }}</strong>
+        <span class="muted">{{ item.count }} · {{ item.percent }}%</span>
+      </div>
+    {% endfor %}
+    {% for item in kit.cohort.trial_states %}
+      <div class="launch-meter">
+        <strong>{{ item.label }}</strong>
+        <span class="muted">{{ item.count }} · {{ item.percent }}%</span>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="card stack">
+    <h3>Contact freshness</h3>
+    {% for item in kit.cohort.contact %}
+      <div class="launch-meter">
+        <strong>{{ item.label }}</strong>
+        <span class="muted">{{ item.count }} · {{ item.percent }}%</span>
+      </div>
+    {% else %}
+      <p class="muted">No contact history yet.</p>
+    {% endfor %}
+  </div>
+</section>
+
 <section class="grid cols-2" style="margin-top:18px">
   <div class="card stack">
     <h3>5-studio beta checklist</h3>

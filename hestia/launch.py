@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 from .config import Settings
@@ -17,6 +18,7 @@ LAUNCH_NUDGE_COOLDOWN_DAYS = 3
 def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
     cockpit = trial_conversion_cockpit(conn, settings)
     studios = cockpit["studios"]
+    nudge_activity = _launch_nudge_activity(conn)
     verified = sum(1 for studio in studios if studio["owner_verified"])
     presets_started = sum(1 for studio in studios if studio["activation_done"] > 0)
     sourced = sum(1 for studio in studios if studio["signup_source"] in ("pricing", "demo"))
@@ -26,7 +28,8 @@ def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
     return {
         "target": BETA_TARGET_STUDIOS,
         "invite_links": _invite_links(settings),
-        "followups": _followups(studios, nudge_activity=_launch_nudge_activity(conn)),
+        "followups": _followups(studios, nudge_activity=nudge_activity),
+        "cohort": _cohort_summary(studios, nudge_activity=nudge_activity),
         "milestones": [
             _milestone("Invite 5 studios", len(studios), BETA_TARGET_STUDIOS),
             _milestone("Verify 3 owners", verified, 3),
@@ -134,6 +137,127 @@ def _launch_nudge_activity(
             "nudge_cooling_down": bool(row["cooling_down"]),
         }
     return activity
+
+
+def _cohort_summary(
+    studios: list[dict],
+    *,
+    nudge_activity: dict[str, dict],
+) -> dict:
+    total = len(studios)
+    return {
+        "window": "Last 7 days",
+        "pulse": [
+            _metric("New signups", sum(1 for s in studios if _is_recent(s["created_at"]))),
+            _metric(
+                "Pricing/demo signups",
+                sum(
+                    1 for s in studios
+                    if s["signup_source"] in ("pricing", "demo") and _is_recent(s["created_at"])
+                ),
+            ),
+            _metric(
+                "Nudged",
+                sum(1 for a in nudge_activity.values() if _is_recent(a["last_nudged_at"])),
+            ),
+            _metric(
+                "Trialing or active",
+                sum(1 for s in studios if s["trial_state"] in ("trialing", "active")),
+            ),
+        ],
+        "sources": _group_counts(
+            studios,
+            lambda s: s["signup_source_label"],
+            total=total,
+        ),
+        "risks": _group_counts(
+            studios,
+            lambda s: s["risk"].title(),
+            total=total,
+            order=["High", "Medium", "Watch", "Low"],
+        ),
+        "trial_states": _group_counts(
+            studios,
+            lambda s: _trial_bucket(s["trial_state"]),
+            total=total,
+            order=["Trial ready", "Trialing", "Paid active", "Past due", "Canceled"],
+        ),
+        "contact": _group_counts(
+            studios,
+            lambda s: _contact_bucket(s, nudge_activity),
+            total=total,
+            order=["Never nudged", "Cooling down", "Ready after cooldown", "No owner email"],
+        ),
+    }
+
+
+def _metric(label: str, count: int) -> dict:
+    return {"label": label, "count": count}
+
+
+def _group_counts(
+    studios: list[dict],
+    label_for,
+    *,
+    total: int,
+    order: list[str] | None = None,
+) -> list[dict]:
+    counts: dict[str, int] = {}
+    for studio in studios:
+        label = label_for(studio)
+        counts[label] = counts.get(label, 0) + 1
+    labels = [label for label in (order or []) if label in counts]
+    labels.extend(sorted(label for label in counts if label not in labels))
+    return [
+        {
+            "label": label,
+            "count": counts[label],
+            "percent": round(100 * counts[label] / max(1, total)),
+        }
+        for label in labels
+    ]
+
+
+def _trial_bucket(state: str) -> str:
+    labels = {
+        "ready": "Trial ready",
+        "trialing": "Trialing",
+        "active": "Paid active",
+        "past_due": "Past due",
+        "canceled": "Canceled",
+    }
+    return labels.get(state, state.replace("_", " ").title())
+
+
+def _contact_bucket(studio: dict, nudge_activity: dict[str, dict]) -> str:
+    if not studio["owner_email"]:
+        return "No owner email"
+    activity = nudge_activity.get(studio["tenant_id"])
+    if not activity:
+        return "Never nudged"
+    if activity["nudge_cooling_down"]:
+        return "Cooling down"
+    return "Ready after cooldown"
+
+
+def _is_recent(value: str | None, *, days: int = 7) -> bool:
+    ts = _parse_time(value)
+    if not ts:
+        return False
+    return ts >= datetime.now(UTC) - timedelta(days=max(0, int(days)))
+
+
+def _parse_time(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    raw = str(value).replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw) if "T" in raw else datetime.strptime(raw, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _invite_links(settings: Settings) -> list[dict]:

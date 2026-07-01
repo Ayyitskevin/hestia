@@ -40,6 +40,14 @@ def test_beta_launch_kit_builds_invite_links_and_followup_queue(conn, settings):
     assert kit["target"] == 5
     assert kit["summary"]["studios"] == 2
     assert kit["summary"]["sourced"] == 2
+    pulse = {item["label"]: item["count"] for item in kit["cohort"]["pulse"]}
+    assert pulse["New signups"] == 2
+    assert pulse["Pricing/demo signups"] == 2
+    assert pulse["Trialing or active"] == 1
+    assert {"label": "Pricing", "count": 1, "percent": 50} in kit["cohort"]["sources"]
+    assert {"label": "Demo", "count": 1, "percent": 50} in kit["cohort"]["sources"]
+    assert {"label": "Never nudged", "count": 2, "percent": 100} in kit["cohort"]["contact"]
+    assert {"label": "Trialing", "count": 1, "percent": 50} in kit["cohort"]["trial_states"]
     assert any(link["url"] == "https://hestia.example/signup?source=pricing&path=/pricing"
                for link in kit["invite_links"])
     assert any(item["label"] == "Start first hosted trial" and item["complete"]
@@ -62,6 +70,9 @@ def test_admin_launch_page_renders_invites_and_followups(settings, conn):
 
     assert page.status_code == 200
     assert "Beta launch kit" in page.text
+    assert "Beta cohort" in page.text
+    assert "Source mix" in page.text
+    assert "Contact freshness" in page.text
     assert "5-studio beta checklist" in page.text
     assert "Pricing page" in page.text
     assert "Follow up today" in page.text
@@ -128,6 +139,7 @@ def test_admin_launch_nudge_cools_down_duplicate_sends(settings, conn):
     assert actions == ["launch.nudge_sent", "launch.nudge_skipped"]
 
     page = admin.get("/admin/launch")
+    assert "Contact freshness" in page.text
     assert "Cooling down 3 days" in page.text
     assert "Last nudge:" in page.text
     assert "Nudge skipped: this studio is still inside the outreach cooldown." in (
