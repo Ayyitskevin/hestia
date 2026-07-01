@@ -23,8 +23,16 @@ from .features import flags_for, normalize_shoot_type
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _SIGNUP_SOURCE_RE = re.compile(r"[^a-z0-9_-]+")
-_SIGNUP_SOURCES = {"landing", "pricing", "demo"}
-_SIGNUP_PATHS = {"/", "/pricing", "/demo", "/demo/wedding", "/demo/food", "/demo/real-estate"}
+_SIGNUP_SOURCES = {"landing", "pricing", "demo", "interest"}
+_SIGNUP_PATHS = {
+    "/",
+    "/pricing",
+    "/demo",
+    "/demo/wedding",
+    "/demo/food",
+    "/demo/real-estate",
+    "/interest",
+}
 
 
 def slugify(value: str) -> str:
@@ -56,6 +64,8 @@ def _source_from_path(path: str) -> str:
         return "demo"
     if path == "/":
         return "landing"
+    if path == "/interest":
+        return "interest"
     return ""
 
 

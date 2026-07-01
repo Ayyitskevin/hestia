@@ -27,6 +27,7 @@ from ..billing import PLANS, plan_status
 from ..db import applied_migrations, audit
 from ..domains import custom_domain_summary, set_custom_domain_status
 from ..integrity import tenant_integrity_overview
+from ..interest import send_beta_interest_invite
 from ..jobs import failed_jobs, queue_stats, requeue_job, stale_jobs
 from ..launch import beta_launch_export_rows, beta_launch_kit, send_beta_launch_nudge
 from ..ratelimit import enforce
@@ -156,7 +157,7 @@ def trials(request: Request):
 
 
 @router.get("/launch")
-def launch(request: Request, nudge: str = "", nudged: str = ""):
+def launch(request: Request, nudge: str = "", nudged: str = "", interest: str = ""):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = _admin_ctx(request, conn)
@@ -170,6 +171,7 @@ def launch(request: Request, nudge: str = "", nudged: str = ""):
         auth=auth,
         kit=kit,
         nudge_notice=nudge_notice,
+        interest_notice=interest,
     )
 
 
@@ -212,6 +214,34 @@ def launch_nudge(request: Request, tenant_id: str):
                 detail=result["owner_email"],
             )
     return RedirectResponse(f"/admin/launch?nudge={nudge_status}", status_code=303)
+
+
+@router.post("/launch/interest/{interest_id}/invite")
+def launch_interest_invite(request: Request, interest_id: int):
+    settings = settings_of(request)
+    invite_status = "missing"
+    with db_conn(request) as conn:
+        auth = _admin_ctx(request, conn)
+        if not auth:
+            return _redirect_login()
+        result = send_beta_interest_invite(conn, settings, interest_id)
+        if result and result.get("skipped"):
+            invite_status = "converted"
+            audit(
+                conn,
+                actor="admin",
+                action="interest.invite_skipped",
+                detail=f"converted:{result['email']}",
+            )
+        elif result:
+            invite_status = "sent"
+            audit(
+                conn,
+                actor="admin",
+                action="interest.invite_sent",
+                detail=result["email"],
+            )
+    return RedirectResponse(f"/admin/launch?interest={invite_status}", status_code=303)
 
 
 @router.get("/system")

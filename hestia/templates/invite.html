@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Start your Hestia studio invite{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>Start your Hestia studio</h1>
+  {% if sent %}
+    <div class="alert ok">Almost there — check your email to verify your account and open onboarding.</div>
+    <p class="muted">Your first 14 days are free, then Hestia is exactly $40/month. No tiers.</p>
+  {% elif not interest %}
+    <div class="alert error">This beta invite is invalid, expired, or already used.</div>
+    <p class="muted"><a href="/interest">Request beta access</a> if you need a fresh invite.</p>
+  {% else %}
+    <p class="muted">Your private beta invite includes the hosted studio OS, 14-day trial, and flat $40/month plan.</p>
+    {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+    <form method="post" action="/invite/{{ token }}" class="stack">
+      {% include "_csrf.html" %}
+      <label for="studio_name">Studio name</label>
+      <input type="text" id="studio_name" name="studio_name" value="{{ interest.studio_name or interest.name or '' }}" required autofocus>
+
+      <label for="email">Email</label>
+      <input type="email" id="email" value="{{ interest.email }}" readonly>
+
+      <label for="shoot_type">Primary niche</label>
+      <select id="shoot_type" name="shoot_type">
+        {% for st in shoot_types %}
+          <option value="{{ st }}" {% if st == interest.shoot_type %}selected{% endif %}>{{ shoot_type_labels.get(st, st) }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="password">Password <span class="muted">(at least 8 characters)</span></label>
+      <input type="password" id="password" name="password" required minlength="8">
+
+      <div class="form-actions">
+        <button class="btn" type="submit">Create studio</button>
+        <a class="btn secondary" href="/demo">View demo</a>
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -172,14 +172,14 @@ def _operating_checklist(
         s for s in studios
         if s["trial_state"] == "ready" and s["activation_percent"] >= 50
     ]
-    interest_total = int((interest or {}).get("total") or 0)
+    interest_total = int((interest or {}).get("open_total") or 0)
 
     candidates: list[dict] = []
     if interest_total:
         candidates.append(_operator_task(
             96 + min(interest_total, 10),
             "Review beta interest leads",
-            f"{interest_total} interested photographer{'s' if interest_total != 1 else ''} waiting.",
+            f"{interest_total} interested photographer{'s' if interest_total != 1 else ''} ready to invite.",
             "/admin/launch",
             "acquisition",
         ))

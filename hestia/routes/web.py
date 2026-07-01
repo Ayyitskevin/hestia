@@ -30,7 +30,12 @@ from ..demo import demo_nav, demo_tour
 from ..email import notify
 from ..galleries import list_galleries
 from ..hosted import tenant_from_custom_domain, tenant_slug_from_request
-from ..interest import record_beta_interest
+from ..interest import (
+    find_beta_interest_invite,
+    mark_beta_interest_converted,
+    mark_beta_interest_converted_by_email,
+    record_beta_interest,
+)
 from ..invoices import money
 from ..packages import list_packages
 from ..pipeline import list_runs
@@ -184,6 +189,102 @@ def interest_submit(
     )
 
 
+@router.get("/invite/{token}")
+def invite_form(request: Request, token: str):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        interest = find_beta_interest_invite(conn, settings, token)
+    return render(
+        request,
+        "invite.html",
+        auth=None,
+        token=token,
+        interest=interest,
+        sent=False,
+        error=None,
+    )
+
+
+@router.post("/invite/{token}")
+def invite_submit(
+    request: Request,
+    token: str,
+    studio_name: str = Form(""),
+    shoot_type: str = Form("other"),
+    password: str = Form(...),
+):
+    enforce(request, "signup")
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        interest = find_beta_interest_invite(conn, settings, token)
+        if not interest:
+            return render(
+                request,
+                "invite.html",
+                auth=None,
+                token=token,
+                interest=None,
+                sent=False,
+                error=None,
+            )
+
+        def _again(error: str):
+            return render(
+                request,
+                "invite.html",
+                auth=None,
+                token=token,
+                interest={**interest, "studio_name": studio_name or interest["studio_name"]},
+                sent=False,
+                error=error,
+            )
+
+        email_norm = interest["email"].strip().lower()
+        if len(password) < 8:
+            return _again("Choose a password of at least 8 characters.")
+        if get_user_by_email(conn, email_norm):
+            return _again("That email is already registered — try signing in instead.")
+
+        tenant = create_tenant(
+            conn,
+            name=(studio_name or interest["studio_name"] or interest["name"] or "New Studio"),
+            shoot_type=shoot_type or interest["shoot_type"],
+            signup_source="interest",
+            signup_landing_path="/interest",
+        )
+        user = create_user(
+            conn,
+            tenant_id=tenant["id"],
+            email=email_norm,
+            password=password,
+            role="owner",
+            verified=0,
+        )
+        verify_token = create_verification(conn, settings, user_id=user["id"])
+        link = f"{settings.public_url.rstrip('/')}/verify/{verify_token}"
+        notify(
+            conn,
+            settings,
+            to=email_norm,
+            tenant_id=tenant["id"],
+            signed=False,
+            subject="Verify your email to activate your Hestia studio",
+            body=(f"Welcome to Hestia!\n\nConfirm your email to activate "
+                  f"{tenant['name']}:\n{link}\n\nThis link expires in 2 days. "
+                  f"If you didn't sign up, you can ignore this email."),
+        )
+        mark_beta_interest_converted(conn, interest["id"], tenant["id"])
+    return render(
+        request,
+        "invite.html",
+        auth=None,
+        token=token,
+        interest={**interest, "studio_name": tenant["name"]},
+        sent=True,
+        error=None,
+    )
+
+
 @router.get("/login")
 def login_form(request: Request):
     return render(request, "login.html", auth=None, error=None)
@@ -243,6 +344,7 @@ def signup_submit(request: Request, name: str = Form(...), email: str = Form(...
                                signup_landing_path=attribution["landing_path"])
         user = create_user(conn, tenant_id=tenant["id"], email=email_norm,
                            password=password, role="owner", verified=0)
+        mark_beta_interest_converted_by_email(conn, email_norm, tenant["id"])
         token = create_verification(conn, settings, user_id=user["id"])
         link = f"{settings.public_url.rstrip('/')}/verify/{token}"
         notify(conn, settings, to=email_norm, tenant_id=tenant["id"], signed=False,

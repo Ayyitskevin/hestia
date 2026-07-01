@@ -55,6 +55,21 @@ def test_baseline_includes_galleries_project_id(tmp_path):
     assert "project_id" in cols
 
 
+def test_beta_interests_include_invite_conversion_columns(tmp_path):
+    db = tmp_path / "h.db"
+    init_db(db)
+    with connect(db) as conn:
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(beta_interests)")}
+    assert {
+        "invite_token_hash",
+        "invited_at",
+        "invite_expires_at",
+        "invite_email_status",
+        "tenant_id",
+        "converted_at",
+    } <= cols
+
+
 def test_legacy_db_without_ledger_is_adopted(tmp_path):
     # Simulate a pre-migration-system database: schema present, no ledger.
     db = tmp_path / "legacy.db"

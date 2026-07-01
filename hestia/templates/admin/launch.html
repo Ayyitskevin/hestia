@@ -19,6 +19,13 @@
 {% elif nudge_notice == 'missing' %}
   <div class="alert">Nudge skipped: no owner email is available for that studio.</div>
 {% endif %}
+{% if interest_notice == 'sent' %}
+  <div class="alert ok">Beta invite sent through the Hestia email seam.</div>
+{% elif interest_notice == 'converted' %}
+  <div class="alert">Invite skipped: that interest lead has already converted.</div>
+{% elif interest_notice == 'missing' %}
+  <div class="alert">Invite skipped: that interest lead was not found.</div>
+{% endif %}
 
 <div class="grid cols-4" style="margin-top:18px">
   <div class="card"><div class="label">Studios</div><div style="font-size:1.8rem;font-weight:800">{{ kit.summary.studios }}/{{ kit.target }}</div></div>
@@ -106,13 +113,18 @@
   <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">
     <div>
       <h3>Beta interest</h3>
-      <p class="muted">{{ kit.interest.total }} photographer{{ '' if kit.interest.total == 1 else 's' }} requested access · {{ kit.interest.last_7_days }} in the last 7 days.</p>
+      <p class="muted">
+        {{ kit.interest.total }} photographer{{ '' if kit.interest.total == 1 else 's' }} requested access ·
+        {{ kit.interest.open_total }} open ·
+        {{ kit.interest.invited_total }} invited ·
+        {{ kit.interest.converted_total }} converted.
+      </p>
     </div>
     <a class="btn ghost" href="/interest">Open public form</a>
   </div>
   {% if kit.interest.recent %}
     <table>
-      <thead><tr><th>Lead</th><th>Niche</th><th>Source</th><th>Updated</th></tr></thead>
+      <thead><tr><th>Lead</th><th>Status</th><th>Niche</th><th>Source</th><th>Action</th></tr></thead>
       <tbody>
         {% for lead in kit.interest.recent %}
           <tr>
@@ -121,9 +133,26 @@
               <span class="muted">{{ lead.email }}</span>
               {% if lead.note %}<br><span class="muted">{{ lead.note }}</span>{% endif %}
             </td>
+            <td>
+              <span class="pill {{ 'on' if lead.status == 'converted' else '' }}">{{ lead.status_label }}</span>
+              {% if lead.invited_at %}<br><span class="muted">Invited: {{ lead.invited_at }}</span>{% endif %}
+              {% if lead.invite_email_status %}<br><span class="muted">Email: {{ lead.invite_email_status }}</span>{% endif %}
+            </td>
             <td>{{ lead.shoot_type_label }}</td>
             <td><span class="pill">{{ lead.source_label }}</span> <span class="mono">{{ lead.landing_path }}</span></td>
-            <td class="muted">{{ lead.updated_at }}</td>
+            <td>
+              {% if lead.invite_available %}
+                <form method="post" action="/admin/launch/interest/{{ lead.id }}/invite" style="display:inline">
+                  {% include "_csrf.html" %}
+                  <button class="btn" type="submit">{{ lead.invite_button_label }}</button>
+                </form>
+              {% elif lead.tenant_id %}
+                <a class="btn secondary" href="/admin/tenants/{{ lead.tenant_id }}">Open studio</a>
+              {% else %}
+                <span class="muted">No action</span>
+              {% endif %}
+              <div class="muted" style="margin-top:6px">Updated: {{ lead.updated_at }}</div>
+            </td>
           </tr>
         {% endfor %}
       </tbody>

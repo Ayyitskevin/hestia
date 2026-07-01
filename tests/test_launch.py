@@ -188,9 +188,55 @@ def test_admin_launch_surfaces_beta_interest_leads(settings, conn):
 
     assert page.status_code == 200
     assert "Beta interest" in page.text
+    assert "1 open" in page.text
+    assert "Send invite" in page.text
     assert "Interest Studio" in page.text
     assert "interest@example.com" in page.text
     assert "Replacing HoneyBook and galleries." in page.text
+
+
+def test_admin_launch_sends_beta_interest_invite(settings, conn):
+    interest = record_beta_interest(
+        conn,
+        settings,
+        name="Invite Owner",
+        studio_name="Invite Studio",
+        email="launch-interest@example.com",
+        shoot_type="food",
+        note="Need one studio command center.",
+        source="demo",
+        landing_path="/demo/food",
+    )
+    conn.commit()
+
+    app = create_app(settings)
+    admin = CSRFClient(app)
+    admin.post("/admin/login", data={"token": ADMIN_TOKEN})
+    response = admin.post(
+        f"/admin/launch/interest/{interest['id']}/invite",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/admin/launch?interest=sent"
+    lead = conn.execute("SELECT * FROM beta_interests WHERE id = ?",
+                        (interest["id"],)).fetchone()
+    assert lead["status"] == "invited"
+    assert lead["invite_token_hash"]
+    email = conn.execute(
+        "SELECT * FROM emails WHERE to_addr = ? ORDER BY id DESC LIMIT 1",
+        ("launch-interest@example.com",),
+    ).fetchone()
+    assert email["subject"] == "You're invited to start your Hestia studio beta"
+    assert "/invite/" in email["body"]
+    audit = conn.execute(
+        "SELECT action, detail FROM audit_log WHERE action = 'interest.invite_sent'",
+    ).fetchone()
+    assert audit["detail"] == "launch-interest@example.com"
+    page = admin.get("/admin/launch?interest=sent")
+    assert "Beta invite sent" in page.text
+    assert "Invited" in page.text
+    assert "Resend invite" in page.text
 
 
 def test_admin_launch_export_csv_is_auth_gated_and_spreadsheet_safe(settings, conn):

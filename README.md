@@ -93,6 +93,7 @@ Hestia is ready for a simple solo-founder hosted launch:
 - Stripe subscriptions locked to the flat $40/month plan
 - Operator trial conversion cockpit for activation and churn-risk signals
 - First-party signup attribution from the public demo and pricing pages
+- Public beta interest capture with private invite links and interest-to-trial conversion tracking
 - Mock-first provider seams for safe local and staging runs
 
 ```bash
@@ -180,13 +181,14 @@ Useful URLs:
 - `/demo` public buyer tour for wedding, food & beverage, and real-estate workflows
 - `/pricing` flat $40/month value stack and trial conversion page
 - `/interest` public beta access form with first-party attribution
+- `/invite/{token}` private beta invite signup path for approved interest leads
 - `/signup` hosted signup when `HESTIA_SIGNUP_ENABLED=true`
 - `/login` owner login
 - `/dashboard` studio command center
 - `/settings/account` hosted account, URLs, custom domain, billing actions
 - `/settings/billing` flat plan billing page
 - `/admin` operator admin with `HESTIA_API_TOKEN`
-- `/admin/launch` beta launch kit with founder operating checklist, beta interest leads, cohort summary, tagged invite links, CSV export, cooldown-safe trial nudges, and owner follow-up queue
+- `/admin/launch` beta launch kit with founder operating checklist, beta interest leads, private invite emails, cohort summary, tagged invite links, CSV export, cooldown-safe trial nudges, and owner follow-up queue
 - `/admin/trials` trial conversion cockpit for stalled and activated studios; tenant detail includes a beta conversion timeline
 - `/healthz` liveness
 - `/readyz` readiness
@@ -233,7 +235,7 @@ bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
 
 The test suite covers tenant isolation, hosted routing, public demo and pricing
-pages, first-party signup attribution, beta launch kit, flat-plan billing, signup,
+pages, first-party signup attribution, private beta invites, beta launch kit, flat-plan billing, signup,
 onboarding presets, trial conversion analytics, custom domains, proposal accept
 flows, offer idempotency, public tokens, payments, client portal flows, and safe
 mock-provider operation.
@@ -262,7 +264,8 @@ assets, or failing `/healthz`/`/readyz` probes. Set `HESTIA_PREFLIGHT_URL` or pa
 12. Install each onboarding preset once: wedding, food & beverage, real estate.
 13. Start and cancel a test subscription.
 14. Verify custom-domain pending and admin verification flow.
-15. Publish the launch post and invite the first 5-10 studios manually.
+15. Review `/admin/launch` beta interest leads and send private invite links.
+16. Publish the launch post and invite the first 5-10 studios manually.
 
 ## X Launch Thread Outline
 

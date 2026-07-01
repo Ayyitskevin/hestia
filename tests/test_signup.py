@@ -4,6 +4,7 @@ import dataclasses
 
 from conftest import CSRFClient
 
+from hestia.interest import record_beta_interest
 from hestia.main import create_app
 from hestia.presets import apply_preset
 
@@ -79,6 +80,41 @@ def test_signup_records_sanitized_first_party_attribution(settings, conn):
     ).fetchone()
     assert tenant["signup_source"] == "pricing"
     assert tenant["signup_landing_path"] == "/pricing"
+
+
+def test_signup_marks_matching_beta_interest_converted(settings, conn):
+    record_beta_interest(
+        conn,
+        settings,
+        name="Interest Owner",
+        studio_name="Interest Studio",
+        email="interest-signup@example.com",
+        shoot_type="wedding",
+        source="pricing",
+        landing_path="/pricing",
+    )
+    conn.commit()
+
+    c = _client(settings)
+    r = c.post("/signup", data={
+        "name": "Interest Studio",
+        "email": "interest-signup@example.com",
+        "password": "password123",
+        "shoot_type": "wedding",
+        "signup_source": "pricing",
+        "signup_landing_path": "/pricing",
+    })
+
+    assert r.status_code == 200
+    owner = conn.execute(
+        "SELECT tenant_id FROM users WHERE email = ?",
+        ("interest-signup@example.com",),
+    ).fetchone()
+    lead = conn.execute("SELECT * FROM beta_interests WHERE email = ?",
+                        ("interest-signup@example.com",)).fetchone()
+    assert lead["status"] == "converted"
+    assert lead["tenant_id"] == owner["tenant_id"]
+    assert lead["converted_at"]
 
 
 def test_signup_rejects_external_attribution_path(settings, conn):
