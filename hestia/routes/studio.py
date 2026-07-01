@@ -15,6 +15,7 @@ from ..db import list_audit
 from ..email import list_emails, notify
 from ..integrity import integrity_report, repair_integrity
 from ..invoices import money
+from ..mini_sessions import hydrate_mini_session_displays, list_published_mini_sessions
 from ..packages import get_package, list_packages
 from ..ratelimit import enforce
 from ..referrals import attribute_referral
@@ -69,8 +70,14 @@ def public_site(request: Request, slug: str, ref: str = ""):
         for p in packages:
             p["price_display"] = money(p["price_cents"], currency)
         has_booking = bool(list_booking_types(conn, tenant["id"], active_only=True))
+        mini_sessions = hydrate_mini_session_displays(
+            settings_of(request),
+            tenant["slug"],
+            list_published_mini_sessions(conn, tenant["id"]),
+        )
     return render(request, "studio/site.html", auth=None, tenant=tenant, profile=profile,
-                  testimonials=testimonials, ref=ref, packages=packages, has_booking=has_booking)
+                  testimonials=testimonials, ref=ref, packages=packages, has_booking=has_booking,
+                  mini_sessions=mini_sessions)
 
 
 @router.get("/studio/{slug}/reviews")

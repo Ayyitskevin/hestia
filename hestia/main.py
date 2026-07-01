@@ -52,6 +52,7 @@ from .routes import (
     invoices,
     library,
     media,
+    minisessions,
     onboarding,
     packages,
     pay,
@@ -176,6 +177,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(proposals.router, dependencies=csrf)
     app.include_router(discounts.router, dependencies=csrf)
     app.include_router(giftcards.router, dependencies=csrf)
+    app.include_router(minisessions.router, dependencies=csrf)
     app.include_router(payment_plans.router, dependencies=csrf)
     app.include_router(recurring.router, dependencies=csrf)
     app.include_router(contracts.router, dependencies=csrf)

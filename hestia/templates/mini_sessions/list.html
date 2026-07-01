@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Mini-sessions — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Mini-sessions</h1>
+    <span class="muted">Limited booking drops with fixed spots.</span>
+  </div>
+</div>
+
+<div class="card stack">
+  <h3>New drop</h3>
+  <form method="post" action="/mini-sessions">
+    {% include "_csrf.html" %}
+    <label for="title">Title</label>
+    <input type="text" id="title" name="title" placeholder="Fall family minis" required autofocus>
+    <label for="description">Description <span class="muted">(optional)</span></label>
+    <textarea id="description" name="description" rows="2"
+      placeholder="20-minute sessions, one location, online gallery included."></textarea>
+    <div class="inline-grid-form">
+      <div><label for="duration_minutes">Minutes</label>
+        <input type="number" id="duration_minutes" name="duration_minutes" value="20" min="1" step="5"></div>
+      <div><label for="price">Price ({{ settings.currency|upper }})</label>
+        <input type="text" id="price" name="price" placeholder="250.00"></div>
+      <div><label for="deposit">Collected now</label>
+        <input type="text" id="deposit" name="deposit" placeholder="250.00"></div>
+    </div>
+    <div class="form-actions"><button class="btn" type="submit">Create drop</button></div>
+  </form>
+</div>
+
+{% if drops %}
+<div class="card" style="margin-top:18px">
+  <table>
+    <thead><tr><th>Drop</th><th>Status</th><th>Spots</th><th>Price</th><th></th></tr></thead>
+    <tbody>
+      {% for drop in drops %}
+      <tr>
+        <td>
+          <a href="/mini-sessions/{{ drop.id }}">{{ drop.title }}</a>
+          {% if drop.description %}<br><span class="muted" style="font-size:.85rem">{{ drop.description }}</span>{% endif %}
+        </td>
+        <td><span class="pill {{ 'on' if drop.status == 'published' else 'off' }}">{{ drop.status }}</span></td>
+        <td class="muted">{{ drop.open_count }} open · {{ drop.claimed_count }} claimed · {{ drop.slot_count }} total</td>
+        <td class="muted">
+          {{ drop.price_display or '—' }}{% if drop.deposit_display %}<br><span style="font-size:.85rem">{{ drop.deposit_display }} collected now</span>{% endif %}
+        </td>
+        <td style="text-align:right"><a class="btn ghost" href="/mini-sessions/{{ drop.id }}">Manage</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted" style="margin-top:18px">No mini-session drops yet.</p>
+{% endif %}
+{% endblock %}

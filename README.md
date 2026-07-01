@@ -25,6 +25,7 @@ full hosted operating system:
 | Replaces | Hestia includes |
 |----------|-----------------|
 | Booking scheduler | Public booking pages, availability rules, confirmations, reminders |
+| Mini-session launch tools | Limited booking drops, fixed spots, deposits, CRM leads, confirmations |
 | CRM spreadsheet | Clients, projects, timelines, tags, notes, files, statements |
 | Proposal app | Package-backed proposals with view tracking, automated follow-up nudges, agreement, and deposit |
 | Contract tool | Templates, sent agreements, typed e-signature, audit trail |
@@ -45,7 +46,7 @@ apps.
 The first hosted presets target:
 
 - **Wedding photographers** who need inquiries, consultations, contracts, deposits,
-  galleries, albums, sales, and anniversary retention.
+  mini-session drops, galleries, albums, sales, and anniversary retention.
 - **Food & beverage photographers** who need menu launches, campaign days,
   recurring content retainers, licensing-friendly intake, and repeat client loops.
 - **Real-estate photographers** who need fast booking, property intake, delivery,
@@ -155,6 +156,7 @@ Hestia is a modular monolith, not a bundle of disconnected services.
 | `studio` | Public studio site and inquiries |
 | `crm` | Clients, projects, tags, files, timelines |
 | `scheduler` | Availability, booking, confirmations, reminders |
+| `mini_sessions` | Limited booking drops with fixed slots, deposits, and CRM handoff |
 | `proposals` | Package-backed proposals, accept flow, automated nudges, linked agreement + deposit invoice |
 | `dashboard` | Trial cockpit, launch path, proposal conversion analytics, digest-ready attention queue |
 | `contracts` | Contract templates, sent agreements, e-signature |

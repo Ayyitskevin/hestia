@@ -28,6 +28,10 @@
           <p class="muted" style="margin:0">Ready to book a session?
             <a href="/studio/{{ tenant.slug }}/book">See available sessions →</a></p>
           {% endif %}
+          {% if mini_sessions %}
+          <p class="muted" style="margin:0">Limited dates open:
+            <a href="#mini-sessions">Claim a mini-session spot →</a></p>
+          {% endif %}
           <p class="muted" style="margin:0">🎁 <a href="/studio/{{ tenant.slug }}/gift">Give a gift card</a></p>
           <form method="post" action="/studio/{{ tenant.slug }}/inquire">
             {% include "_csrf.html" %}
@@ -73,6 +77,25 @@
             </div>
             {% if pk.description %}<p class="muted" style="margin:0">{{ pk.description }}</p>{% endif %}
             {% if pk.deposit_cents %}<p class="muted" style="font-size:.85rem; margin:0">Book with a deposit</p>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {% if mini_sessions %}
+      <section id="mini-sessions" style="margin-top:32px">
+        <h3 style="text-align:center">Mini-sessions</h3>
+        <div class="grid cols-2">
+          {% for drop in mini_sessions %}
+          <div class="card stack">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px">
+              <h3 style="margin:0">{{ drop.title }}</h3>
+              <strong>{{ drop.price_display or '' }}</strong>
+            </div>
+            {% if drop.description %}<p class="muted" style="margin:0">{{ drop.description }}</p>{% endif %}
+            <p class="muted" style="font-size:.85rem; margin:0">{{ drop.open_count }} spot{{ '' if drop.open_count == 1 else 's' }} open{% if drop.deposit_display %} · {{ drop.deposit_display }} collected now{% endif %}</p>
+            <div><a class="btn secondary" href="{{ drop.public_url }}">Claim a spot</a></div>
           </div>
           {% endfor %}
         </div>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ drop.title }} — {{ tenant.name }}</title>
+  <link rel="stylesheet" href="/static/hestia.css">
+</head>
+<body class="client">
+  <header class="client-header">
+    <div class="wrap">
+      <div class="eyebrow">{{ tenant.name }}</div>
+      <h1>{{ drop.title }}</h1>
+      <p class="muted">{{ drop.duration_minutes }} min{% if drop.price_display %} · {{ drop.price_display }}{% endif %}{% if drop.deposit_display %} · {{ drop.deposit_display }} collected now{% endif %}</p>
+    </div>
+  </header>
+  <main>
+    <div class="wrap narrow" style="padding-top:32px">
+      {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+      <div class="card stack">
+        {% if drop.description %}<p class="muted">{{ drop.description }}</p>{% endif %}
+        {% if slots %}
+        <form method="post" action="/studio/{{ tenant.slug }}/mini-sessions/{{ drop.slug }}" class="stack">
+          <label for="slot_id">Choose your spot</label>
+          <select id="slot_id" name="slot_id" required>
+            {% for slot in slots %}
+            <option value="{{ slot.id }}">{{ slot.starts_at }}</option>
+            {% endfor %}
+          </select>
+          <label for="name">Your name</label>
+          <input type="text" id="name" name="name" required>
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required placeholder="you@example.com">
+          <label for="message">Anything we should know? <span class="muted">(optional)</span></label>
+          <textarea id="message" name="message" rows="3"></textarea>
+          {% if drop.deposit_display %}
+          <p class="muted" style="font-size:.85rem; margin:0">You'll be taken to pay
+            {{ drop.deposit_display }} to secure your spot.</p>
+          {% endif %}
+          <div class="form-actions"><button class="btn" type="submit">Claim this spot</button></div>
+        </form>
+        {% else %}
+        <p class="muted">All spots are claimed. <a href="/studio/{{ tenant.slug }}">Contact {{ tenant.name }}</a> for the waitlist.</p>
+        {% endif %}
+      </div>
+      <p style="text-align:center; margin-top:18px"><a class="btn ghost" href="/studio/{{ tenant.slug }}">← Back to {{ tenant.name }}</a></p>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap">{{ tenant.name }} on Hestia</div></footer>
+</body>
+</html>

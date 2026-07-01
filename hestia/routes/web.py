@@ -37,6 +37,7 @@ from ..interest import (
     record_beta_interest,
 )
 from ..invoices import money
+from ..mini_sessions import hydrate_mini_session_displays, list_published_mini_sessions
 from ..packages import list_packages
 from ..pipeline import list_runs
 from ..presets import preset_applied
@@ -78,6 +79,7 @@ def _session_redirect(settings, token: str, target: str) -> RedirectResponse:
 
 @router.get("/")
 def landing(request: Request):
+    settings = settings_of(request)
     with db_conn(request) as conn:
         tenant = None
         if slug := tenant_slug_from_request(request):
@@ -96,9 +98,15 @@ def landing(request: Request):
             for p in packages:
                 p["price_display"] = money(p["price_cents"], currency)
             has_booking = bool(list_booking_types(conn, tenant["id"], active_only=True))
+            mini_sessions = hydrate_mini_session_displays(
+                settings,
+                tenant["slug"],
+                list_published_mini_sessions(conn, tenant["id"]),
+            )
             return render(request, "studio/site.html", auth=None, tenant=tenant,
                           profile=profile, testimonials=testimonials, ref="",
-                          packages=packages, has_booking=has_booking)
+                          packages=packages, has_booking=has_booking,
+                          mini_sessions=mini_sessions)
         auth = context_from_session(conn, request)
     return render(request, "landing.html", auth=auth)
 

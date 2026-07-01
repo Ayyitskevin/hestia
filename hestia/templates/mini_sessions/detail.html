@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ drop.title }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ drop.title }}</h1>
+    <span class="muted">{{ drop.duration_minutes }} min ·
+      <span class="pill {{ 'on' if drop.status == 'published' else 'off' }}">{{ drop.status }}</span> ·
+      {{ drop.open_count }} open · {{ drop.claimed_count }} claimed</span>
+  </div>
+  <div style="display:flex; gap:8px; flex-wrap:wrap">
+    {% if drop.status == 'published' %}
+      <a class="btn secondary" href="{{ drop.public_url }}" target="_blank">View public drop ↗</a>
+      <form method="post" action="/mini-sessions/{{ drop.id }}/unpublish">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Unpublish</button></form>
+    {% else %}
+      <form method="post" action="/mini-sessions/{{ drop.id }}/publish">{% include "_csrf.html" %}<button class="btn" type="submit">Publish</button></form>
+    {% endif %}
+    <form method="post" action="/mini-sessions/{{ drop.id }}/archive" onsubmit="return confirm('Archive this mini-session drop?')">
+      {% include "_csrf.html" %}<button class="btn ghost" type="submit">Archive</button>
+    </form>
+  </div>
+</div>
+
+{% if drop.status == 'published' %}
+<div class="card stack">
+  <p class="muted" style="margin:0">Share this link:
+    <strong>{{ drop.public_url }}</strong></p>
+</div>
+{% endif %}
+
+<div class="grid cols-2" style="margin-top:18px">
+  <div class="card stack">
+    <h3>Add spots</h3>
+    <form method="post" action="/mini-sessions/{{ drop.id }}/slots">
+      {% include "_csrf.html" %}
+      <label for="starts_at">One date/time per line</label>
+      <textarea id="starts_at" name="starts_at" rows="6"
+        placeholder="2026-10-18 09:00&#10;2026-10-18 09:30&#10;2026-10-18 10:00"></textarea>
+      <div class="form-actions"><button class="btn secondary" type="submit">Add spots</button></div>
+    </form>
+  </div>
+
+  <div class="card stack">
+    <h3>Details</h3>
+    <p class="muted" style="margin:0">{{ drop.description or "No description." }}</p>
+    <div class="health-strip">
+      <div class="health-item"><span class="svc">{{ drop.open_count }}</span><span class="url">open</span></div>
+      <div class="health-item"><span class="svc">{{ drop.claimed_count }}</span><span class="url">claimed</span></div>
+      <div class="health-item"><span class="svc">{{ drop.slot_count }}</span><span class="url">total spots</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:18px">
+  <h3>Spots</h3>
+  {% if slots %}
+  <table>
+    <thead><tr><th>Time</th><th>Status</th><th>Client</th><th></th></tr></thead>
+    <tbody>
+      {% for slot in slots %}
+      <tr>
+        <td class="mono">{{ slot.starts_at }}</td>
+        <td><span class="pill {{ 'on' if slot.status == 'open' else 'off' }}">{{ slot.status }}</span></td>
+        <td>{% if slot.client_name %}<a href="/clients/{{ slot.client_id }}">{{ slot.client_name }}</a><br><span class="muted" style="font-size:.85rem">{{ slot.client_email }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td style="text-align:right">
+          {% if slot.status == 'open' %}
+          <form method="post" action="/mini-sessions/{{ drop.id }}/slots/{{ slot.id }}/delete" style="display:inline">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit" title="Remove">✕</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No spots yet.</p>
+  {% endif %}
+</div>
+{% endblock %}
