@@ -81,6 +81,64 @@ PRESETS: dict[str, Preset] = {
         "demo_client": "Avery & Jordan Demo",
         "demo_project": "Avery & Jordan Wedding Demo",
     },
+    "portrait": {
+        "label": "Portrait & Family",
+        "shoot_type": "portrait",
+        "blurb": "A portrait studio setup with mini and full sessions, print-ready packages, and simple intake.",
+        "headline": "Warm, unhurried portraits for people who hate stiff photos",
+        "about": (
+            "Relaxed portrait and family sessions with friendly direction, a quick online "
+            "gallery, and artwork options worth hanging."
+        ),
+        "booking_types": [
+            {
+                "title": "Mini session",
+                "description": "Thirty focused minutes, one look and location, five edited images.",
+                "kind": "shoot",
+                "duration_minutes": 30,
+                "price_cents": 17500,
+                "deposit_cents": 5000,
+            },
+            {
+                "title": "Full portrait session",
+                "description": "Ninety minutes, multiple looks, and a gallery of twenty edited images.",
+                "kind": "shoot",
+                "duration_minutes": 90,
+                "price_cents": 42500,
+                "deposit_cents": 10000,
+            },
+        ],
+        "packages": [
+            {
+                "name": "Portrait Session",
+                "description": "Full session, online gallery, twenty edited images, and a print release.",
+                "price_cents": 42500,
+                "deposit_cents": 10000,
+            },
+            {
+                "name": "Family Story",
+                "description": "Extended family session, thirty edited images, and two fine-art prints.",
+                "price_cents": 65000,
+                "deposit_cents": 15000,
+            },
+            {
+                "name": "Wall Art Add-On",
+                "description": "A framed 16x20 fine-art print of your favorite frame.",
+                "price_cents": 22000,
+                "deposit_cents": 0,
+            },
+        ],
+        "questionnaire_title": "Portrait intake",
+        "questionnaire_prompts": [
+            "Who is being photographed, and how do they feel about being in front of a camera?",
+            "Where will we shoot — studio, home, or outdoors?",
+            "What will the photos be used for (walls, cards, profiles)?",
+            "Any dates or times that work best?",
+            "Anything else that would make the session feel easy?",
+        ],
+        "demo_client": "The Rivera Family Demo",
+        "demo_project": "Rivera Family Portraits Demo",
+    },
     "food": {
         "label": "Food & Beverage",
         "shoot_type": "food",

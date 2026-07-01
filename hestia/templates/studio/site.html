@@ -4,6 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ tenant.name }} — Photography</title>
+  {% set seo_desc = (profile.headline or profile.about or (tenant.name ~ ' — hand-crafted photography, delivered with care.')) | truncate(160) %}
+  <meta name="description" content="{{ seo_desc }}">
+  {% if canonical %}<link rel="canonical" href="{{ canonical }}">{% endif %}
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{{ tenant.name }} — Photography">
+  <meta property="og:description" content="{{ seo_desc }}">
+  {% if canonical %}<meta property="og:url" content="{{ canonical }}">{% endif %}
+  <meta name="twitter:card" content="summary">
+  <script type="application/ld+json">{{ {
+      "@context": "https://schema.org",
+      "@type": "ProfessionalService",
+      "name": tenant.name,
+      "description": seo_desc,
+      "url": canonical or "",
+      "email": profile.contact_email or none,
+    } | tojson }}</script>
   <link rel="stylesheet" href="/static/hestia.css">
 </head>
 <body class="client">

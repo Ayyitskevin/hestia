@@ -75,9 +75,10 @@ def public_site(request: Request, slug: str, ref: str = ""):
             tenant["slug"],
             list_published_mini_sessions(conn, tenant["id"]),
         )
+    canonical = f"{settings_of(request).public_url.rstrip('/')}/studio/{tenant['slug']}"
     return render(request, "studio/site.html", auth=None, tenant=tenant, profile=profile,
                   testimonials=testimonials, ref=ref, packages=packages, has_booking=has_booking,
-                  mini_sessions=mini_sessions)
+                  mini_sessions=mini_sessions, canonical=canonical)
 
 
 @router.get("/studio/{slug}/reviews")

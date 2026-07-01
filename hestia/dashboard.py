@@ -86,6 +86,28 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         "ORDER BY id DESC LIMIT ?",
         (tenant_id, limit))]
 
+    # Sessions still awaiting a confirmed time: every 'proposed' appointment — a public
+    # booking request the studio should confirm, or an owner-sent time-picker the client
+    # hasn't answered (worth a nudge either way). These have no starts_at, so the
+    # "upcoming" query above can never surface them — without this list they're
+    # invisible until the owner happens to open the schedule.
+    to_confirm = [dict(r) for r in conn.execute(
+        "SELECT a.id, a.title, a.created_at, c.name AS client_name "
+        "FROM appointments a LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id "
+        "WHERE a.tenant_id = ? AND a.status = 'proposed' AND a.kind != 'blocked' "
+        "ORDER BY a.created_at ASC LIMIT ?",  # oldest waiting first
+        (tenant_id, limit))]
+
+    # Albums where the client asked for changes — the ball is in the studio's court.
+    # Gallery join tenant-matched like every other join here: albums.gallery_id is
+    # written tenant-scoped today, but the FK alone doesn't force tenant agreement.
+    album_changes = [dict(r) for r in conn.execute(
+        "SELECT al.id, al.title, al.change_request, g.title AS gallery_title "
+        "FROM albums al JOIN galleries g ON g.id = al.gallery_id AND g.tenant_id = al.tenant_id "
+        "WHERE al.tenant_id = ? AND al.change_request IS NOT NULL "
+        "ORDER BY al.change_requested_at ASC LIMIT ?",
+        (tenant_id, limit))]
+
     # Contracts sent but not yet signed — the booking can't proceed until they are.
     # Client join tenant-matched so a stray cross-tenant client_id can't surface a name.
     awaiting_contract = [dict(r) for r in conn.execute(
@@ -111,12 +133,15 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         "unpaid": unpaid,
         "upcoming": upcoming,
         "to_deliver": to_deliver,
+        "to_confirm": to_confirm,
+        "album_changes": album_changes,
         "awaiting_contract": awaiting_contract,
         "awaiting_questionnaire": awaiting_questionnaire,
         "proposal_acceptance": proposal_followup["awaiting_acceptance"],
         "proposal_booking": proposal_followup["finish_booking"],
         "proposal_followup": proposal_followup,
         "total": (len(leads) + len(unpaid) + len(upcoming) + len(to_deliver)
+                  + len(to_confirm) + len(album_changes)
                   + len(awaiting_contract) + len(awaiting_questionnaire)
                   + proposal_followup["total"]),
     }
@@ -505,6 +530,10 @@ def build_owner_digest(conn: sqlite3.Connection, tenant_id: str,
             lambda x: f"{x['title']} — {x['amount_display']}" + (" (overdue)" if x.get("is_overdue") else ""))
     section("\U0001f4c5", "Upcoming sessions", att["upcoming"],
             lambda x: f"{x['title']} — {x['starts_at']}")
+    section("⏳", "Awaiting a confirmed time", att["to_confirm"],
+            lambda x: x["title"] + (f" — {x['client_name']}" if x.get("client_name") else ""))
+    section("\U0001f4d6", "Album change requests", att["album_changes"],
+            lambda x: f"{x['gallery_title']}: “{x['change_request']}”")
     section("\U0001f4e6", "Ready to deliver", att["to_deliver"], lambda x: x["title"])
     section("✍️", "Awaiting signature", att["awaiting_contract"],
             lambda x: x["title"] + (f" — {x['client_name']}" if x.get("client_name") else ""))
