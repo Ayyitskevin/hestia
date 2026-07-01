@@ -70,6 +70,121 @@ def portal_url(settings: Settings, token: str) -> str:
     return f"{settings.public_url.rstrip('/')}/portal/{token}"
 
 
+def _todo_action(kind: str, priority: int, label: str, detail: str, href: str, cta: str,
+                 *, status: str = "todo") -> dict:
+    return {
+        "kind": kind,
+        "priority": priority,
+        "label": label,
+        "detail": detail,
+        "href": href,
+        "cta": cta,
+        "status": status,
+    }
+
+
+def _installment_label(title: str) -> str:
+    return title.split("—")[-1].strip() if "—" in title else title
+
+
+def _portal_actions(
+    *,
+    contracts: list[dict],
+    plans: list[dict],
+    invoices: list[dict],
+    galleries: list[dict],
+    albums: list[dict],
+    questionnaires: list[dict],
+    appointments: list[dict],
+    review_url: str | None,
+    files: list[dict],
+) -> list[dict]:
+    actions = []
+    for ct in contracts:
+        if ct["status"] == "sent":
+            actions.append(_todo_action(
+                "sign", 10, f"Sign {ct['title']}", "Contract waiting for your signature.",
+                ct["sign_url"], "Review & sign",
+            ))
+
+    for appt in appointments:
+        if appt["status"] == "proposed":
+            actions.append(_todo_action(
+                "book", 20, f"Pick a time for {appt['title']}",
+                "Choose one of the session times your studio proposed.",
+                appt["book_url"], "Pick a time",
+            ))
+
+    for album in albums:
+        if album["state"] == "review":
+            actions.append(_todo_action(
+                "album", 30, f"Review {album['gallery_title']} album",
+                "Approve the layout or request changes.",
+                album["review_url"], "Review album",
+            ))
+
+    for q in questionnaires:
+        if q["status"] == "sent":
+            actions.append(_todo_action(
+                "form", 40, f"Answer {q['title']}",
+                "Intake answers help your studio prepare for the shoot.",
+                q["fill_url"], "Answer form",
+            ))
+
+    for plan in plans:
+        if plan["status"] == "void":
+            continue
+        for inst in plan["installments"]:
+            if inst["status"] in ("paid", "void"):
+                continue
+            label = _installment_label(inst["title"])
+            detail = f"{plan['title']} · {inst['amount_display']}"
+            if inst.get("due_date"):
+                detail = f"{detail} · due {inst['due_date']}"
+            actions.append(_todo_action(
+                "pay", 50 + int(inst.get("sequence") or 0), f"Pay {label}",
+                detail, inst["pay_url"], f"Pay {inst['amount_display']}",
+            ))
+
+    for inv in invoices:
+        if inv["status"] not in ("paid", "void"):
+            detail = inv["amount_display"]
+            if inv.get("due_date"):
+                detail = f"{detail} · due {inv['due_date']}"
+            actions.append(_todo_action(
+                "pay", 60, f"Pay {inv['title']}", detail, inv["pay_url"], "Pay invoice",
+            ))
+
+    for g in galleries:
+        if g.get("download_url"):
+            actions.append(_todo_action(
+                "download", 70, f"Download {g['title']}",
+                "High-resolution files are ready.", g["download_url"], "Download",
+                status="ready",
+            ))
+        elif g.get("view_url"):
+            actions.append(_todo_action(
+                "gallery", 75, f"View {g['title']}",
+                "Your published gallery is ready.", g["view_url"], "View gallery",
+                status="ready",
+            ))
+
+    for f in files:
+        actions.append(_todo_action(
+            "file", 80, f"Download {f['filename']}",
+            "A studio file was shared with you.", f["download_url"], "Download",
+            status="ready",
+        ))
+
+    if review_url:
+        actions.append(_todo_action(
+            "review", 90, "Leave a review",
+            "A few words help other clients find this studio.", review_url, "Leave review",
+        ))
+
+    return sorted(actions, key=lambda a: (a["priority"], a["label"].lower()))
+
+
 def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) -> dict:
     """Gather everything the client should see, with the action URLs precomputed."""
     tenant_id = client["tenant_id"]
@@ -131,6 +246,22 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
     for f in files:
         f["download_url"] = f"{base}/portal/{client['portal_token']}/files/{f['id']}"
 
+    actions = _portal_actions(
+        contracts=contracts,
+        plans=plans,
+        invoices=invoices,
+        galleries=galleries,
+        albums=albums,
+        questionnaires=questionnaires,
+        appointments=appointments,
+        review_url=review_url,
+        files=files,
+    )
+    action_summary = {
+        "todo_count": sum(1 for a in actions if a["status"] == "todo"),
+        "ready_count": sum(1 for a in actions if a["status"] == "ready"),
+    }
+
     return {
         "tenant": tenant,
         "projects": list_projects(conn, tenant_id, client_id=client["id"]),
@@ -143,6 +274,8 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
         "appointments": appointments,
         "review_url": review_url,
         "files": files,
+        "actions": actions,
+        "action_summary": action_summary,
         # billed / paid / outstanding across all the client's issued invoices + installments
         "statement": client_statement(conn, tenant_id, client["id"]),
     }

@@ -19,23 +19,34 @@
 
       {% if sent %}<div class="alert ok">✓ Message sent — {{ tenant.name }} will be in touch.</div>{% endif %}
 
-      {% set unsigned = contracts | selectattr('status', 'equalto', 'sent') | list %}
-      {% set open_invoices = invoices | rejectattr('status', 'in', ['paid', 'void']) | list %}
-      {% set to_fill = questionnaires | selectattr('status', 'equalto', 'sent') | list %}
-      {% set to_book = appointments | selectattr('status', 'equalto', 'proposed') | list %}
-      {% set to_review = albums | selectattr('state', 'equalto', 'review') | list %}
-      {% if unsigned or open_invoices or to_fill or to_book or to_review or review_url or (plans | selectattr('progress', 'ne', 'paid') | list) %}
-      <div class="card stack" style="border-color:#f0d9b4; background:#fff7ec">
-        <h3>Needs your attention</h3>
-        <ul class="portal-todo">
-          {% for ct in unsigned %}<li>Sign <strong>{{ ct.title }}</strong> — <a href="{{ ct.sign_url }}">review &amp; sign →</a></li>{% endfor %}
-          {% for a in to_book %}<li>Pick a time for <strong>{{ a.title }}</strong> — <a href="{{ a.book_url }}">book →</a></li>{% endfor %}
-          {% for alb in to_review %}<li>Review your album for <strong>{{ alb.gallery_title }}</strong> — <a href="{{ alb.review_url }}">review &amp; approve →</a></li>{% endfor %}
-          {% for q in to_fill %}<li>Fill out <strong>{{ q.title }}</strong> — <a href="{{ q.fill_url }}">answer →</a></li>{% endfor %}
-          {% for pl in plans if pl.status != 'void' and pl.progress != 'paid' %}<li>Payment plan <strong>{{ pl.title }}</strong> — {{ pl.paid_display }} of {{ pl.total_display }} paid</li>{% endfor %}
-          {% for inv in open_invoices %}<li>Invoice <strong>{{ inv.title }}</strong> ({{ inv.amount_display }}) — <a href="{{ inv.pay_url }}">pay →</a></li>{% endfor %}
-          {% if review_url %}<li>Share a few words about your experience — <a href="{{ review_url }}">leave a review →</a></li>{% endif %}
-        </ul>
+      {% if actions %}
+      <div class="card stack portal-actions-card">
+        <div class="portal-action-header">
+          <div>
+            <h3>Action room</h3>
+            <p class="muted">
+              {% if action_summary.todo_count %}
+              {{ action_summary.todo_count }} next step{{ '' if action_summary.todo_count == 1 else 's' }} waiting on you.
+              {% else %}
+              Everything current is ready for you.
+              {% endif %}
+            </p>
+          </div>
+          {% if action_summary.ready_count %}
+          <span class="pill on">{{ action_summary.ready_count }} ready</span>
+          {% endif %}
+        </div>
+        <div class="portal-actions">
+          {% for action in actions %}
+          <a class="portal-action {{ action.status }}" href="{{ action.href }}">
+            <span>
+              <strong>{{ action.label }}</strong>
+              <small>{{ action.detail }}</small>
+            </span>
+            <em>{{ action.cta }} &rarr;</em>
+          </a>
+          {% endfor %}
+        </div>
       </div>
       {% endif %}
 

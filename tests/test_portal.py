@@ -18,6 +18,7 @@ from hestia.portal import (
     regenerate_portal_token,
 )
 from hestia.project_files import add_project_file
+from hestia.questionnaires import create_questionnaire, send_questionnaire
 from hestia.scheduler import create_appointment
 from hestia.tenants import create_tenant
 from hestia.testimonials import request_testimonial
@@ -115,6 +116,43 @@ def test_portal_surfaces_download_and_review(conn, settings):
     assert data["review_url"] and tt["token"] in data["review_url"]
 
 
+def test_portal_action_room_prioritizes_client_next_steps(conn, settings, storage):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Sarah")
+    p = create_project(conn, tenant_id=t["id"], name="Wedding", client_id=c["id"])
+    ct = create_contract(conn, tenant_id=t["id"], title="Agreement", client_id=c["id"])
+    send_contract(conn, t["id"], ct["id"])
+    create_appointment(conn, tenant_id=t["id"], title="Consultation",
+                       options=["2030-01-01 10:00"], client_id=c["id"])
+    q = create_questionnaire(conn, tenant_id=t["id"], title="Timeline",
+                             prompts=["What time do you arrive?"], client_id=c["id"])
+    send_questionnaire(conn, t["id"], q["id"])
+    create_payment_plan(conn, settings, tenant_id=t["id"], title="Wedding", client_id=c["id"],
+                        installments=deposit_balance_installments(total_cents=400000,
+                                                                  deposit_cents=100000))
+    create_invoice(conn, settings, tenant_id=t["id"], title="Print credit", amount_cents=5000,
+                   client_id=c["id"])
+    g = create_gallery(conn, tenant_id=t["id"], title="Finals")
+    assign_gallery_to_project(conn, t["id"], g["id"], p["id"])
+    publish_gallery(conn, t["id"], g["id"])
+    enable_delivery(conn, t["id"], g["id"])
+    add_project_file(conn, storage, tenant_id=t["id"], project_id=p["id"],
+                     filename="timeline.pdf", fileobj=io.BytesIO(b"PLAN"))
+    request_testimonial(conn, tenant_id=t["id"], client_id=c["id"])
+    conn.commit()
+
+    token = enable_portal(conn, t["id"], c["id"])
+    data = assemble_portal(conn, settings, get_client_by_portal_token(conn, token))
+    actions = data["actions"]
+    kinds = [a["kind"] for a in actions]
+
+    assert kinds[:3] == ["sign", "book", "form"]
+    assert kinds.count("pay") == 3                    # two plan installments + one standalone invoice
+    assert "download" in kinds and "file" in kinds and kinds[-1] == "review"
+    assert data["action_summary"] == {"todo_count": 7, "ready_count": 2}
+    assert actions[0]["href"].endswith(f"/sign/{ct['token']}")
+
+
 def test_portal_omits_download_and_review_when_absent(conn, settings):
     t = _tenant(conn)
     c = create_client(conn, tenant_id=t["id"], name="Plain")
@@ -164,8 +202,8 @@ def test_http_pending_review_is_in_attention_banner(client, app):
     finally:
         conn.close()
     page = client.get(f"/portal/{portal_tok}").text
-    assert "Needs your attention" in page                             # the to-do banner renders
-    assert "leave a review →" in page                                 # the review is a surfaced to-do
+    assert "Action room" in page                                      # the to-do banner renders
+    assert "Leave review" in page                                     # the review is a surfaced to-do
 
 
 def test_isolation_token_resolves_only_its_client(conn):

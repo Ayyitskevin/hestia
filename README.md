@@ -28,6 +28,7 @@ full hosted operating system:
 | Mini-session launch tools | Limited booking drops, fixed spots, deposits, CRM leads, confirmations |
 | Sales assistant | Lead intelligence cockpit that ranks hot leads by source, urgency, money, and booking signals |
 | CRM spreadsheet | Clients, projects, timelines, tags, notes, files, statements |
+| Client portal | Client action room for signatures, payments, forms, sessions, galleries, albums, files, and reviews |
 | Proposal app | Package-backed proposals with view tracking, automated follow-up nudges, agreement, and deposit |
 | Contract tool | Templates, sent agreements, typed e-signature, audit trail |
 | Intake forms | Questionnaires, reusable templates, client portal responses |
@@ -103,6 +104,7 @@ Hestia is ready for a simple solo-founder hosted launch:
 - Founder weekly launch digest for pipeline, stalled studios, beta interest, and paid MRR
 - In-app launch operations runbook with preflight, smoke, dogfood, and share-link commands
 - Founder demo mode that seeds polished wedding, food & beverage, and real-estate sample studios
+- Client action room that ranks every client next step across sign, pay, book, answer, review, download, and testimonial flows
 - Mock-first provider seams for safe local and staging runs
 
 ```bash
@@ -170,7 +172,7 @@ Hestia is a modular monolith, not a bundle of disconnected services.
 | `albums` | Draft album spreads with code validation |
 | `content` / `products` | Captions, shot lists, marketing packs, packshots |
 | `invoices` / `payments` | Invoices, deposits, payment plans, Stripe seam |
-| `portal` | One branded client hub |
+| `portal` | One branded client hub with a ranked client action room |
 | `automations` | Workflow rules, delayed retention, owner digest |
 | `subscriptions` | Flat hosted SaaS billing |
 | `pipeline` / `jobs` | Durable background processing |

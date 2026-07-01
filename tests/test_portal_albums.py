@@ -94,8 +94,8 @@ def test_review_album_appears_in_attention(client, conn, storage, settings):
     ptoken = enable_portal(conn, t["id"], c["id"])
     conn.commit()
     page = client.get(f"/portal/{ptoken}").text
-    assert "Needs your attention" in page                      # an album awaiting review is a to-do
-    assert "Review your album" in page and f"/a/{tok}" in page
+    assert "Action room" in page                               # an album awaiting review is a to-do
+    assert "Review Wedding Gallery album" in page and f"/a/{tok}" in page
 
 
 def test_approved_album_not_a_todo(client, conn, storage, settings):
@@ -107,5 +107,5 @@ def test_approved_album_not_a_todo(client, conn, storage, settings):
     ptoken = enable_portal(conn, t["id"], c["id"])
     conn.commit()
     page = client.get(f"/portal/{ptoken}").text
-    assert "Review your album" not in page                     # approved → no longer a to-do...
+    assert "Review Wedding Gallery album" not in page          # approved → no longer a to-do...
     assert "Your albums" in page                               # ...but still listed (as approved)

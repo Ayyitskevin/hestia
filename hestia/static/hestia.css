@@ -99,6 +99,20 @@ label.check input { width: auto; margin-top: 3px; flex: none; }
   line-height: 1.6; color: var(--ink); background: var(--paper); border: 1px solid var(--line);
   border-radius: 9px; padding: 16px; margin: 0; }
 .portal-todo { margin: 4px 0 0; padding-left: 20px; line-height: 1.9; }
+.portal-actions-card { border-color: #f0d9b4; background: #fff7ec; }
+.portal-action-header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.portal-action-header h3, .portal-action-header p { margin: 0; }
+.portal-actions { display: grid; gap: 10px; }
+.portal-action {
+  display: flex; justify-content: space-between; gap: 16px; align-items: center;
+  min-height: 64px; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--paper); color: var(--ink);
+}
+.portal-action:hover { background: #fffaf2; color: var(--ink); text-decoration: none; }
+.portal-action strong { display: block; }
+.portal-action small { display: block; color: var(--muted); font-size: .86rem; margin-top: 2px; }
+.portal-action em { flex: none; color: var(--terracotta-dark); font-style: normal; font-weight: 700; font-size: .9rem; }
+.portal-action.ready { border-color: #cfe2cb; }
 .portal-plan { margin-bottom: 14px; }
 .portal-plan:last-child { margin-bottom: 0; }
 .qa-item { padding: 10px 0; border-bottom: 1px solid var(--line); }
@@ -555,6 +569,8 @@ body.client { background: var(--cream); }
   .client-header { padding: 24px 0; }
   .client-header h1 { font-size: 1.5rem; }
   .hero-strip img { height: 180px; }
+  .portal-action-header, .portal-action { flex-direction: column; align-items: flex-start; }
+  .portal-action em { white-space: normal; }
 
   /* Testimonial rows stack their actions under the text. */
   .testimonial-row { flex-direction: column; }
