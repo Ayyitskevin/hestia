@@ -30,6 +30,7 @@ def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
         "invite_links": _invite_links(settings),
         "followups": _followups(studios, nudge_activity=nudge_activity),
         "cohort": _cohort_summary(studios, nudge_activity=nudge_activity),
+        "operating_checklist": _operating_checklist(studios, nudge_activity=nudge_activity),
         "milestones": [
             _milestone("Invite 5 studios", len(studios), BETA_TARGET_STUDIOS),
             _milestone("Verify 3 owners", verified, 3),
@@ -137,6 +138,126 @@ def _launch_nudge_activity(
             "nudge_cooling_down": bool(row["cooling_down"]),
         }
     return activity
+
+
+def _operating_checklist(
+    studios: list[dict],
+    *,
+    nudge_activity: dict[str, dict],
+) -> list[dict]:
+    total = len(studios)
+    verified = sum(1 for studio in studios if studio["owner_verified"])
+    presets_started = sum(1 for studio in studios if studio["activation_done"] > 0)
+    sourced = sum(1 for studio in studios if studio["signup_source"] in ("pricing", "demo"))
+    trialing_or_active = sum(
+        1 for studio in studios if studio["trial_state"] in ("trialing", "active")
+    )
+    at_risk = [s for s in studios if s["risk"] in ("high", "medium")]
+    ready_to_contact = [
+        s for s in studios
+        if s["owner_email"] and _contact_bucket(s, nudge_activity) in (
+            "Never nudged",
+            "Ready after cooldown",
+        )
+    ]
+    activated_not_trialing = [
+        s for s in studios
+        if s["trial_state"] == "ready" and s["activation_percent"] >= 50
+    ]
+
+    candidates: list[dict] = []
+    if at_risk and ready_to_contact:
+        overlap = [s for s in at_risk if s in ready_to_contact]
+        count = len(overlap) or min(len(at_risk), len(ready_to_contact))
+        candidates.append(_operator_task(
+            100 + count,
+            "Nudge at-risk studios",
+            f"{count} studio{'s' if count != 1 else ''} can be contacted now.",
+            "/admin/launch",
+            "outreach",
+        ))
+    if verified < 3:
+        gap = 3 - verified
+        candidates.append(_operator_task(
+            90 + gap,
+            "Verify owner emails",
+            f"{gap} more verified owner{'s' if gap != 1 else ''} gets the beta to signal.",
+            "/admin/trials",
+            "activation",
+        ))
+    if trialing_or_active == 0 and activated_not_trialing:
+        candidates.append(_operator_task(
+            86 + len(activated_not_trialing),
+            "Start the first hosted trial",
+            "At least one studio has enough setup progress to start the 14-day trial.",
+            "/admin/trials",
+            "billing",
+        ))
+    if sourced < 2:
+        gap = 2 - sourced
+        candidates.append(_operator_task(
+            80 + gap,
+            "Push pricing and demo links",
+            f"Need {gap} more pricing/demo-sourced signup{'s' if gap != 1 else ''}.",
+            "/admin/launch",
+            "acquisition",
+        ))
+    if presets_started < 3:
+        gap = 3 - presets_started
+        candidates.append(_operator_task(
+            70 + gap,
+            "Get niche presets installed",
+            f"{gap} more studio{'s' if gap != 1 else ''} should start wedding, food, or real-estate setup.",
+            "/admin/trials",
+            "activation",
+        ))
+    if total < BETA_TARGET_STUDIOS:
+        gap = BETA_TARGET_STUDIOS - total
+        candidates.append(_operator_task(
+            60 + gap,
+            "Invite more beta studios",
+            f"{gap} invite{'s' if gap != 1 else ''} left to fill the first cohort.",
+            "/admin/launch",
+            "acquisition",
+        ))
+    if not candidates:
+        candidates.extend([
+            _operator_task(
+                30,
+                "Review trial cockpit",
+                "Scan conversion risk and keep activated studios moving toward paid.",
+                "/admin/trials",
+                "operator",
+            ),
+            _operator_task(
+                20,
+                "Refresh invite links",
+                "Share the strongest pricing or niche demo link with the next qualified photographer.",
+                "/admin/launch",
+                "acquisition",
+            ),
+            _operator_task(
+                10,
+                "Keep the cohort warm",
+                "Check contact freshness before sending another founder nudge.",
+                "/admin/launch",
+                "retention",
+            ),
+        ])
+    candidates.sort(key=lambda item: (-item["score"], item["label"]))
+    for index, item in enumerate(candidates[:3], start=1):
+        item["rank"] = index
+    return candidates[:3]
+
+
+def _operator_task(score: int, label: str, detail: str, href: str, theme: str) -> dict:
+    return {
+        "score": score,
+        "label": label,
+        "detail": detail,
+        "href": href,
+        "theme": theme,
+    }
 
 
 def _cohort_summary(

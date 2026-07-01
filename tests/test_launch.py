@@ -48,6 +48,13 @@ def test_beta_launch_kit_builds_invite_links_and_followup_queue(conn, settings):
     assert {"label": "Demo", "count": 1, "percent": 50} in kit["cohort"]["sources"]
     assert {"label": "Never nudged", "count": 2, "percent": 100} in kit["cohort"]["contact"]
     assert {"label": "Trialing", "count": 1, "percent": 50} in kit["cohort"]["trial_states"]
+    assert [item["label"] for item in kit["operating_checklist"]] == [
+        "Nudge at-risk studios",
+        "Verify owner emails",
+        "Get niche presets installed",
+    ]
+    assert kit["operating_checklist"][0]["rank"] == 1
+    assert kit["operating_checklist"][0]["href"] == "/admin/launch"
     assert any(link["url"] == "https://hestia.example/signup?source=pricing&path=/pricing"
                for link in kit["invite_links"])
     assert any(item["label"] == "Start first hosted trial" and item["complete"]
@@ -70,6 +77,8 @@ def test_admin_launch_page_renders_invites_and_followups(settings, conn):
 
     assert page.status_code == 200
     assert "Beta launch kit" in page.text
+    assert "Founder operating checklist" in page.text
+    assert "Nudge at-risk studios" in page.text
     assert "Beta cohort" in page.text
     assert "Source mix" in page.text
     assert "Contact freshness" in page.text

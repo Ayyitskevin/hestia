@@ -27,6 +27,28 @@
   <div class="card"><div class="label">Trialing or active</div><div style="font-size:1.8rem;font-weight:800">{{ kit.summary.trialing_or_active }}</div></div>
 </div>
 
+<section class="card stack" style="margin-top:18px">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">
+    <div>
+      <h3>Founder operating checklist</h3>
+      <p class="muted">The next three moves ranked from today&apos;s beta cohort signals.</p>
+    </div>
+    <span class="pill">$40/month launch</span>
+  </div>
+  <div class="grid cols-3">
+    {% for item in kit.operating_checklist %}
+      <div class="launch-meter">
+        <div>
+          <span class="pill">{{ item.rank }}</span>
+          <strong>{{ item.label }}</strong><br>
+          <span class="muted">{{ item.detail }}</span>
+        </div>
+        <a class="btn ghost" href="{{ item.href }}">Open</a>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
 <section class="grid cols-4" style="margin-top:18px">
   <div class="card stack">
     <h3>Beta cohort</h3>

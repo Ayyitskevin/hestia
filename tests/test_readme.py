@@ -17,6 +17,7 @@ def test_readme_positions_hestia_as_flat_price_hosted_microsaas():
         "/pricing",
         "first-party signup attribution",
         "/admin/launch",
+        "founder operating checklist",
         "cohort summary",
         "CSV export",
         "cooldown-safe trial nudges",
