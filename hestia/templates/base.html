@@ -3,9 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set seo_title = self.title()|striptags|trim %}
+  {% set seo_description_raw %}{% block meta_description %}Hestia is the $40/month hosted photography studio OS for booking, contracts, AI-powered galleries, payments, and client follow-up in one maintained app.{% endblock %}{% endset %}
+  {% set seo_description = seo_description_raw|striptags|trim %}
+  {% set canonical_url = settings.public_url.rstrip('/') ~ request.url.path %}
   <title>{% block title %}Hestia{% endblock %}</title>
+  <meta name="description" content="{{ seo_description }}">
+  <link rel="canonical" href="{{ canonical_url }}">
+  <meta name="theme-color" content="#c0552f">
+  <meta property="og:site_name" content="Hestia">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+  <meta property="og:title" content="{{ seo_title }}">
+  <meta property="og:description" content="{{ seo_description }}">
+  <meta property="og:url" content="{{ canonical_url }}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{{ seo_title }}">
+  <meta name="twitter:description" content="{{ seo_description }}">
   <link rel="stylesheet" href="/static/hestia.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>%F0%9F%94%A5</text></svg>">
+  {% block head_extra %}{% endblock %}
 </head>
 <body>
   <header class="site-header">

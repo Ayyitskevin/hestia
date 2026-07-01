@@ -95,6 +95,7 @@ Hestia is ready for a simple solo-founder hosted launch:
 - First-party signup attribution from the public demo and pricing pages
 - Shareable public beta landing page for the $40/month hosted offer
 - 14-day trial proof plan showing concrete setup, booking, gallery, offer, and follow-up outcomes
+- Public SEO, canonical URL, Open Graph, and Twitter metadata for polished shared links
 - Public beta interest capture with private invite links and interest-to-trial conversion tracking
 - Beta revenue pipeline from interest to paid $40/month account
 - Founder weekly launch digest for pipeline, stalled studios, beta interest, and paid MRR

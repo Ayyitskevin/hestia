@@ -18,6 +18,7 @@ def test_readme_positions_hestia_as_flat_price_hosted_microsaas():
         "/beta",
         "shareable public beta landing page",
         "14-day trial proof plan",
+        "Open Graph",
         "/interest",
         "compatibility beta access form",
         "/invite/{token}",
