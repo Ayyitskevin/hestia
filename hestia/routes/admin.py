@@ -39,7 +39,11 @@ from ..tenants import (
     set_shoot_type,
     tenant_flags,
 )
-from ..trial_conversion import trial_conversion_cockpit, trial_conversion_for_tenant
+from ..trial_conversion import (
+    beta_conversion_timeline,
+    trial_conversion_cockpit,
+    trial_conversion_for_tenant,
+)
 from .deps import db_conn, render, settings_of
 
 router = APIRouter(prefix="/admin")
@@ -356,6 +360,12 @@ def _render_tenant_detail(request: Request, tenant_id: str, *,
         flags = tenant_flags(tenant)
         plan = plan_status(tenant)
         conversion = trial_conversion_for_tenant(conn, tenant, settings)
+        conversion_timeline = beta_conversion_timeline(
+            conn,
+            tenant,
+            settings,
+            conversion=conversion,
+        )
         api_keys = conn.execute(
             "SELECT prefix, created_at FROM tenant_api_keys WHERE tenant_id = ? ORDER BY id DESC",
             (tenant_id,),
@@ -364,4 +374,5 @@ def _render_tenant_detail(request: Request, tenant_id: str, *,
                   plan=plan, plans=PLANS, new_api_key=new_api_key, created=created,
                   api_keys=[dict(r) for r in api_keys],
                   custom_domain=custom_domain_summary(settings, tenant),
-                  conversion=conversion)
+                  conversion=conversion,
+                  conversion_timeline=conversion_timeline)

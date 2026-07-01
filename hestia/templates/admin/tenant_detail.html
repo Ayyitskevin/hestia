@@ -89,6 +89,34 @@
 </div>
 
 <div class="card stack" style="margin-top:18px">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">
+    <div>
+      <h3>Beta conversion timeline</h3>
+      <p class="muted">One operator view of signup, onboarding, trial state, outreach, and the next conversion move.</p>
+    </div>
+    <span class="pill {{ 'on' if conversion.risk in ('low', 'watch') else 'off' }}">{{ conversion.risk }} risk</span>
+  </div>
+  <ol class="steps">
+    {% for item in conversion_timeline.steps %}
+      <li class="step {{ item.status }}">
+        <div class="marker">{{ loop.index }}</div>
+        <div class="body">
+          <div class="status-tag">{{ item.status_label }}</div>
+          <div class="label">{{ item.title }}</div>
+          <div class="detail">
+            {{ item.detail }}
+            {% if item.at %}<span class="mono"> · {{ item.at }}</span>{% endif %}
+          </div>
+          {% if item.href %}
+            <div style="margin-top:8px"><a class="btn ghost" href="{{ item.href }}">Open step</a></div>
+          {% endif %}
+        </div>
+      </li>
+    {% endfor %}
+  </ol>
+</div>
+
+<div class="card stack" style="margin-top:18px">
   <h3>API keys</h3>
   {% if api_keys %}
     <table>

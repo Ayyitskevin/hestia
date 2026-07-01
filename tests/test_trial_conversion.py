@@ -2,10 +2,15 @@
 
 from conftest import ADMIN_TOKEN, CSRFClient
 
+from hestia.db import audit
 from hestia.presets import apply_preset
 from hestia.subscriptions import apply_plan
-from hestia.tenants import create_tenant, create_user
-from hestia.trial_conversion import trial_conversion_cockpit, trial_conversion_for_tenant
+from hestia.tenants import create_tenant, create_user, get_tenant
+from hestia.trial_conversion import (
+    beta_conversion_timeline,
+    trial_conversion_cockpit,
+    trial_conversion_for_tenant,
+)
 
 
 def _owner(conn, tenant_id, email, *, verified=1):
@@ -78,6 +83,31 @@ def test_trial_conversion_for_tenant_counts_commercial_signals(conn, settings):
     assert summary["money_links"] == 1
 
 
+def test_beta_conversion_timeline_summarizes_operator_history(conn, settings):
+    tenant = create_tenant(conn, name="Timeline Studio", shoot_type="wedding",
+                           signup_source="demo", signup_landing_path="/demo/wedding")
+    _owner(conn, tenant["id"], "timeline@example.com")
+    apply_preset(conn, tenant["id"], "wedding", include_demo=False)
+    apply_plan(conn, tenant["id"], plan="studio", status="trialing", provider="mock")
+    audit(conn, actor="admin", action="launch.nudge_sent", tenant_id=tenant["id"],
+          detail="timeline@example.com")
+    audit(conn, actor="admin", action="launch.nudge_skipped", tenant_id=tenant["id"],
+          detail="cooldown:timeline@example.com")
+    conn.commit()
+
+    timeline = beta_conversion_timeline(conn, get_tenant(conn, tenant["id"]), settings)
+    by_title = {item["title"]: item for item in timeline["steps"]}
+
+    assert by_title["Signup captured"]["detail"] == "Demo from /demo/wedding"
+    assert by_title["Owner email verified"]["detail"] == "timeline@example.com"
+    assert by_title["Niche preset installed"]["status"] == "done"
+    assert by_title["Trial active"]["detail"].endswith("on the flat $40/month plan.")
+    assert by_title["Launch nudge sent"]["detail"] == "Sent to timeline@example.com."
+    assert by_title["Launch nudge skipped"]["detail"] == "Cooldown protected timeline@example.com."
+    assert by_title["Next operator action"]["href"]
+    assert timeline["nudge_count"] == 2
+
+
 def test_admin_trial_conversion_pages_render(app, conn):
     tenant = create_tenant(conn, name="Admin Trial", shoot_type="wedding",
                            signup_source="demo", signup_landing_path="/demo/food")
@@ -102,6 +132,10 @@ def test_admin_trial_conversion_pages_render(app, conn):
     detail = admin.get(f"/admin/tenants/{tenant['id']}")
     assert detail.status_code == 200
     assert "Trial conversion" in detail.text
+    assert "Beta conversion timeline" in detail.text
+    assert "Signup captured" in detail.text
+    assert "Owner email not verified" in detail.text
+    assert "Next operator action" in detail.text
     assert "Signup source" in detail.text
     assert "/demo/food" in detail.text
     assert "Open trial cockpit" in detail.text

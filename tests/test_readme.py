@@ -19,6 +19,7 @@ def test_readme_positions_hestia_as_flat_price_hosted_microsaas():
         "/admin/launch",
         "CSV export",
         "cooldown-safe trial nudges",
+        "beta conversion timeline",
         "docker compose up --build -d",
         "scripts/hosted-preflight.sh",
         "Hosted Launch Checklist",

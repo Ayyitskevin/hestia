@@ -105,6 +105,106 @@ def trial_conversion_for_tenant(
     }
 
 
+def beta_conversion_timeline(
+    conn: sqlite3.Connection,
+    tenant: dict,
+    settings: Settings,
+    *,
+    conversion: dict | None = None,
+    nudge_limit: int = 5,
+) -> dict:
+    """Operator timeline for one hosted beta studio.
+
+    Derived from existing state only: tenant signup metadata, owner verification,
+    setup checklist, subscription state, and launch-nudge audit rows.
+    """
+    summary = conversion or trial_conversion_for_tenant(conn, tenant, settings)
+    tenant_id = tenant["id"]
+    has_preset = preset_applied(conn, tenant_id)
+    source_detail = summary["signup_source_label"]
+    if summary.get("signup_landing_path"):
+        source_detail = f"{source_detail} from {summary['signup_landing_path']}"
+    else:
+        source_detail = f"{source_detail} signup"
+
+    items = [
+        _timeline_item(
+            "done",
+            "Signup captured",
+            source_detail,
+            at=summary.get("created_at") or "",
+        )
+    ]
+    if summary["owner_verified"]:
+        items.append(_timeline_item(
+            "done",
+            "Owner email verified",
+            summary["owner_email"] or "Owner account is verified.",
+        ))
+    else:
+        items.append(_timeline_item(
+            "error",
+            "Owner email not verified",
+            summary["owner_email"] or "No owner email is available.",
+            href="/admin/launch",
+        ))
+
+    if has_preset:
+        items.append(_timeline_item(
+            "done",
+            "Niche preset installed",
+            f"{summary['activation_done']}/{summary['activation_total']} activation steps complete.",
+        ))
+    else:
+        items.append(_timeline_item(
+            "skipped",
+            "Niche preset not started",
+            "Send the owner to onboarding before asking them to start the trial.",
+            href="/onboarding",
+        ))
+
+    setup_detail = (
+        f"{summary['activation_done']}/{summary['activation_total']} steps complete"
+        f" ({summary['activation_percent']}%)."
+    )
+    if summary.get("setup_next"):
+        setup_detail = f"{setup_detail} Next: {summary['setup_next']['label']}."
+    items.append(_timeline_item(
+        "done" if summary["setup_complete"] else "running",
+        "Activation path complete" if summary["setup_complete"] else "Activation in progress",
+        setup_detail,
+        href=summary.get("next_href") or "",
+    ))
+
+    items.append(_timeline_item(
+        _billing_status(summary["trial_state"]),
+        _billing_title(summary["trial_state"]),
+        f"{summary['trial_label']} on the flat {_price_label(settings)} plan.",
+        href="/settings/billing",
+    ))
+
+    for row in _launch_nudge_rows(conn, tenant_id, limit=nudge_limit):
+        sent = row["action"] == "launch.nudge_sent"
+        items.append(_timeline_item(
+            "done" if sent else "skipped",
+            "Launch nudge sent" if sent else "Launch nudge skipped",
+            _nudge_detail(row),
+            at=row["created_at"],
+        ))
+
+    items.append(_timeline_item(
+        "running",
+        "Next operator action",
+        summary["next_action"],
+        href=summary["next_href"],
+    ))
+    return {
+        "steps": items,
+        "nudge_count": sum(1 for item in items if item["title"].startswith("Launch nudge")),
+        "next_action": summary["next_action"],
+    }
+
+
 def _source_counts(studios: list[dict]) -> list[dict]:
     counts: dict[str, int] = {}
     for studio in studios:
@@ -123,6 +223,86 @@ def _source_label(source: str | None) -> str:
         "demo": "Demo",
     }
     return labels.get((source or "").strip().lower(), "Direct / unknown")
+
+
+def _price_label(settings: Settings) -> str:
+    cents = int(settings.flat_price_cents)
+    if settings.currency.lower() == "usd" and cents % 100 == 0:
+        return f"${cents // 100}/month"
+    return f"{cents / 100:.2f} {settings.currency.upper()}/month"
+
+
+def _billing_status(trial_state: str) -> str:
+    if trial_state == "active":
+        return "done"
+    if trial_state in ("canceled", "past_due"):
+        return "error"
+    return "running"
+
+
+def _billing_title(trial_state: str) -> str:
+    if trial_state == "ready":
+        return "Trial ready"
+    if trial_state == "trialing":
+        return "Trial active"
+    if trial_state == "past_due":
+        return "Billing past due"
+    if trial_state == "canceled":
+        return "Billing canceled"
+    return "Paid plan active"
+
+
+def _timeline_item(
+    status: str,
+    title: str,
+    detail: str,
+    *,
+    at: str = "",
+    href: str = "",
+) -> dict:
+    labels = {
+        "done": "Done",
+        "running": "Active",
+        "error": "Needs attention",
+        "skipped": "Not started",
+    }
+    return {
+        "status": status,
+        "status_label": labels.get(status, status.title()),
+        "title": title,
+        "detail": detail,
+        "at": at,
+        "href": href,
+    }
+
+
+def _launch_nudge_rows(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    *,
+    limit: int,
+) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT action, detail, created_at
+          FROM audit_log
+         WHERE tenant_id = ?
+           AND action IN ('launch.nudge_sent', 'launch.nudge_skipped')
+         ORDER BY id DESC
+         LIMIT ?
+        """,
+        (tenant_id, max(1, int(limit))),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _nudge_detail(row: dict) -> str:
+    detail = (row.get("detail") or "").strip()
+    if detail.startswith("cooldown:"):
+        return f"Cooldown protected {detail.removeprefix('cooldown:')}."
+    if detail:
+        return f"Sent to {detail}."
+    return "Recorded through the Hestia email seam."
 
 
 def _owner(conn: sqlite3.Connection, tenant_id: str) -> dict:

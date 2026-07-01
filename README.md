@@ -186,7 +186,7 @@ Useful URLs:
 - `/settings/billing` flat plan billing page
 - `/admin` operator admin with `HESTIA_API_TOKEN`
 - `/admin/launch` beta launch kit with tagged invite links, CSV export, cooldown-safe trial nudges, and owner follow-up queue
-- `/admin/trials` trial conversion cockpit for stalled and activated studios
+- `/admin/trials` trial conversion cockpit for stalled and activated studios; tenant detail includes a beta conversion timeline
 - `/healthz` liveness
 - `/readyz` readiness
 
