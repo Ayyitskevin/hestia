@@ -15,6 +15,7 @@ def test_readme_positions_hestia_as_flat_price_hosted_microsaas():
         "No tiers",
         "wedding, food & beverage, or real-estate preset",
         "docker compose up --build -d",
+        "scripts/hosted-preflight.sh",
         "Hosted Launch Checklist",
         "X Launch Thread Outline",
     ]

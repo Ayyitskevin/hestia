@@ -219,11 +219,19 @@ Details: [`docs/architecture.md`](docs/architecture.md)
 ```bash
 bash scripts/ci-smoke.sh        # ruff + pytest + healthz boot
 bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke
+bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
 
 The test suite covers tenant isolation, hosted routing, flat-plan billing, signup,
 onboarding presets, custom domains, offer idempotency, public tokens, payments,
 client portal flows, and safe mock-provider operation.
+
+`scripts/hosted-preflight.sh` reads the same `.env`/environment values as the app
+and fails on hosted blockers: default secrets, non-HTTPS public URL, missing hosted
+domain, wrong $40/month or 14-day trial contract, missing Stripe subscription
+secrets, mock email for signup verification, unwritable volumes, missing Docker/Caddy
+assets, or failing `/healthz`/`/readyz` probes. Set `HESTIA_PREFLIGHT_URL` or pass
+`--url` after the app is running.
 
 ## Hosted Launch Checklist
 
@@ -236,7 +244,8 @@ client portal flows, and safe mock-provider operation.
 7. Confirm Stripe checkout creates the single $40/month subscription with a 14-day trial.
 8. Choose local volume or S3/R2 storage and verify backups.
 9. Run `docker compose up --build -d`.
-10. Run `/healthz`, `/readyz`, `scripts/ci-smoke.sh`, and `scripts/dogfood-hestia.sh`.
+10. Run `/healthz`, `/readyz`, `scripts/ci-smoke.sh`, `scripts/dogfood-hestia.sh`,
+    and `scripts/hosted-preflight.sh --url https://yourdomain.com`.
 11. Create one test studio through `/signup`.
 12. Install each onboarding preset once: wedding, food & beverage, real estate.
 13. Start and cancel a test subscription.
