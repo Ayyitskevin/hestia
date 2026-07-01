@@ -12,8 +12,12 @@
   </div>
 </div>
 
-{% if nudged %}
+{% if nudge_notice == 'sent' %}
   <div class="alert ok">Nudge recorded through the Hestia email seam.</div>
+{% elif nudge_notice == 'cooldown' %}
+  <div class="alert">Nudge skipped: this studio is still inside the outreach cooldown.</div>
+{% elif nudge_notice == 'missing' %}
+  <div class="alert">Nudge skipped: no owner email is available for that studio.</div>
 {% endif %}
 
 <div class="grid cols-4" style="margin-top:18px">
@@ -77,12 +81,19 @@
             <span class="muted">Owner path: <span class="mono">{{ f.owner_path }}</span></span>
           </td>
           <td>
-            {% if f.mailto %}
-              <form method="post" action="/admin/launch/{{ f.tenant_id }}/nudge" style="display:inline">
-                {% include "_csrf.html" %}
-                <button class="btn" type="submit">Send nudge</button>
-              </form>
+            {% if f.owner_email %}
+              {% if f.nudge_available %}
+                <form method="post" action="/admin/launch/{{ f.tenant_id }}/nudge" style="display:inline">
+                  {% include "_csrf.html" %}
+                  <button class="btn" type="submit">Send nudge</button>
+                </form>
+              {% else %}
+                <button class="btn secondary" type="button" disabled>{{ f.nudge_status }}</button>
+              {% endif %}
               <a class="btn secondary" href="{{ f.mailto }}">Draft</a>
+              {% if f.last_nudged_at %}
+                <div class="muted" style="margin-top:6px">Last nudge: {{ f.last_nudged_at }}</div>
+              {% endif %}
             {% else %}
               <span class="muted">Find contact first</span>
             {% endif %}

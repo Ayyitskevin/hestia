@@ -61,6 +61,8 @@ _LAUNCH_EXPORT_HEADER = [
     "owner_path",
     "followup_prompt",
     "mailto",
+    "last_nudged_at",
+    "nudge_status",
 ]
 
 
@@ -150,14 +152,21 @@ def trials(request: Request):
 
 
 @router.get("/launch")
-def launch(request: Request, nudged: str = ""):
+def launch(request: Request, nudge: str = "", nudged: str = ""):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = _admin_ctx(request, conn)
         if not auth:
             return _redirect_login()
         kit = beta_launch_kit(conn, settings)
-    return render(request, "admin/launch.html", auth=auth, kit=kit, nudged=bool(nudged))
+    nudge_notice = nudge or ("sent" if nudged else "")
+    return render(
+        request,
+        "admin/launch.html",
+        auth=auth,
+        kit=kit,
+        nudge_notice=nudge_notice,
+    )
 
 
 @router.get("/launch/export.csv")
@@ -174,12 +183,23 @@ def launch_export(request: Request):
 @router.post("/launch/{tenant_id}/nudge")
 def launch_nudge(request: Request, tenant_id: str):
     settings = settings_of(request)
+    nudge_status = "missing"
     with db_conn(request) as conn:
         auth = _admin_ctx(request, conn)
         if not auth:
             return _redirect_login()
         result = send_beta_launch_nudge(conn, settings, tenant_id)
-        if result:
+        if result and result.get("skipped"):
+            nudge_status = "cooldown"
+            audit(
+                conn,
+                actor="admin",
+                action="launch.nudge_skipped",
+                tenant_id=tenant_id,
+                detail=f"cooldown:{result['owner_email']}",
+            )
+        elif result:
+            nudge_status = "sent"
             audit(
                 conn,
                 actor="admin",
@@ -187,7 +207,7 @@ def launch_nudge(request: Request, tenant_id: str):
                 tenant_id=tenant_id,
                 detail=result["owner_email"],
             )
-    return RedirectResponse("/admin/launch?nudged=1", status_code=303)
+    return RedirectResponse(f"/admin/launch?nudge={nudge_status}", status_code=303)
 
 
 @router.get("/system")

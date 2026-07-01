@@ -11,6 +11,7 @@ from .tenants import get_tenant
 from .trial_conversion import trial_conversion_cockpit, trial_conversion_for_tenant
 
 BETA_TARGET_STUDIOS = 5
+LAUNCH_NUDGE_COOLDOWN_DAYS = 3
 
 
 def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
@@ -25,7 +26,7 @@ def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
     return {
         "target": BETA_TARGET_STUDIOS,
         "invite_links": _invite_links(settings),
-        "followups": _followups(studios),
+        "followups": _followups(studios, nudge_activity=_launch_nudge_activity(conn)),
         "milestones": [
             _milestone("Invite 5 studios", len(studios), BETA_TARGET_STUDIOS),
             _milestone("Verify 3 owners", verified, 3),
@@ -46,10 +47,17 @@ def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
 
 def beta_launch_export_rows(conn: sqlite3.Connection, settings: Settings) -> list[dict]:
     cockpit = trial_conversion_cockpit(conn, settings)
-    followups = {f["tenant_id"]: f for f in _followups(cockpit["studios"], limit=999)}
+    nudge_activity = _launch_nudge_activity(conn)
+    followups = {
+        f["tenant_id"]: f
+        for f in _followups(cockpit["studios"], limit=999, nudge_activity=nudge_activity)
+    }
     rows = []
     for studio in cockpit["studios"]:
-        followup = followups.get(studio["tenant_id"]) or _followup(studio)
+        followup = followups.get(studio["tenant_id"]) or _followup(
+            studio,
+            nudge_activity=nudge_activity,
+        )
         rows.append({
             "studio": studio["name"],
             "slug": studio["slug"],
@@ -67,6 +75,8 @@ def beta_launch_export_rows(conn: sqlite3.Connection, settings: Settings) -> lis
             "owner_path": studio["next_href"],
             "followup_prompt": followup["prompt"],
             "mailto": followup["mailto"],
+            "last_nudged_at": followup["last_nudged_at"],
+            "nudge_status": followup["nudge_status"],
         })
     return rows
 
@@ -80,9 +90,12 @@ def send_beta_launch_nudge(
     if not tenant:
         return None
     studio = trial_conversion_for_tenant(conn, tenant, settings)
-    followup = _followup(studio)
+    activity = _launch_nudge_activity(conn)
+    followup = _followup(studio, nudge_activity=activity)
     if not followup["owner_email"]:
         return None
+    if followup["nudge_cooling_down"]:
+        return {**followup, "email_status": "cooldown", "skipped": True}
     status = notify(
         conn,
         settings,
@@ -93,6 +106,34 @@ def send_beta_launch_nudge(
         body=followup["email_body"],
     )
     return {**followup, "email_status": status}
+
+
+def _launch_nudge_activity(
+    conn: sqlite3.Connection,
+    *,
+    cooldown_days: int = LAUNCH_NUDGE_COOLDOWN_DAYS,
+) -> dict[str, dict]:
+    rows = conn.execute(
+        """
+        SELECT tenant_id, detail, created_at,
+               datetime(created_at) >= datetime('now', ?) AS cooling_down
+          FROM audit_log
+         WHERE action = 'launch.nudge_sent'
+           AND tenant_id IS NOT NULL
+         ORDER BY id DESC
+        """,
+        (f"-{int(cooldown_days)} days",),
+    ).fetchall()
+    activity: dict[str, dict] = {}
+    for row in rows:
+        if row["tenant_id"] in activity:
+            continue
+        activity[row["tenant_id"]] = {
+            "last_nudged_at": row["created_at"],
+            "last_nudged_to": row["detail"] or "",
+            "nudge_cooling_down": bool(row["cooling_down"]),
+        }
+    return activity
 
 
 def _invite_links(settings: Settings) -> list[dict]:
@@ -126,7 +167,12 @@ def _milestone(label: str, done: int, target: int) -> dict:
     }
 
 
-def _followups(studios: list[dict], *, limit: int = 5) -> list[dict]:
+def _followups(
+    studios: list[dict],
+    *,
+    limit: int = 5,
+    nudge_activity: dict[str, dict] | None = None,
+) -> list[dict]:
     candidates = [
         studio for studio in studios
         if studio["risk"] in ("high", "medium")
@@ -139,10 +185,17 @@ def _followups(studios: list[dict], *, limit: int = 5) -> list[dict]:
         -s["activation_percent"],
         s["created_at"],
     ))
-    return [_followup(studio) for studio in candidates[:limit]]
+    return [
+        _followup(studio, nudge_activity=nudge_activity)
+        for studio in candidates[:limit]
+    ]
 
 
-def _followup(studio: dict) -> dict:
+def _followup(
+    studio: dict,
+    *,
+    nudge_activity: dict[str, dict] | None = None,
+) -> dict:
     prompt = _prompt(studio)
     subject = f"Next Hestia step for {studio['name']}"
     body = (
@@ -155,6 +208,16 @@ def _followup(studio: dict) -> dict:
         subject_q = quote(subject, safe="")
         body_q = quote(body, safe="")
         mailto = f"mailto:{studio['owner_email']}?subject={subject_q}&body={body_q}"
+    activity = (nudge_activity or {}).get(studio["tenant_id"], {})
+    last_nudged_at = activity.get("last_nudged_at", "")
+    nudge_cooling_down = bool(activity.get("nudge_cooling_down"))
+    nudge_available = bool(studio["owner_email"]) and not nudge_cooling_down
+    if not studio["owner_email"]:
+        nudge_status = "No owner email"
+    elif nudge_cooling_down:
+        nudge_status = f"Cooling down {LAUNCH_NUDGE_COOLDOWN_DAYS} days"
+    else:
+        nudge_status = "Ready to nudge"
     return {
         "tenant_id": studio["tenant_id"],
         "name": studio["name"],
@@ -169,6 +232,11 @@ def _followup(studio: dict) -> dict:
         "mailto": mailto,
         "email_subject": subject,
         "email_body": body,
+        "last_nudged_at": last_nudged_at,
+        "last_nudged_to": activity.get("last_nudged_to", ""),
+        "nudge_available": nudge_available,
+        "nudge_cooling_down": nudge_cooling_down,
+        "nudge_status": nudge_status,
     }
 
 

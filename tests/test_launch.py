@@ -4,7 +4,7 @@ import dataclasses
 
 from conftest import ADMIN_TOKEN, CSRFClient
 
-from hestia.launch import beta_launch_kit
+from hestia.launch import beta_launch_export_rows, beta_launch_kit
 from hestia.main import create_app
 from hestia.presets import apply_preset
 from hestia.subscriptions import apply_plan
@@ -83,7 +83,7 @@ def test_admin_launch_nudge_sends_email_and_records_audit(settings, conn):
     response = admin.post(f"/admin/launch/{tenant['id']}/nudge", follow_redirects=False)
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/admin/launch?nudged=1"
+    assert response.headers["location"] == "/admin/launch?nudge=sent"
     email = conn.execute(
         "SELECT * FROM emails WHERE tenant_id = ? AND to_addr = ?",
         (tenant["id"], "nudge@example.com"),
@@ -96,7 +96,47 @@ def test_admin_launch_nudge_sends_email_and_records_audit(settings, conn):
     ).fetchone()
     assert audit["action"] == "launch.nudge_sent"
     assert audit["detail"] == "nudge@example.com"
-    assert "Nudge recorded" in admin.get("/admin/launch?nudged=1").text
+    assert "Nudge recorded" in admin.get("/admin/launch?nudge=sent").text
+
+
+def test_admin_launch_nudge_cools_down_duplicate_sends(settings, conn):
+    tenant = create_tenant(conn, name="Cooldown Studio", shoot_type="wedding",
+                           signup_source="pricing", signup_landing_path="/pricing")
+    _owner(conn, tenant["id"], "cooldown@example.com", verified=0)
+    conn.commit()
+
+    app = create_app(settings)
+    admin = CSRFClient(app)
+    admin.post("/admin/login", data={"token": ADMIN_TOKEN})
+    admin.post(f"/admin/launch/{tenant['id']}/nudge", follow_redirects=False)
+    duplicate = admin.post(f"/admin/launch/{tenant['id']}/nudge", follow_redirects=False)
+
+    assert duplicate.status_code == 303
+    assert duplicate.headers["location"] == "/admin/launch?nudge=cooldown"
+    sent = conn.execute(
+        "SELECT COUNT(*) AS n FROM emails WHERE tenant_id = ? AND to_addr = ?",
+        (tenant["id"], "cooldown@example.com"),
+    ).fetchone()["n"]
+    assert sent == 1
+    actions = [
+        row["action"]
+        for row in conn.execute(
+            "SELECT action FROM audit_log WHERE tenant_id = ? ORDER BY id",
+            (tenant["id"],),
+        ).fetchall()
+    ]
+    assert actions == ["launch.nudge_sent", "launch.nudge_skipped"]
+
+    page = admin.get("/admin/launch")
+    assert "Cooling down 3 days" in page.text
+    assert "Last nudge:" in page.text
+    assert "Nudge skipped: this studio is still inside the outreach cooldown." in (
+        admin.get("/admin/launch?nudge=cooldown").text
+    )
+    row = next(r for r in beta_launch_export_rows(conn, settings)
+               if r["slug"] == "cooldown-studio")
+    assert row["nudge_status"] == "Cooling down 3 days"
+    assert row["last_nudged_at"]
 
 
 def test_admin_launch_export_csv_is_auth_gated_and_spreadsheet_safe(settings, conn):
@@ -117,6 +157,7 @@ def test_admin_launch_export_csv_is_auth_gated_and_spreadsheet_safe(settings, co
     assert export.headers["content-type"].startswith("text/csv")
     assert "attachment; filename=\"hestia-beta-launch.csv\"" in export.headers["content-disposition"]
     assert "studio,slug,owner_email,owner_verified,source" in export.text
+    assert "last_nudged_at,nudge_status" in export.text
     assert "'=Formula Studio" in export.text
     assert "formula@example.com" in export.text
     assert "Verify owner email" in export.text
