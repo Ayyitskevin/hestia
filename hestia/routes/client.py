@@ -22,6 +22,7 @@ from ..proofing import (
     favorite_count,
     favorite_image_ids,
     list_favorites,
+    selection_packet,
     toggle_favorite,
 )
 from ..ratelimit import enforce
@@ -120,6 +121,7 @@ def client_gallery(request: Request, slug: str, gallery_slug: str):
     """Client gallery delivery. PIN-gated when the gallery has a PIN."""
     favorites: set[int] = set()
     comments: dict[int, list] = {}
+    packet = None
     alts: dict[int, str] = {}
     with db_conn(request) as conn:
         tenant, gallery, unlocked = _resolve_unlocked(conn, request, slug, gallery_slug)
@@ -136,10 +138,11 @@ def client_gallery(request: Request, slug: str, gallery_slug: str):
                 offer = offer_public_url(settings_of(request), slug, o["token"])
             favorites = favorite_image_ids(conn, gallery["id"], tenant_id=tenant["id"])
             comments = comments_by_image(conn, gallery["id"], tenant_id=tenant["id"])
+            packet = selection_packet(conn, tenant["id"], gallery["id"])
             alts = alt_text_map(conn, gallery["id"])      # AI captions for accessible/SEO alt text
     return render(request, "client_gallery.html", auth=None, tenant=tenant, gallery=gallery,
                   images=images, unlocked=unlocked, storage=storage_of(request), offer_url=offer,
-                  favorites=favorites, comments=comments, alts=alts)
+                  favorites=favorites, comments=comments, selection_packet=packet, alts=alts)
 
 
 @router.post("/g/{slug}/{gallery_slug}/favorite/{image_id}")

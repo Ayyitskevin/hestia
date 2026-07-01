@@ -35,7 +35,13 @@ from ..jobs import drain, enqueue
 from ..orders import list_orders
 from ..pipeline import start_run
 from ..products import get_set_for_gallery
-from ..proofing import comments_for_gallery, favorite_image_ids, list_favorites
+from ..proofing import (
+    comments_for_gallery,
+    favorite_image_ids,
+    list_favorites,
+    selection_packet,
+    selection_packet_text,
+)
 from ..sales import get_offer_for_gallery, offer_public_url
 from ..tenants import get_tenant, tenant_flags
 from ..vision import cull_summary, gallery_analysis_map, hero_suggestions
@@ -119,6 +125,7 @@ def gallery_detail(request: Request, gallery_id: int):
         product_set = get_set_for_gallery(conn, auth.tenant["id"], gallery_id)
         favorites = favorite_image_ids(conn, gallery_id, tenant_id=auth.tenant["id"])
         comments = comments_for_gallery(conn, auth.tenant["id"], gallery_id)
+        packet = selection_packet(conn, auth.tenant["id"], gallery_id)
         campaign = get_active_campaign(conn, gallery_id, tenant_id=auth.tenant["id"])
         sales_opportunity = gallery_sales_opportunity(conn, auth.tenant["id"], gallery_id)
         orders = list_orders(conn, auth.tenant["id"], gallery_id=gallery_id)
@@ -141,7 +148,8 @@ def gallery_detail(request: Request, gallery_id: int):
     return render(request, "gallery_detail.html", auth=auth, gallery=gallery, images=images,
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
                   storage=storage_of(request), flags=flags, project=project, album=album,
-                  product_set=product_set, favorites=favorites, comments=comments, campaign=campaign,
+                  product_set=product_set, favorites=favorites, comments=comments,
+                  selection_packet=packet, campaign=campaign,
                   sales_opportunity=sales_opportunity, orders=orders, fulfillments=fulfillments,
                   cull=cull, cull_pending=cull_pending, hidden_count=hidden_count, analysis=analysis, hero_ids=hero_ids,
                   flagged_pending=flagged_pending,
@@ -162,6 +170,23 @@ def gallery_selects(request: Request, gallery_id: int):
     body = "".join(f"{f['filename']}\n" for f in favs)
     return Response(content=body, media_type="text/plain",
                     headers={"Content-Disposition": f'attachment; filename="selects-{gallery_id}.txt"'})
+
+
+@router.get("/{gallery_id}/selection-packet.txt")
+def gallery_selection_packet(request: Request, gallery_id: int):
+    """Download favorites + notes + submit status as a studio-ready handoff packet."""
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if not get_gallery(conn, auth.tenant["id"], gallery_id):
+            return RedirectResponse("/galleries", status_code=303)
+        body = selection_packet_text(conn, auth.tenant["id"], gallery_id)
+    return Response(
+        content=body,
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="selection-packet-{gallery_id}.txt"'},
+    )
 
 
 @router.post("/{gallery_id}/delivery")

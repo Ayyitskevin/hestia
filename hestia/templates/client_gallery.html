@@ -31,8 +31,20 @@
           <a class="offer-url" href="{{ offer_url }}">View your print &amp; album collection →</a>
         </div>
         {% endif %}
-        <p class="muted" style="margin-bottom:14px">Heart the frames you love and leave a note —
-          {{ favorites|length }} favorited so far. Your photographer sees these to build your album and prints.</p>
+        {% if selection_packet %}
+        <div class="card stack" style="margin-bottom:14px">
+          <strong>Your selection packet</strong>
+          <p class="muted">
+            {{ selection_packet.favorite_count }} favorited so far
+            · {{ selection_packet.comment_count }} note{{ '' if selection_packet.comment_count == 1 else 's' }}
+            {% if gallery.selections_submitted_at %}
+              · sent to {{ tenant.name }}
+            {% else %}
+              · ready to send when you are done
+            {% endif %}
+          </p>
+        </div>
+        {% endif %}
         {% if gallery.selections_submitted_at %}
           <div class="card stack" style="margin-bottom:14px">
             <strong>✓ You've sent {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }} to {{ tenant.name }}.</strong>

@@ -156,14 +156,26 @@
 </div>
 {% endif %}
 
-{% if favorites or comments %}
+{% if selection_packet and (selection_packet.favorite_count or selection_packet.comment_count or selection_packet.submitted_at) %}
 <div class="card stack" style="margin-top:18px">
-  <h3>Client proofing · {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }}</h3>
-  <p class="muted">The frames your client loved (♥ in the grid below) and their notes — the signal for the album and print picks.</p>
-  {% if favorites %}
-  <div><a class="btn secondary" href="/galleries/{{ gallery.id }}/selects.txt">⬇ Download selects (.txt)</a>
-    <span class="muted" style="font-size:.85rem">— filename list for Lightroom / your editor</span></div>
-  {% endif %}
+  <h3>Client proofing · {{ selection_packet.favorite_count }} favorite{{ '' if selection_packet.favorite_count == 1 else 's' }}</h3>
+  <p class="muted">
+    <span class="pill {{ 'on' if selection_packet.status == 'submitted' else 'off' }}">{{ selection_packet.status_label }}</span>
+    {{ selection_packet.comment_count }} note{{ '' if selection_packet.comment_count == 1 else 's' }}
+    across {{ selection_packet.commented_frame_count }} frame{{ '' if selection_packet.commented_frame_count == 1 else 's' }} ·
+    {{ selection_packet.next_action }}
+  </p>
+  <div class="grid cols-3">
+    <div><div class="label">Favorites</div><div style="font-size:1.35rem">{{ selection_packet.favorite_count }}</div></div>
+    <div><div class="label">Notes</div><div style="font-size:1.35rem">{{ selection_packet.comment_count }}</div></div>
+    <div><div class="label">Status</div><div style="font-size:1.05rem">{{ selection_packet.status_label }}</div></div>
+  </div>
+  <div style="display:flex; gap:10px; flex-wrap:wrap">
+    <a class="btn secondary" href="/galleries/{{ gallery.id }}/selection-packet.txt">Download selection packet (.txt)</a>
+    {% if selection_packet.favorite_count %}
+      <a class="btn ghost" href="/galleries/{{ gallery.id }}/selects.txt">Download selects only</a>
+    {% endif %}
+  </div>
   {% if comments %}
     <table>
       <thead><tr><th>Frame</th><th>From</th><th>Note</th></tr></thead>

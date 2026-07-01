@@ -9,6 +9,7 @@ can't favorite or comment on a frame outside the link they were given.
 from __future__ import annotations
 
 import sqlite3
+from collections import defaultdict
 
 
 def image_in_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int, image_id: int) -> bool:
@@ -123,10 +124,115 @@ def comments_by_image(
 def comments_for_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> list[dict]:
     """All comments (newest first, with the frame filename), for the owner view."""
     rows = conn.execute(
-        "SELECT c.*, i.filename FROM image_comments c "
+        "SELECT c.*, i.filename, i.position, i.hidden FROM image_comments c "
         "JOIN images i ON i.id = c.image_id AND i.tenant_id = c.tenant_id "
         "AND i.gallery_id = c.gallery_id "
         "WHERE c.gallery_id = ? AND c.tenant_id = ? ORDER BY c.id DESC",
         (gallery_id, tenant_id),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def selection_packet(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> dict | None:
+    """Album/print handoff packet built from the client's favorites and notes.
+
+    This is intentionally a read model over the proofing tables so the studio gets
+    a richer handoff without another status table to maintain.
+    """
+    gallery = conn.execute(
+        "SELECT id, title, client_name, selections_submitted_at "
+        "FROM galleries WHERE id = ? AND tenant_id = ?",
+        (gallery_id, tenant_id),
+    ).fetchone()
+    if not gallery:
+        return None
+
+    favorites = list_favorites(conn, tenant_id, gallery_id)
+    comments = comments_for_gallery(conn, tenant_id, gallery_id)
+    comments = sorted(comments, key=lambda c: (c.get("position") or 0, c["id"]))
+
+    notes_by_image: dict[int, list[dict]] = defaultdict(list)
+    for comment in comments:
+        notes_by_image[comment["image_id"]].append(comment)
+
+    favorite_items = [
+        {
+            "id": fav["id"],
+            "filename": fav["filename"],
+            "position": fav["position"],
+            "hidden": bool(fav["hidden"]),
+            "comment_count": len(notes_by_image.get(fav["id"], [])),
+            "notes": notes_by_image.get(fav["id"], []),
+        }
+        for fav in favorites
+    ]
+    favorite_ids = {fav["id"] for fav in favorites}
+    unselected_comments = [
+        comment for comment in comments if comment["image_id"] not in favorite_ids
+    ]
+    submitted_at = gallery["selections_submitted_at"]
+    if submitted_at:
+        status = "submitted"
+        status_label = "Selections submitted"
+        next_action = "Build the album or print offer from this packet."
+    elif favorites or comments:
+        status = "in_progress"
+        status_label = "Selection in progress"
+        next_action = "Wait for the client to submit, or use the live packet now."
+    else:
+        status = "empty"
+        status_label = "No selections yet"
+        next_action = "Send the gallery link and ask the client to heart their favorites."
+
+    return {
+        "gallery_id": gallery_id,
+        "gallery_title": gallery["title"],
+        "client_name": gallery["client_name"],
+        "submitted_at": submitted_at,
+        "status": status,
+        "status_label": status_label,
+        "next_action": next_action,
+        "favorite_count": len(favorite_items),
+        "comment_count": len(comments),
+        "commented_frame_count": len({comment["image_id"] for comment in comments}),
+        "favorites": favorite_items,
+        "comments": comments,
+        "unselected_comments": unselected_comments,
+    }
+
+
+def selection_packet_text(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> str:
+    """Plain-text proofing handoff for Lightroom/editor/album-design workflows."""
+    packet = selection_packet(conn, tenant_id, gallery_id)
+    if not packet:
+        return ""
+
+    lines = [
+        f"Selection packet: {packet['gallery_title']}",
+        f"Client: {packet['client_name'] or 'Not set'}",
+        f"Status: {packet['status_label']}",
+        f"Favorites: {packet['favorite_count']}",
+        f"Notes: {packet['comment_count']} across {packet['commented_frame_count']} frame(s)",
+    ]
+    if packet["submitted_at"]:
+        lines.append(f"Submitted: {packet['submitted_at']}")
+
+    lines.extend(["", "Favorites"])
+    if packet["favorites"]:
+        for item in packet["favorites"]:
+            hidden = " (hidden)" if item["hidden"] else ""
+            notes = f" - {item['comment_count']} note(s)" if item["comment_count"] else ""
+            lines.append(f"- {item['filename']}{hidden}{notes}")
+    else:
+        lines.append("- None yet")
+
+    lines.extend(["", "Notes"])
+    if packet["comments"]:
+        for comment in packet["comments"]:
+            who = comment["author_name"] or "Client"
+            hidden = " (hidden)" if comment.get("hidden") else ""
+            lines.append(f"- {comment['filename']}{hidden} - {who}: {comment['body']}")
+    else:
+        lines.append("- None yet")
+
+    return "\n".join(lines) + "\n"

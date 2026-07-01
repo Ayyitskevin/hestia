@@ -22,6 +22,8 @@ from hestia.proofing import (
     favorite_image_ids,
     image_in_gallery,
     list_favorites,
+    selection_packet,
+    selection_packet_text,
     toggle_favorite,
 )
 from hestia.tenants import create_tenant
@@ -122,6 +124,59 @@ def test_tenant_scoped_reads_ignore_malformed_rows(conn, storage):
     assert comments_by_image(conn, g1["id"], tenant_id=t1["id"]) == {}
     assert list_favorites(conn, t2["id"], g1["id"]) == []
     assert comments_for_gallery(conn, t2["id"], g1["id"]) == []
+
+
+def test_selection_packet_combines_favorites_notes_and_status(conn, storage):
+    t = _tenant(conn)
+    g = create_gallery(conn, tenant_id=t["id"], title="Wedding", client_name="Sarah")
+    first = _img(conn, storage, t["id"], g["id"], "001.jpg")
+    second = _img(conn, storage, t["id"], g["id"], "002.jpg")
+    toggle_favorite(conn, tenant_id=t["id"], gallery_id=g["id"], image_id=second["id"])
+    add_comment(
+        conn,
+        tenant_id=t["id"],
+        gallery_id=g["id"],
+        image_id=second["id"],
+        body="album opener",
+        author_name="Sarah",
+    )
+    add_comment(
+        conn,
+        tenant_id=t["id"],
+        gallery_id=g["id"],
+        image_id=first["id"],
+        body="maybe black and white",
+        author_name="Sarah",
+    )
+
+    packet = selection_packet(conn, t["id"], g["id"])
+
+    assert packet["status"] == "in_progress"
+    assert packet["favorite_count"] == 1
+    assert packet["comment_count"] == 2
+    assert packet["commented_frame_count"] == 2
+    assert packet["favorites"][0]["filename"] == "002.jpg"
+    assert packet["favorites"][0]["comment_count"] == 1
+    assert packet["unselected_comments"][0]["filename"] == "001.jpg"
+
+
+def test_selection_packet_text_is_tenant_scoped(conn, storage):
+    t1, t2 = _tenant(conn, "A"), _tenant(conn, "B")
+    g1 = create_gallery(conn, tenant_id=t1["id"], title="Public")
+    g2 = create_gallery(conn, tenant_id=t2["id"], title="Secret")
+    img1 = _img(conn, storage, t1["id"], g1["id"], "PUBLIC.jpg")
+    img2 = _img(conn, storage, t2["id"], g2["id"], "SECRET.jpg")
+    toggle_favorite(conn, tenant_id=t1["id"], gallery_id=g1["id"], image_id=img1["id"])
+    toggle_favorite(conn, tenant_id=t2["id"], gallery_id=g2["id"], image_id=img2["id"])
+    add_comment(conn, tenant_id=t2["id"], gallery_id=g2["id"], image_id=img2["id"],
+                body="private note")
+
+    body = selection_packet_text(conn, t1["id"], g1["id"])
+
+    assert "Selection packet: Public" in body
+    assert "PUBLIC.jpg" in body
+    assert "SECRET.jpg" not in body
+    assert "private note" not in body
 
 
 def _published_gallery_with_image(app, *, pin=None):
