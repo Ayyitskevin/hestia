@@ -32,6 +32,7 @@ def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
     return {
         "target": BETA_TARGET_STUDIOS,
         "invite_links": _invite_links(settings),
+        "operations": _launch_operations(settings),
         "followups": _followups(studios, nudge_activity=nudge_activity),
         "cohort": _cohort_summary(studios, nudge_activity=nudge_activity),
         "interest": interest,
@@ -676,6 +677,110 @@ def _invite_links(settings: Settings) -> list[dict]:
         }
         for label, source, path, target in links
     ]
+
+
+def _launch_operations(settings: Settings) -> dict:
+    base = settings.public_url.rstrip("/") or "http://127.0.0.1:8500"
+    hosted_domain = (settings.hosted_domain or "").strip()
+    price = _single_price_label(settings)
+    return {
+        "base_url": base,
+        "hosted_domain": hosted_domain,
+        "readiness": [
+            _readiness(
+                "Public URL",
+                base,
+                base.startswith("https://"),
+                "Use HTTPS before launch so checkout, email links, and share previews match production.",
+            ),
+            _readiness(
+                "Wildcard domain",
+                hosted_domain or "Set HESTIA_DOMAIN",
+                bool(hosted_domain),
+                "Point apex and wildcard DNS at the Caddy host.",
+            ),
+            _readiness(
+                "Billing",
+                settings.subscription_backend,
+                settings.subscription_backend == "stripe",
+                "Use Stripe subscriptions for the hosted $40/month plan.",
+            ),
+            _readiness(
+                "Email",
+                settings.email_backend,
+                settings.email_backend == "smtp",
+                "Use SMTP so verification, invites, nudges, and digests leave the mock outbox.",
+            ),
+            _readiness(
+                "Plan contract",
+                f"{price} after {settings.trial_days} days",
+                int(settings.flat_price_cents) == 4000 and int(settings.trial_days) == 14,
+                "The public offer stays exactly $40/month after a 14-day trial.",
+            ),
+            _readiness(
+                "Storage",
+                settings.storage_backend,
+                settings.storage_backend in ("local", "s3"),
+                "Use a persistent volume or S3/R2-backed media storage.",
+            ),
+        ],
+        "commands": [
+            _runbook_command(
+                "Boot hosted stack",
+                "docker compose up --build -d",
+                "Build the FastAPI app behind Caddy with the mounted SQLite/media volumes.",
+            ),
+            _runbook_command(
+                "Run hosted preflight",
+                f"bash scripts/hosted-preflight.sh --url {base}",
+                "Validate HTTPS URL, wildcard domain, secrets, Stripe, SMTP, volumes, Docker/Caddy, and probes.",
+            ),
+            _runbook_command(
+                "Probe runtime",
+                f"curl -fsS {base}/healthz && curl -fsS {base}/readyz",
+                "Confirm the deployed service and database are reachable after boot.",
+            ),
+            _runbook_command(
+                "Run full smoke",
+                "bash scripts/ci-smoke.sh",
+                "Run Ruff, pytest, and local healthz boot before announcing a launch build.",
+            ),
+            _runbook_command(
+                "Dogfood magic moment",
+                "bash scripts/dogfood-hestia.sh",
+                "Create a studio, upload frames, generate an offer, and verify idempotent re-processing.",
+            ),
+        ],
+        "links": [
+            _operator_link("Public landing", f"{base}/"),
+            _operator_link("Beta page", f"{base}/beta"),
+            _operator_link("Pricing page", f"{base}/pricing"),
+            _operator_link("Wedding demo", f"{base}/demo/wedding"),
+            _operator_link("Food & beverage demo", f"{base}/demo/food"),
+            _operator_link("Real-estate demo", f"{base}/demo/real-estate"),
+            _operator_link("Admin launch kit", f"{base}/admin/launch"),
+            _operator_link("Trial cockpit", f"{base}/admin/trials"),
+        ],
+    }
+
+
+def _readiness(label: str, value: str, ok: bool, detail: str) -> dict:
+    return {"label": label, "value": value, "ok": ok, "detail": detail}
+
+
+def _runbook_command(label: str, command: str, detail: str) -> dict:
+    return {"label": label, "command": command, "detail": detail}
+
+
+def _operator_link(label: str, url: str) -> dict:
+    return {"label": label, "url": url}
+
+
+def _single_price_label(settings: Settings) -> str:
+    cents = int(settings.flat_price_cents)
+    if settings.currency.lower() == "usd" and cents % 100 == 0:
+        return f"${cents // 100}/month"
+    return f"{cents / 100:.2f} {settings.currency.upper()}/month"
 
 
 def _milestone(label: str, done: int, target: int) -> dict:

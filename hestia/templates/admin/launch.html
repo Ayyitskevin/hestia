@@ -48,6 +48,49 @@
 <section class="card stack" style="margin-top:18px">
   <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">
     <div>
+      <h3>Launch operations</h3>
+      <p class="muted">Deployment, preflight, and share actions for the hosted $40/month launch.</p>
+    </div>
+    <span class="pill">{{ kit.operations.base_url }}</span>
+  </div>
+  <div class="grid cols-3">
+    {% for item in kit.operations.readiness %}
+      <div class="launch-meter">
+        <div>
+          <span class="pill {{ 'on' if item.ok else 'off' }}">{{ 'Ready' if item.ok else 'Check' }}</span>
+          <strong>{{ item.label }}</strong><br>
+          <span class="mono">{{ item.value }}</span><br>
+          <span class="muted">{{ item.detail }}</span>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  <div class="grid cols-2">
+    <div>
+      <h4>Runbook commands</h4>
+      {% for cmd in kit.operations.commands %}
+        <div class="launch-link">
+          <strong>{{ cmd.label }}</strong><br>
+          <span class="muted">{{ cmd.detail }}</span>
+          <div class="mono">{{ cmd.command }}</div>
+        </div>
+      {% endfor %}
+    </div>
+    <div>
+      <h4>Share and inspect</h4>
+      {% for link in kit.operations.links %}
+        <div class="launch-link">
+          <strong>{{ link.label }}</strong>
+          <div class="mono">{{ link.url }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="card stack" style="margin-top:18px">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">
+    <div>
       <h3>Founder operating checklist</h3>
       <p class="muted">The next three moves ranked from today&apos;s beta cohort signals.</p>
     </div>

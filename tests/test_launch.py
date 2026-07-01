@@ -65,6 +65,15 @@ def test_beta_launch_kit_builds_invite_links_and_followup_queue(conn, settings):
     ]
     assert kit["operating_checklist"][0]["rank"] == 1
     assert kit["operating_checklist"][0]["href"] == "/admin/launch"
+    assert kit["operations"]["base_url"] == "https://hestia.example"
+    assert any(item["label"] == "Public URL" and item["ok"]
+               for item in kit["operations"]["readiness"])
+    assert any(item["label"] == "Billing" and not item["ok"]
+               for item in kit["operations"]["readiness"])
+    assert any(cmd["command"] == "bash scripts/hosted-preflight.sh --url https://hestia.example"
+               for cmd in kit["operations"]["commands"])
+    assert any(link["url"] == "https://hestia.example/beta"
+               for link in kit["operations"]["links"])
     assert any(link["url"] == "https://hestia.example/beta?source=beta&path=/beta"
                for link in kit["invite_links"])
     assert any(link["url"] == "https://hestia.example/signup?source=pricing&path=/pricing"
@@ -207,6 +216,12 @@ def test_admin_launch_page_renders_invites_and_followups(settings, conn):
     assert "Founder operating checklist" in page.text
     assert "Beta revenue pipeline" in page.text
     assert "Interest → invite → studio → verified → preset → trial → paid." in page.text
+    assert "Launch operations" in page.text
+    assert "Runbook commands" in page.text
+    assert "Share and inspect" in page.text
+    assert "docker compose up --build -d" in page.text
+    assert "bash scripts/hosted-preflight.sh --url http://testserver" in page.text
+    assert "http://testserver/beta" in page.text
     assert "Studio created" in page.text
     assert "Paid" in page.text
     assert "Nudge at-risk studios" in page.text
