@@ -83,6 +83,22 @@
   </div>
 </div>
 
+{% if proposal_stats.show %}
+<div class="card" style="margin-bottom:18px">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px">
+    <h3 style="margin:0">Proposal conversion <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ proposal_stats.window_label }}</span></h3>
+    <a class="muted" href="/proposals" style="font-size:.85rem">Proposals -></a>
+  </div>
+  <div style="display:flex; gap:28px; flex-wrap:wrap">
+    <div><div class="label">Sent</div><div style="font-size:1.35rem">{{ proposal_stats.sent_count }}</div></div>
+    <div><div class="label">Accepted</div><div style="font-size:1.35rem">{{ proposal_stats.accepted_count }} <span class="pill {{ 'on' if proposal_stats.sent_to_accepted_pct >= 50 else 'off' }}" style="font-size:.62rem; vertical-align:middle">{{ proposal_stats.sent_to_accepted }}</span></div></div>
+    <div><div class="label">Paid</div><div style="font-size:1.35rem">{{ proposal_stats.booked_count }} <span class="pill {{ 'on' if proposal_stats.accepted_to_paid_pct >= 50 else 'off' }}" style="font-size:.62rem; vertical-align:middle">{{ proposal_stats.accepted_to_paid }}</span></div></div>
+    <div><div class="label">Avg time to book</div><div style="font-size:1.35rem">{{ proposal_stats.avg_time_to_book }}</div></div>
+    <div><div class="label">Money stuck</div><div style="font-size:1.35rem">{{ proposal_stats.stuck_value }}{% if proposal_stats.stuck_count %} <span class="pill off" style="font-size:.62rem; vertical-align:middle">{{ proposal_stats.stuck_count }} open</span>{% endif %}</div></div>
+  </div>
+</div>
+{% endif %}
+
 <div class="card stack" style="margin-bottom:18px">
   <h3>Needs attention{% if attention.total %} · {{ attention.total }}{% endif %}</h3>
   {% if attention.total == 0 %}

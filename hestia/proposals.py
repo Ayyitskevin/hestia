@@ -167,6 +167,72 @@ def proposal_followups(
     }
 
 
+def proposal_metrics(conn: sqlite3.Connection, tenant_id: str, *, days: int = 30) -> dict:
+    """Proposal conversion analytics for the owner dashboard.
+
+    Tracks the recent sent-proposal cohort: sent -> accepted -> paid, average
+    time to payment, and money still stuck in open proposal booking invoices.
+    """
+    window_days = max(1, int(days))
+    since = f"-{window_days} days"
+    row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS sent_count,
+            COALESCE(SUM(CASE WHEN pr.status = 'accepted' THEN 1 ELSE 0 END), 0)
+                AS accepted_count,
+            COALESCE(SUM(CASE WHEN pr.status = 'accepted' AND i.status = 'paid' THEN 1 ELSE 0 END), 0)
+                AS booked_count,
+            COALESCE(SUM(CASE
+                WHEN (pr.status = 'sent'
+                      OR COALESCE(ct.status, '') != 'signed'
+                      OR COALESCE(i.status, '') != 'paid')
+                     THEN 1 ELSE 0 END), 0) AS stuck_count,
+            COALESCE(SUM(CASE
+                WHEN (pr.status = 'sent'
+                      OR COALESCE(ct.status, '') != 'signed'
+                      OR COALESCE(i.status, '') != 'paid')
+                     AND COALESCE(i.status, '') != 'paid'
+                     THEN COALESCE(i.amount_cents, 0) ELSE 0 END), 0) AS stuck_cents,
+            AVG(CASE
+                WHEN pr.status = 'accepted' AND i.status = 'paid' AND i.paid_at IS NOT NULL
+                     THEN julianday(i.paid_at) - julianday(COALESCE(pr.sent_at, pr.created_at))
+                END) AS avg_time_to_book_days,
+            COALESCE(MAX(i.currency), 'usd') AS currency
+          FROM proposals pr
+          LEFT JOIN contracts ct ON ct.id = pr.contract_id AND ct.tenant_id = pr.tenant_id
+          LEFT JOIN invoices i ON i.id = pr.invoice_id AND i.tenant_id = pr.tenant_id
+         WHERE pr.tenant_id = ?
+           AND pr.status IN ('sent', 'accepted')
+           AND COALESCE(pr.sent_at, pr.created_at) >= datetime('now', ?)
+        """,
+        (tenant_id, since),
+    ).fetchone()
+    sent = int(row["sent_count"] or 0)
+    accepted = int(row["accepted_count"] or 0)
+    booked = int(row["booked_count"] or 0)
+    stuck = int(row["stuck_count"] or 0)
+    stuck_cents = int(row["stuck_cents"] or 0)
+    avg_days = row["avg_time_to_book_days"]
+    return {
+        "window_days": window_days,
+        "window_label": f"last {window_days} days",
+        "sent_count": sent,
+        "accepted_count": accepted,
+        "booked_count": booked,
+        "stuck_count": stuck,
+        "stuck_value_cents": stuck_cents,
+        "stuck_value": money(stuck_cents, row["currency"] or "usd"),
+        "sent_to_accepted_pct": _pct(accepted, sent),
+        "sent_to_accepted": f"{_pct(accepted, sent)}%",
+        "accepted_to_paid_pct": _pct(booked, accepted),
+        "accepted_to_paid": f"{_pct(booked, accepted)}%",
+        "avg_time_to_book_days": float(avg_days) if avg_days is not None else None,
+        "avg_time_to_book": _days_display(avg_days),
+        "show": bool(sent or stuck),
+    }
+
+
 def send_proposal(conn: sqlite3.Connection, tenant_id: str, proposal_id: int) -> dict | None:
     """Publish a proposal link and make its linked sign/pay links live.
 
@@ -178,7 +244,8 @@ def send_proposal(conn: sqlite3.Connection, tenant_id: str, proposal_id: int) ->
     send_contract(conn, tenant_id, proposal["contract_id"])
     send_invoice(conn, tenant_id, proposal["invoice_id"])
     conn.execute(
-        "UPDATE proposals SET status = 'sent', updated_at = datetime('now') "
+        "UPDATE proposals SET status = 'sent', sent_at = COALESCE(sent_at, datetime('now')), "
+        "updated_at = datetime('now') "
         "WHERE id = ? AND tenant_id = ? AND status IN ('draft', 'sent')",
         (proposal_id, tenant_id),
     )
@@ -349,6 +416,20 @@ def _hydrate(row: dict) -> dict:
     row["followup_label"] = "Needs " + " + ".join(missing) if missing else "Complete"
     row["reminder_email"] = (row.get("accepted_email") or row.get("client_email") or "").strip()
     return row
+
+
+def _pct(part: int, whole: int) -> int:
+    return round(100 * int(part) / int(whole)) if whole else 0
+
+
+def _days_display(value) -> str:
+    if value is None:
+        return "-"
+    days = max(0.0, float(value))
+    if days < 1:
+        return "<1 day"
+    label = "day" if round(days, 1) == 1 else "days"
+    return f"{days:.1f} {label}"
 
 
 def _invoice_item_label(package: dict) -> str:

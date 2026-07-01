@@ -33,6 +33,7 @@ from ..invoices import money
 from ..packages import list_packages
 from ..pipeline import list_runs
 from ..presets import preset_applied
+from ..proposals import proposal_metrics
 from ..ratelimit import enforce
 from ..resets import consume_reset, create_reset, find_reset
 from ..studio import get_profile
@@ -257,6 +258,7 @@ def dashboard(request: Request):
         profile = get_profile(conn, tenant["id"])
         attention = needs_attention(conn, tenant["id"])
         snapshot = money_snapshot(conn, tenant["id"])
+        proposal_stats = proposal_metrics(conn, tenant["id"])
         setup = setup_checklist(conn, tenant["id"], published=profile["published"])
         subscription = get_subscription(conn, tenant["id"])
         trial = trial_cockpit(tenant, subscription, settings_of(request), setup)
@@ -264,7 +266,7 @@ def dashboard(request: Request):
     return render(request, "dashboard.html", auth=auth, tenant=tenant, flags=flags,
                   galleries=galleries, runs=runs, plan=plan, counts=counts, profile=profile,
                   attention=attention, snapshot=snapshot, setup=setup, trial=trial,
-                  reconnect=reconnect)
+                  reconnect=reconnect, proposal_stats=proposal_stats)
 
 
 @router.post("/dashboard/digest")

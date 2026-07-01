@@ -14,6 +14,7 @@ from hestia.proposals import (
     get_proposal,
     list_proposals,
     proposal_followups,
+    proposal_metrics,
     record_proposal_reminder,
     send_proposal,
     send_proposal_reminder,
@@ -66,6 +67,7 @@ def test_create_proposal_creates_linked_contract_and_invoice(conn, settings):
 
     sent = send_proposal(conn, t["id"], proposal["id"])
     assert sent["status"] == "sent"
+    assert sent["sent_at"]
     assert get_contract(conn, t["id"], proposal["contract_id"])["status"] == "sent"
     assert get_invoice(conn, t["id"], proposal["invoice_id"])["status"] == "sent"
 
@@ -119,6 +121,56 @@ def test_proposal_reminder_records_and_sends(conn, settings):
     conn.execute("UPDATE contracts SET status='signed' WHERE id=?", (proposal["contract_id"],))
     conn.execute("UPDATE invoices SET status='paid' WHERE id=?", (proposal["invoice_id"],))
     assert record_proposal_reminder(conn, t["id"], proposal["id"]) is False
+
+
+def test_proposal_metrics_rates_time_and_stuck_value(conn, settings):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Sarah", email="sarah@example.com")
+    pkg = create_package(conn, tenant_id=t["id"], name="Wedding Collection",
+                         price_cents=400000, deposit_cents=100000)
+
+    waiting = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                              title="Waiting proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], waiting["id"])
+    conn.execute("UPDATE proposals SET sent_at = datetime('now', '-5 days') WHERE id = ?",
+                 (waiting["id"],))
+
+    accepted = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                               title="Accepted proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], accepted["id"])
+    conn.execute("UPDATE proposals SET sent_at = datetime('now', '-4 days') WHERE id = ?",
+                 (accepted["id"],))
+    accept_proposal(conn, token=accepted["token"], accepted_name="Sarah")
+
+    booked = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                             title="Booked proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], booked["id"])
+    conn.execute("UPDATE proposals SET sent_at = datetime('now', '-4 days') WHERE id = ?",
+                 (booked["id"],))
+    accept_proposal(conn, token=booked["token"], accepted_name="Sarah")
+    conn.execute("UPDATE contracts SET status='signed' WHERE id = ?", (booked["contract_id"],))
+    conn.execute(
+        "UPDATE invoices SET status='paid', paid_at = "
+        "(SELECT datetime(sent_at, '+2 days') FROM proposals WHERE id = ?) WHERE id = ?",
+        (booked["id"], booked["invoice_id"]),
+    )
+
+    old = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                          title="Old proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], old["id"])
+    conn.execute("UPDATE proposals SET sent_at = datetime('now', '-60 days') WHERE id = ?",
+                 (old["id"],))
+    conn.commit()
+
+    metrics = proposal_metrics(conn, t["id"], days=30)
+    assert metrics["sent_count"] == 3
+    assert metrics["accepted_count"] == 2
+    assert metrics["booked_count"] == 1
+    assert metrics["sent_to_accepted"] == "67%"
+    assert metrics["accepted_to_paid"] == "50%"
+    assert metrics["stuck_count"] == 2
+    assert metrics["stuck_value_cents"] == 200000
+    assert metrics["avg_time_to_book"] == "2.0 days"
 
 
 def test_http_proposal_publish_and_accept_flow(client, app):

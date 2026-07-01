@@ -146,7 +146,7 @@ Hestia is a modular monolith, not a bundle of disconnected services.
 | `crm` | Clients, projects, tags, files, timelines |
 | `scheduler` | Availability, booking, confirmations, reminders |
 | `proposals` | Package-backed proposals, accept flow, linked agreement + deposit invoice |
-| `dashboard` | Trial cockpit, launch path, proposal conversion follow-up, digest-ready attention queue |
+| `dashboard` | Trial cockpit, launch path, proposal conversion analytics, digest-ready attention queue |
 | `contracts` | Contract templates, sent agreements, e-signature |
 | `questionnaires` | Intake forms, answers, reusable templates |
 | `galleries` / `storage` | Gallery hosting, uploads, delivery |

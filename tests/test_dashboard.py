@@ -200,6 +200,8 @@ def test_dashboard_page_shows_proposal_followup(client, app):
     page = client.get("/dashboard")
     assert page.status_code == 200
     assert "Proposal follow-up" in page.text and "Follow this proposal" in page.text
+    assert "Proposal conversion" in page.text
+    assert "Money stuck" in page.text and "$1,000.00" in page.text
 
 
 def test_money_snapshot_reports_month_revenue_and_outstanding(conn, settings):
