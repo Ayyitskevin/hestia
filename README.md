@@ -100,6 +100,7 @@ Hestia is ready for a simple solo-founder hosted launch:
 - Beta revenue pipeline from interest to paid $40/month account
 - Founder weekly launch digest for pipeline, stalled studios, beta interest, and paid MRR
 - In-app launch operations runbook with preflight, smoke, dogfood, and share-link commands
+- Founder demo mode that seeds polished wedding, food & beverage, and real-estate sample studios
 - Mock-first provider seams for safe local and staging runs
 
 ```bash
@@ -196,7 +197,7 @@ Useful URLs:
 - `/settings/account` hosted account, URLs, custom domain, billing actions
 - `/settings/billing` flat plan billing page
 - `/admin` operator admin with `HESTIA_API_TOKEN`
-- `/admin/launch` beta launch kit with founder operating checklist, launch operations runbook, beta revenue pipeline, weekly launch digest, beta interest leads, private invite emails, cohort summary, tagged invite links, CSV export, cooldown-safe trial nudges, and owner follow-up queue
+- `/admin/launch` beta launch kit with founder operating checklist, launch operations runbook, founder demo mode, beta revenue pipeline, weekly launch digest, beta interest leads, private invite emails, cohort summary, tagged invite links, CSV export, cooldown-safe trial nudges, and owner follow-up queue
 - `/admin/trials` trial conversion cockpit for stalled and activated studios; tenant detail includes a beta conversion timeline
 - `/healthz` liveness
 - `/readyz` readiness

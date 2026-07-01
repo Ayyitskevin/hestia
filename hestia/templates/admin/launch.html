@@ -37,6 +37,9 @@
 {% elif digest_notice == 'cooldown' %}
   <div class="alert">Digest skipped: the weekly launch digest was already sent recently.</div>
 {% endif %}
+{% if demo_notice == 'seeded' %}
+  <div class="alert ok">Founder demo studios are seeded and ready for screenshots.</div>
+{% endif %}
 
 <div class="grid cols-4" style="margin-top:18px">
   <div class="card"><div class="label">Studios</div><div style="font-size:1.8rem;font-weight:800">{{ kit.summary.studios }}/{{ kit.target }}</div></div>
@@ -82,6 +85,35 @@
         <div class="launch-link">
           <strong>{{ link.label }}</strong>
           <div class="mono">{{ link.url }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="launch-link">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">
+      <div>
+        <h4>Founder demo mode</h4>
+        <p class="muted">
+          {{ kit.founder_demo.ready }}/{{ kit.founder_demo.target }} sample studios ready for screenshots,
+          sales calls, and walkthroughs.
+        </p>
+      </div>
+      <form method="post" action="/admin/launch/founder-demo">
+        {% include "_csrf.html" %}
+        <button class="btn secondary" type="submit">Seed founder demo studios</button>
+      </form>
+    </div>
+    <div class="grid cols-3" style="margin-top:8px">
+      {% for demo in kit.founder_demo.studios %}
+        <div>
+          <strong>{{ demo.label }}</strong>
+          <span class="pill {{ 'on' if demo.ready else 'off' }}">{{ demo.status }}</span><br>
+          {% if demo.found %}
+            <a class="btn ghost" href="{{ demo.admin_url }}">Admin</a>
+            <a class="btn ghost" href="{{ demo.public_url }}">Public</a>
+          {% else %}
+            <span class="muted">Seed to create <span class="mono">{{ demo.slug }}</span>.</span>
+          {% endif %}
         </div>
       {% endfor %}
     </div>

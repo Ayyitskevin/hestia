@@ -26,6 +26,7 @@ from ..auth import (
 from ..billing import PLANS, plan_status
 from ..db import applied_migrations, audit
 from ..domains import custom_domain_summary, set_custom_domain_status
+from ..founder_demo import seed_founder_demo_studios
 from ..integrity import tenant_integrity_overview
 from ..interest import send_beta_interest_invite
 from ..jobs import failed_jobs, queue_stats, requeue_job, stale_jobs
@@ -168,6 +169,7 @@ def launch(
     nudged: str = "",
     interest: str = "",
     digest: str = "",
+    demo: str = "",
 ):
     settings = settings_of(request)
     with db_conn(request) as conn:
@@ -184,6 +186,7 @@ def launch(
         nudge_notice=nudge_notice,
         interest_notice=interest,
         digest_notice=digest,
+        demo_notice=demo,
     )
 
 
@@ -270,6 +273,17 @@ def launch_digest(request: Request):
         else:
             digest_status = result["status"]
     return RedirectResponse(f"/admin/launch?digest={digest_status}", status_code=303)
+
+
+@router.post("/launch/founder-demo")
+def launch_founder_demo(request: Request):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _admin_ctx(request, conn)
+        if not auth:
+            return _redirect_login()
+        seed_founder_demo_studios(conn, settings, actor="admin")
+    return RedirectResponse("/admin/launch?demo=seeded", status_code=303)
 
 
 @router.get("/system")

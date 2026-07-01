@@ -9,6 +9,7 @@ from urllib.parse import quote
 from .config import Settings
 from .db import audit
 from .email import notify
+from .founder_demo import founder_demo_summary
 from .interest import beta_interest_summary
 from .tenants import get_tenant
 from .trial_conversion import trial_conversion_cockpit, trial_conversion_for_tenant
@@ -33,6 +34,7 @@ def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
         "target": BETA_TARGET_STUDIOS,
         "invite_links": _invite_links(settings),
         "operations": _launch_operations(settings),
+        "founder_demo": founder_demo_summary(conn, settings),
         "followups": _followups(studios, nudge_activity=nudge_activity),
         "cohort": _cohort_summary(studios, nudge_activity=nudge_activity),
         "interest": interest,

@@ -31,6 +31,7 @@ def test_readme_positions_hestia_as_flat_price_hosted_microsaas():
         "weekly launch digest",
         "founder weekly launch digest",
         "launch operations runbook",
+        "Founder demo mode",
         "beta interest leads",
         "private invite emails",
         "cohort summary",

@@ -18,7 +18,7 @@ from hestia.launch import (
 from hestia.main import create_app
 from hestia.presets import apply_preset
 from hestia.subscriptions import apply_plan
-from hestia.tenants import create_tenant, create_user
+from hestia.tenants import create_tenant, create_user, get_tenant_by_slug
 
 
 def _owner(conn, tenant_id, email, *, verified=1):
@@ -74,6 +74,8 @@ def test_beta_launch_kit_builds_invite_links_and_followup_queue(conn, settings):
                for cmd in kit["operations"]["commands"])
     assert any(link["url"] == "https://hestia.example/beta"
                for link in kit["operations"]["links"])
+    assert kit["founder_demo"]["target"] == 3
+    assert kit["founder_demo"]["ready"] == 0
     assert any(link["url"] == "https://hestia.example/beta?source=beta&path=/beta"
                for link in kit["invite_links"])
     assert any(link["url"] == "https://hestia.example/signup?source=pricing&path=/pricing"
@@ -222,6 +224,9 @@ def test_admin_launch_page_renders_invites_and_followups(settings, conn):
     assert "docker compose up --build -d" in page.text
     assert "bash scripts/hosted-preflight.sh --url http://testserver" in page.text
     assert "http://testserver/beta" in page.text
+    assert "Founder demo mode" in page.text
+    assert "0/3 sample studios ready" in page.text
+    assert "Seed founder demo studios" in page.text
     assert "Studio created" in page.text
     assert "Paid" in page.text
     assert "Nudge at-risk studios" in page.text
@@ -236,6 +241,48 @@ def test_admin_launch_page_renders_invites_and_followups(settings, conn):
     assert "Launch Admin" in page.text
     assert "Send nudge" in page.text
     assert 'href="/admin/launch"' in admin.get("/admin/tenants").text
+
+
+def test_admin_launch_seeds_founder_demo_studios(settings, conn):
+    app = create_app(settings)
+    admin = CSRFClient(app)
+    admin.post("/admin/login", data={"token": ADMIN_TOKEN})
+
+    response = admin.post("/admin/launch/founder-demo", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/admin/launch?demo=seeded"
+    for slug, demo_email in [
+        ("hestia-wedding-demo", "demo+wedding@hestia.local"),
+        ("hestia-food-demo", "demo+food@hestia.local"),
+        ("hestia-real-estate-demo", "demo+real_estate@hestia.local"),
+    ]:
+        tenant = get_tenant_by_slug(conn, slug)
+        assert tenant is not None
+        assert conn.execute(
+            "SELECT COUNT(*) AS n FROM users WHERE tenant_id = ? AND role = 'owner'",
+            (tenant["id"],),
+        ).fetchone()["n"] == 1
+        assert conn.execute(
+            "SELECT published FROM studio_profiles WHERE tenant_id = ?",
+            (tenant["id"],),
+        ).fetchone()["published"] == 1
+        assert conn.execute(
+            "SELECT COUNT(*) AS n FROM service_packages WHERE tenant_id = ?",
+            (tenant["id"],),
+        ).fetchone()["n"] >= 3
+        assert conn.execute(
+            "SELECT COUNT(*) AS n FROM clients WHERE tenant_id = ? AND email = ?",
+            (tenant["id"], demo_email),
+        ).fetchone()["n"] == 1
+
+    kit = beta_launch_kit(conn, settings)
+    assert kit["founder_demo"]["ready"] == 3
+    page = admin.get("/admin/launch?demo=seeded")
+    assert "Founder demo studios are seeded" in page.text
+    assert "3/3 sample studios ready" in page.text
+    assert "http://testserver/studio/hestia-wedding-demo" in page.text
+    assert 'href="/admin/tenants/' in page.text
 
 
 def test_admin_launch_nudge_sends_email_and_records_audit(settings, conn):
