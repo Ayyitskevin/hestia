@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Integrity — Hestia admin{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Integrity</h1>
+    <span class="muted">Cross-studio view of hidden relationship issues.</span>
+  </div>
+  <a class="btn ghost" href="/admin/system">← System</a>
+</div>
+
+<div class="grid cols-2">
+  <div class="card stack">
+    <h3>Fleet summary</h3>
+    <div class="health-strip">
+      <div class="health-item"><span class="svc">{{ overview.tenant_count }}</span><span class="url">studios</span></div>
+      <div class="health-item"><span class="svc">{{ overview.dirty_tenants }}</span><span class="url">with issues</span></div>
+      <div class="health-item"><span class="svc">{{ overview.total }}</span><span class="url">total issues</span></div>
+    </div>
+  </div>
+  <div class="card stack">
+    <h3>Issue split</h3>
+    <div class="health-strip">
+      <div class="health-item"><span class="svc">{{ overview.repairable_total }}</span><span class="url">repairable by owner</span></div>
+      <div class="health-item"><span class="svc">{{ overview.manual_total }}</span><span class="url">manual review</span></div>
+      <div class="health-item"><span class="svc">{{ overview.clean_tenants }}</span><span class="url">clean studios</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>Studios</h3>
+  {% if overview.tenants %}
+    <table>
+      <thead>
+        <tr>
+          <th>Studio</th>
+          <th>Total</th>
+          <th>Repairable</th>
+          <th>Manual</th>
+          <th>Signals</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in overview.tenants %}
+          <tr>
+            <td>
+              <a href="/admin/tenants/{{ t.id }}">{{ t.name }}</a>
+              <div class="mono muted" style="font-size:.8rem">{{ t.slug }}</div>
+            </td>
+            <td><span class="pill {{ 'on' if t.clean else 'off' }}">{{ t.total }}</span></td>
+            <td class="muted">{{ t.repairable_total }}</td>
+            <td class="muted">{{ t.manual_total }}</td>
+            <td>
+              {% if t.manual_rules %}
+                <div>
+                  {% for r in t.manual_rules %}
+                    <span class="pill off">{{ r.count }} · {{ r.label }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              {% if t.repairable_rules %}
+                <div style="margin-top:6px">
+                  {% for r in t.repairable_rules %}
+                    <span class="pill">{{ r.count }} · {{ r.label }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              {% if t.clean %}
+                <span class="muted">Clean</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No studios yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -495,3 +495,49 @@ def repair_integrity(conn: sqlite3.Connection, tenant_id: str) -> dict:
         "fixes": fixes,
         "report": integrity_report(conn, tenant_id),
     }
+
+
+def tenant_integrity_overview(conn: sqlite3.Connection) -> dict:
+    """Cross-tenant operator summary. Read-only: repair remains tenant-scoped."""
+    rows = conn.execute(
+        "SELECT id, name, slug FROM tenants ORDER BY created_at DESC, name"
+    ).fetchall()
+    tenants = []
+    total = repairable_total = manual_total = dirty = 0
+    for tenant in rows:
+        report = integrity_report(conn, tenant["id"], sample_limit=0)
+        active = report["active_rules"]
+        manual_rules = [
+            {"label": r["label"], "count": r["count"]}
+            for r in active if not r["repairable"]
+        ]
+        repairable_rules = [
+            {"label": r["label"], "count": r["count"]}
+            for r in active if r["repairable"]
+        ]
+        if report["total"]:
+            dirty += 1
+        total += report["total"]
+        repairable_total += report["repairable_total"]
+        manual_total += report["manual_total"]
+        tenants.append({
+            "id": tenant["id"],
+            "name": tenant["name"],
+            "slug": tenant["slug"],
+            "total": report["total"],
+            "repairable_total": report["repairable_total"],
+            "manual_total": report["manual_total"],
+            "clean": report["clean"],
+            "manual_rules": manual_rules,
+            "repairable_rules": repairable_rules,
+        })
+    tenants.sort(key=lambda t: (t["total"] == 0, -t["manual_total"], -t["repairable_total"], t["name"].lower()))
+    return {
+        "tenants": tenants,
+        "tenant_count": len(tenants),
+        "dirty_tenants": dirty,
+        "clean_tenants": len(tenants) - dirty,
+        "total": total,
+        "repairable_total": repairable_total,
+        "manual_total": manual_total,
+    }

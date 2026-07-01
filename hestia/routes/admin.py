@@ -23,6 +23,7 @@ from ..auth import (
 )
 from ..billing import PLANS, plan_status
 from ..db import applied_migrations, audit
+from ..integrity import tenant_integrity_overview
 from ..jobs import failed_jobs, queue_stats, requeue_job, stale_jobs
 from ..ratelimit import enforce
 from ..tenants import (
@@ -128,6 +129,16 @@ def system(request: Request):
             "warnings": settings.config_warnings,
         }
     return render(request, "admin/system.html", auth=auth, info=info)
+
+
+@router.get("/integrity")
+def integrity(request: Request):
+    with db_conn(request) as conn:
+        auth = _admin_ctx(request, conn)
+        if not auth:
+            return _redirect_login()
+        overview = tenant_integrity_overview(conn)
+    return render(request, "admin/integrity.html", auth=auth, overview=overview)
 
 
 @router.post("/system/jobs/{job_id}/requeue")
