@@ -2,7 +2,7 @@
 
 import dataclasses
 
-from conftest import CSRFClient, login_owner, onboard_studio
+from conftest import ADMIN_TOKEN, CSRFClient, login_owner, onboard_studio
 
 from hestia.db import connect
 from hestia.domains import (
@@ -119,3 +119,52 @@ def test_account_page_saves_custom_domain(settings):
         summary = custom_domain_summary(app.state.settings, dict(tenant))
     assert summary["domain"] == "photos.domainowner.com"
     assert summary["target"] == "hestia.test"
+
+
+def test_admin_can_verify_and_reset_custom_domain(settings, conn):
+    app = create_app(dataclasses.replace(settings, hosted_domain="hestia.test"))
+    admin = CSRFClient(app)
+    admin.post("/admin/login", data={"token": ADMIN_TOKEN})
+    tenant = create_tenant(conn, name="Verify Studio", shoot_type="wedding")
+    set_custom_domain(conn, tenant["id"], "verify.example.co")
+    upsert_profile(conn, tenant_id=tenant["id"], headline="Verified weddings", about="",
+                   contact_email="", published=True)
+    conn.commit()
+
+    detail = admin.get(f"/admin/tenants/{tenant['id']}")
+    assert detail.status_code == 200
+    assert "verify.example.co" in detail.text
+    assert "_hestia.verify.example.co" in detail.text
+    assert "Mark verified" in detail.text
+
+    r = admin.post(f"/admin/tenants/{tenant['id']}/custom-domain/verify",
+                   follow_redirects=False)
+    assert r.status_code == 303
+    got = get_tenant(conn, tenant["id"])
+    assert got["custom_domain_status"] == "verified"
+    assert "custom_domain.verified" in [
+        row["action"] for row in conn.execute(
+            "SELECT action FROM audit_log WHERE tenant_id = ?", (tenant["id"],)
+        )
+    ]
+
+    page = admin.get("/", headers={"host": "verify.example.co"})
+    assert "Verified weddings" in page.text
+
+    admin.post(f"/admin/tenants/{tenant['id']}/custom-domain/pending")
+    assert get_tenant(conn, tenant["id"])["custom_domain_status"] == "pending"
+    detail = admin.get(f"/admin/tenants/{tenant['id']}")
+    assert "Reset to pending" not in detail.text and "Mark verified" in detail.text
+
+
+def test_admin_verify_ignores_empty_custom_domain(settings, conn):
+    app = create_app(settings)
+    admin = CSRFClient(app)
+    admin.post("/admin/login", data={"token": ADMIN_TOKEN})
+    tenant = create_tenant(conn, name="No Domain", shoot_type="wedding")
+    conn.commit()
+
+    r = admin.post(f"/admin/tenants/{tenant['id']}/custom-domain/verify",
+                   follow_redirects=False)
+    assert r.status_code == 303
+    assert get_tenant(conn, tenant["id"])["custom_domain_status"] == "unset"

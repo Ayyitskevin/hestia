@@ -41,6 +41,39 @@
     <p class="hint">The studio manages its own plan at <span class="mono">/settings/billing</span>
       (mock by default; Stripe subscriptions when <span class="mono">HESTIA_SUBSCRIPTION_BACKEND=stripe</span>).</p>
   </div>
+
+  <div class="card stack">
+    <h3>Custom domain</h3>
+    {% if custom_domain.domain %}
+      <p class="muted"><span class="pill {{ 'on' if custom_domain.status == 'verified' else 'off' }}">{{ custom_domain.status }}</span>
+        <span class="mono">{{ custom_domain.domain }}</span></p>
+      <div>
+        <div class="label">CNAME target</div>
+        <div class="mono">{{ custom_domain.target }}</div>
+      </div>
+      <div>
+        <div class="label">TXT verification</div>
+        <div class="mono">{{ custom_domain.dns_name }}</div>
+        <div class="mono">{{ custom_domain.token }}</div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        {% if custom_domain.status != 'verified' %}
+        <form method="post" action="/admin/tenants/{{ tenant.id }}/custom-domain/verify">
+          {% include "_csrf.html" %}
+          <button class="btn" type="submit">Mark verified</button>
+        </form>
+        {% else %}
+        <form method="post" action="/admin/tenants/{{ tenant.id }}/custom-domain/pending">
+          {% include "_csrf.html" %}
+          <button class="btn secondary" type="submit">Reset to pending</button>
+        </form>
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="muted">No custom domain requested.</p>
+      <p class="hint">The studio owner can add one at <span class="mono">/settings/account</span>.</p>
+    {% endif %}
+  </div>
 </div>
 
 <div class="card stack" style="margin-top:18px">

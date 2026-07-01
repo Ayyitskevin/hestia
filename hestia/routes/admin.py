@@ -23,6 +23,7 @@ from ..auth import (
 )
 from ..billing import PLANS, plan_status
 from ..db import applied_migrations, audit
+from ..domains import custom_domain_summary, set_custom_domain_status
 from ..integrity import tenant_integrity_overview
 from ..jobs import failed_jobs, queue_stats, requeue_job, stale_jobs
 from ..ratelimit import enforce
@@ -208,8 +209,35 @@ def mint_api_key(request: Request, tenant_id: str):
     return _render_tenant_detail(request, tenant_id, new_api_key=api_key)
 
 
+@router.post("/tenants/{tenant_id}/custom-domain/verify")
+def verify_custom_domain(request: Request, tenant_id: str):
+    with db_conn(request) as conn:
+        if not _is_admin(request, conn):
+            return _redirect_login()
+        try:
+            set_custom_domain_status(conn, tenant_id, "verified")
+        except ValueError:
+            return RedirectResponse(f"/admin/tenants/{tenant_id}", status_code=303)
+        audit(conn, actor="admin", action="custom_domain.verified", tenant_id=tenant_id)
+    return RedirectResponse(f"/admin/tenants/{tenant_id}", status_code=303)
+
+
+@router.post("/tenants/{tenant_id}/custom-domain/pending")
+def reset_custom_domain(request: Request, tenant_id: str):
+    with db_conn(request) as conn:
+        if not _is_admin(request, conn):
+            return _redirect_login()
+        try:
+            set_custom_domain_status(conn, tenant_id, "pending")
+        except ValueError:
+            return RedirectResponse(f"/admin/tenants/{tenant_id}", status_code=303)
+        audit(conn, actor="admin", action="custom_domain.pending", tenant_id=tenant_id)
+    return RedirectResponse(f"/admin/tenants/{tenant_id}", status_code=303)
+
+
 def _render_tenant_detail(request: Request, tenant_id: str, *,
                           new_api_key: str | None = None, created: bool = False):
+    settings = settings_of(request)
     with db_conn(request) as conn:
         auth = _admin_ctx(request, conn)
         tenant = get_tenant(conn, tenant_id)
@@ -223,4 +251,5 @@ def _render_tenant_detail(request: Request, tenant_id: str, *,
         ).fetchall()
     return render(request, "admin/tenant_detail.html", auth=auth, tenant=tenant, flags=flags,
                   plan=plan, plans=PLANS, new_api_key=new_api_key, created=created,
-                  api_keys=[dict(r) for r in api_keys])
+                  api_keys=[dict(r) for r in api_keys],
+                  custom_domain=custom_domain_summary(settings, tenant))
