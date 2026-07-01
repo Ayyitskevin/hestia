@@ -36,7 +36,7 @@ full hosted operating system:
 | AI helper apps | Culling, hero picks, metadata, offer curation, album drafts, copy |
 | Gallery sales automation | Ready-to-monetize gallery queue, one-click campaigns, and cooldown-safe print offer emails |
 | Invoicing app | Invoices, payment plans, deposits, receipts, Stripe checkout |
-| Retention chores | Review asks, rebooking reminders, reconnect surfaces, owner digest |
+| Retention chores | Review/referral flywheel, rebooking reminders, reconnect surfaces, owner digest |
 
 The promise is simple: **one login, one bill, one maintained studio command center.**
 
@@ -106,6 +106,7 @@ Hestia is ready for a simple solo-founder hosted launch:
 - In-app launch operations runbook with preflight, smoke, dogfood, and share-link commands
 - Founder demo mode that seeds polished wedding, food & beverage, and real-estate sample studios
 - Client action room that ranks every client next step across sign, pay, book, answer, review, download, and testimonial flows
+- Growth flywheel that finds happy clients from paid/delivered work and sends a review + referral ask
 - Gallery sales automation that spots delivered galleries with offer links and emails limited-time print campaigns without duplicate sends
 - Mock-first provider seams for safe local and staging runs
 
@@ -175,7 +176,7 @@ Hestia is a modular monolith, not a bundle of disconnected services.
 | `content` / `products` | Captions, shot lists, marketing packs, packshots |
 | `invoices` / `payments` | Invoices, deposits, payment plans, Stripe seam |
 | `portal` | One branded client hub with a ranked client action room |
-| `automations` | Workflow rules, delayed retention, owner digest |
+| `growth` / `automations` | Review/referral flywheel, workflow rules, delayed retention, owner digest |
 | `subscriptions` | Flat hosted SaaS billing |
 | `pipeline` / `jobs` | Durable background processing |
 

@@ -109,6 +109,22 @@ def list_testimonials(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def latest_testimonial_for_client(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    client_id: int | None,
+) -> dict | None:
+    """The newest testimonial/request associated with a client, if any."""
+    if not client_id:
+        return None
+    row = conn.execute(
+        "SELECT * FROM testimonials WHERE tenant_id = ? AND client_id = ? "
+        "ORDER BY COALESCE(submitted_at, created_at) DESC, id DESC LIMIT 1",
+        (tenant_id, client_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def pending_testimonial(conn: sqlite3.Connection, tenant_id: str, client_id: int | None) -> dict | None:
     """A client's outstanding review request (still 'requested'), if any — so the
     client portal can surface a 'leave a review' prompt instead of a separate email."""

@@ -14,6 +14,7 @@ from .. import messaging
 from ..auth import context_from_session
 from ..crm import get_client, list_clients
 from ..email import notify
+from ..growth import growth_opportunities, send_growth_ask
 from ..ratelimit import enforce
 from ..tenants import get_tenant
 from ..testimonials import (
@@ -40,7 +41,7 @@ def _user(request: Request, conn):
 
 
 @router.get("/settings/testimonials")
-def manage(request: Request):
+def manage(request: Request, growth: str = ""):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = _user(request, conn)
@@ -48,9 +49,18 @@ def manage(request: Request):
             return RedirectResponse("/login", status_code=303)
         items = list_testimonials(conn, auth.tenant["id"])
         clients = list_clients(conn, auth.tenant["id"])
+        opportunities = growth_opportunities(conn, auth.tenant["id"])
     for t in items:  # the share link for pending requests
         t["url"] = testimonial_public_url(settings, t["token"])
-    return render(request, "testimonials/manage.html", auth=auth, items=items, clients=clients)
+    return render(
+        request,
+        "testimonials/manage.html",
+        auth=auth,
+        items=items,
+        clients=clients,
+        growth=opportunities,
+        growth_notice=growth,
+    )
 
 
 @router.post("/settings/testimonials/request")
@@ -73,6 +83,22 @@ def request_one(request: Request, client_id: str = Form(""), author_name: str = 
             notify(conn, settings, to=client["email"], tenant_id=auth.tenant["id"],
                    subject=msg["subject"], body=msg["body"])
     return RedirectResponse("/settings/testimonials", status_code=303)
+
+
+@router.post("/settings/testimonials/growth/{client_id}")
+def growth_ask(request: Request, client_id: int):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        result = send_growth_ask(conn, settings, tenant_id=auth.tenant["id"], client_id=client_id)
+        if result["sent"]:
+            conn.commit()
+            notice = "sent"
+        else:
+            notice = result["reason"]
+    return RedirectResponse(f"/settings/testimonials?growth={notice}", status_code=303)
 
 
 @router.post("/testimonials/{testimonial_id}/feature")

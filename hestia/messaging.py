@@ -153,6 +153,15 @@ TEMPLATES: dict[str, dict] = {
                  "{review_url}\n\nThank you!"),
         "variables": ["client", "studio", "review_url"],
     },
+    "growth_ask": {
+        "label": "Review + referral ask",
+        "subject": "{studio}: one quick favor",
+        "body": ("Hi {client},\n\nThank you again for trusting {studio}.\n\n{review_line}\n\n"
+                 "If someone you care about needs photos, this personal link sends them "
+                 "straight to us and credits you as the referral:\n{referral_url}\n\n"
+                 "Warmly,\n{studio}"),
+        "variables": ["client", "studio", "review_line", "referral_url"],
+    },
 }
 
 # Templates offerable in the ad-hoc client-email composer: those whose variables are

@@ -10,6 +10,48 @@
   </div>
 </div>
 
+{% if growth_notice == 'sent' %}
+  <div class="alert ok">Review and referral ask sent.</div>
+{% elif growth_notice == 'cooldown' %}
+  <div class="alert">Skipped: this client was asked recently.</div>
+{% elif growth_notice in ('missing_email', 'missing_client') %}
+  <div class="alert warn">Skipped: add a client email first.</div>
+{% endif %}
+
+<div class="card stack" style="margin-bottom:18px">
+  <h3>Review + referral flywheel</h3>
+  <p class="muted">Hestia finds happy clients from paid invoices and published galleries, then sends one ask with a private review link and their personal referral link.</p>
+  {% if growth %}
+    <table>
+      <thead><tr><th>Client</th><th>Signal</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for g in growth %}
+        <tr>
+          <td><a href="/clients/{{ g.id }}">{{ g.name }}</a><br><span class="muted">{{ g.email }}</span></td>
+          <td>{{ g.signal_line }}{% if g.paid_cents %}<br><span class="muted">{{ g.paid_display }} lifetime paid</span>{% endif %}</td>
+          <td>
+            <span class="pill {{ 'on' if g.can_send else 'off' }}">{{ g.status_label }}</span>
+            {% if g.last_ask_at %}<br><span class="muted">last asked {{ g.last_ask_at[:10] }}</span>{% endif %}
+          </td>
+          <td style="text-align:right">
+            {% if g.can_send %}
+            <form method="post" action="/settings/testimonials/growth/{{ g.id }}" style="margin:0">
+              {% include "_csrf.html" %}
+              <button class="btn secondary" type="submit">Send ask</button>
+            </form>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No ask-ready clients yet. Paid invoices and published galleries will surface clients here.</p>
+  {% endif %}
+</div>
+
 <div class="card stack">
   <h3>Request a testimonial</h3>
   <p class="muted">Pick a client to email a private review link — or generate a link to share
