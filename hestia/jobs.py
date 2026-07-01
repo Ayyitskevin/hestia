@@ -231,6 +231,23 @@ def _remind_pending_documents(db_path: str | Path, settings: Settings) -> int:
         conn.close()
 
 
+def _remind_stalled_proposals(db_path: str | Path, settings: Settings) -> int:
+    """Worker-cadence wrapper: nudge sent proposal links that have gone quiet.
+
+    Contract and invoice sweeps handle accepted proposals, so this stays focused
+    on the pre-acceptance conversion gap.
+    """
+    from .db import connect
+    from .proposals import send_proposal_followup_reminders
+    conn = connect(db_path)
+    try:
+        n = send_proposal_followup_reminders(conn, settings)
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
 def _send_owner_digests(db_path: str | Path, settings: Settings) -> int:
     """Worker-cadence wrapper: email each studio owner their 'what needs you' digest,
     on a weekly per-tenant cooldown — so running this hourly is harmless (the cooldown,
@@ -295,6 +312,11 @@ def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_slee
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
                 log.warning("worker document-reminder sweep failed",
                             extra={"action": "jobs.remind_documents"}, exc_info=True)
+            try:
+                _remind_stalled_proposals(db_path, settings)
+            except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
+                log.warning("worker proposal-reminder sweep failed",
+                            extra={"action": "jobs.remind_proposals"}, exc_info=True)
             try:
                 _send_owner_digests(db_path, settings)
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker

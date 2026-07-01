@@ -22,6 +22,7 @@ from .ownership import mask_invalid_project_id, normalize_client_project_ids
 from .packages import get_package
 
 PROPOSAL_STATUSES = ("draft", "sent", "accepted", "declined", "void")
+MAX_PROPOSAL_AUTO_REMINDERS = 3
 
 
 def create_proposal(
@@ -285,19 +286,25 @@ def send_proposal_reminder(
                   tenant_id=proposal["tenant_id"])
 
 
-def record_proposal_reminder(conn: sqlite3.Connection, tenant_id: str, proposal_id: int) -> bool:
+def record_proposal_reminder(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    proposal_id: int,
+    *,
+    expected_count: int | None = None,
+    sent_only: bool = False,
+) -> bool:
     """Atomically stamp an actionable proposal reminder.
 
     A proposal is actionable while it is sent-but-unaccepted, or accepted but the
     linked contract is not signed or linked invoice is not paid. The recipient
-    guard prevents counting a reminder that cannot be sent.
+    guard prevents counting a reminder that cannot be sent. Automated proposal
+    sweeps pass ``expected_count`` and ``sent_only`` so a concurrent sweep or a
+    client acceptance between select and claim cannot double-send.
     """
-    cur = conn.execute(
-        """
-        UPDATE proposals
-           SET last_reminder_at = datetime('now'), reminder_count = reminder_count + 1
-         WHERE id = ? AND tenant_id = ?
-           AND (
+    action_sql = "status = 'sent'"
+    if not sent_only:
+        action_sql = """
                 status = 'sent'
                 OR (
                     status = 'accepted'
@@ -316,7 +323,19 @@ def record_proposal_reminder(conn: sqlite3.Connection, tenant_id: str, proposal_
                         )
                     )
                 )
-           )
+        """
+    count_sql = ""
+    params: list[object] = [proposal_id, tenant_id]
+    if expected_count is not None:
+        count_sql = "AND reminder_count = ?"
+        params.append(int(expected_count))
+    cur = conn.execute(
+        f"""
+        UPDATE proposals
+           SET last_reminder_at = datetime('now'), reminder_count = reminder_count + 1
+         WHERE id = ? AND tenant_id = ?
+           AND ({action_sql})
+           {count_sql}
            AND (
                 TRIM(COALESCE(accepted_email, '')) <> ''
                 OR EXISTS (
@@ -327,9 +346,57 @@ def record_proposal_reminder(conn: sqlite3.Connection, tenant_id: str, proposal_
                 )
            )
         """,
-        (proposal_id, tenant_id),
+        params,
     )
     return cur.rowcount == 1
+
+
+def send_proposal_followup_reminders(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    *,
+    cooldown_days: int = 3,
+    limit: int = 500,
+) -> int:
+    """Auto-nudge sent proposals that have stalled, capped to avoid nagging.
+
+    Proposal acceptance is the highest-leverage part of the booking funnel: it is
+    where the client still has one simple action. Accepted proposals are left to
+    the contract/payment reminder sweeps so clients do not receive duplicate
+    "finish booking" emails from separate systems.
+    """
+    cooldown = max(1, int(cooldown_days))
+    rows = conn.execute(
+        _proposal_select()
+        + """
+         WHERE pr.status = 'sent'
+           AND pr.reminder_count < ?
+           AND (
+                TRIM(COALESCE(pr.accepted_email, '')) <> ''
+                OR TRIM(COALESCE(c.email, '')) <> ''
+           )
+           AND COALESCE(pr.last_reminder_at, pr.last_viewed_at, pr.sent_at, pr.created_at)
+               < datetime('now', ?)
+         ORDER BY CASE WHEN COALESCE(pr.view_count, 0) > 0 THEN 0 ELSE 1 END,
+                  COALESCE(pr.last_viewed_at, pr.sent_at, pr.created_at), pr.id
+         LIMIT ?
+        """,
+        (MAX_PROPOSAL_AUTO_REMINDERS, f"-{cooldown} days", max(1, int(limit))),
+    ).fetchall()
+    sent = 0
+    for r in rows:
+        proposal = _hydrate(dict(r))
+        step = int(proposal.get("reminder_count") or 0)
+        if record_proposal_reminder(
+            conn,
+            proposal["tenant_id"],
+            proposal["id"],
+            expected_count=step,
+            sent_only=True,
+        ):
+            send_proposal_reminder(conn, settings, proposal)
+            sent += 1
+    return sent
 
 
 def accept_proposal(

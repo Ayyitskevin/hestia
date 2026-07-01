@@ -17,6 +17,7 @@ from hestia.proposals import (
     proposal_metrics,
     record_proposal_reminder,
     send_proposal,
+    send_proposal_followup_reminders,
     send_proposal_reminder,
 )
 from hestia.tenants import create_tenant
@@ -121,6 +122,105 @@ def test_proposal_reminder_records_and_sends(conn, settings):
     conn.execute("UPDATE contracts SET status='signed' WHERE id=?", (proposal["contract_id"],))
     conn.execute("UPDATE invoices SET status='paid' WHERE id=?", (proposal["invoice_id"],))
     assert record_proposal_reminder(conn, t["id"], proposal["id"]) is False
+
+
+def test_auto_proposal_followup_waits_for_real_stall(conn, settings):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Sarah", email="sarah@example.com")
+    pkg = create_package(conn, tenant_id=t["id"], name="Wedding Collection",
+                         price_cents=350000, deposit_cents=100000)
+    proposal = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                               title="Stalled proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], proposal["id"])
+    conn.commit()
+
+    assert send_proposal_followup_reminders(conn, settings, cooldown_days=3) == 0
+
+    conn.execute("UPDATE proposals SET sent_at = datetime('now', '-4 days') WHERE id = ?",
+                 (proposal["id"],))
+    conn.commit()
+    assert send_proposal_followup_reminders(conn, settings, cooldown_days=3) == 1
+    conn.commit()
+
+    reminded = get_proposal(conn, t["id"], proposal["id"])
+    assert reminded["reminder_count"] == 1 and reminded["last_reminder_at"]
+    emails = list_emails(conn, t["id"])
+    assert len(emails) == 1
+    assert "Stalled proposal" in emails[0]["subject"]
+    assert f"/proposal/{proposal['token']}" in emails[0]["body"]
+
+    assert send_proposal_followup_reminders(conn, settings, cooldown_days=3) == 0
+    assert len(list_emails(conn, t["id"])) == 1
+
+
+def test_auto_proposal_followup_uses_view_cooldown_and_stops_after_acceptance(conn, settings):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Sarah", email="sarah@example.com")
+    pkg = create_package(conn, tenant_id=t["id"], name="Wedding Collection",
+                         price_cents=350000, deposit_cents=100000)
+    viewed = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                             title="Viewed proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], viewed["id"])
+    conn.execute(
+        "UPDATE proposals SET sent_at = datetime('now', '-10 days'), "
+        "view_count = 1, last_viewed_at = datetime('now') WHERE id = ?",
+        (viewed["id"],),
+    )
+    conn.commit()
+
+    assert send_proposal_followup_reminders(conn, settings, cooldown_days=3) == 0
+
+    conn.execute("UPDATE proposals SET last_viewed_at = datetime('now', '-4 days') WHERE id = ?",
+                 (viewed["id"],))
+    conn.commit()
+    assert send_proposal_followup_reminders(conn, settings, cooldown_days=3) == 1
+
+    accepted = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                               title="Accepted proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], accepted["id"])
+    accept_proposal(conn, token=accepted["token"], accepted_name="Sarah")
+    conn.execute(
+        "UPDATE proposals SET sent_at = datetime('now', '-10 days'), "
+        "accepted_at = datetime('now', '-10 days'), last_reminder_at = NULL "
+        "WHERE id = ?",
+        (accepted["id"],),
+    )
+    conn.commit()
+
+    assert send_proposal_followup_reminders(conn, settings, cooldown_days=3) == 0
+    assert record_proposal_reminder(
+        conn,
+        t["id"],
+        accepted["id"],
+        expected_count=0,
+        sent_only=True,
+    ) is False
+
+
+def test_auto_proposal_followup_caps_and_claims_expected_count(conn, settings):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Sarah", email="sarah@example.com")
+    pkg = create_package(conn, tenant_id=t["id"], name="Wedding Collection",
+                         price_cents=350000, deposit_cents=100000)
+    proposal = create_proposal(conn, settings, tenant_id=t["id"], package_id=pkg["id"],
+                               title="Capped proposal", client_id=c["id"])
+    send_proposal(conn, t["id"], proposal["id"])
+    conn.execute(
+        "UPDATE proposals SET sent_at = datetime('now', '-20 days'), "
+        "last_reminder_at = datetime('now', '-20 days'), reminder_count = 3 WHERE id = ?",
+        (proposal["id"],),
+    )
+    conn.commit()
+
+    assert send_proposal_followup_reminders(conn, settings, cooldown_days=3) == 0
+    assert record_proposal_reminder(
+        conn,
+        t["id"],
+        proposal["id"],
+        expected_count=0,
+        sent_only=True,
+    ) is False
+    assert len(list_emails(conn, t["id"])) == 0
 
 
 def test_proposal_metrics_rates_time_and_stuck_value(conn, settings):

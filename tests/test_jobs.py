@@ -163,6 +163,43 @@ def test_worker_logs_periodic_sweep_failure(monkeypatch, db_path, settings):
     )
 
 
+def test_worker_runs_proposal_reminder_sweep(monkeypatch, db_path, settings):
+    calls = []
+
+    class StopAfterOneIdle:
+        def __init__(self):
+            self.done = False
+
+        def is_set(self):
+            return self.done
+
+        def wait(self, _timeout):
+            self.done = True
+
+    monkeypatch.setattr(jobs_mod, "reclaim_stale", lambda _db_path: 0)
+    monkeypatch.setattr(jobs_mod, "_remind_overdue", lambda _db_path, _settings: 0)
+    monkeypatch.setattr(jobs_mod, "_remind_pending_documents", lambda _db_path, _settings: 0)
+    monkeypatch.setattr(
+        jobs_mod,
+        "_remind_stalled_proposals",
+        lambda _db_path, _settings: calls.append("proposals") or 0,
+    )
+    monkeypatch.setattr(jobs_mod, "_send_owner_digests", lambda _db_path, _settings: 0)
+    monkeypatch.setattr(jobs_mod, "_generate_recurring", lambda _db_path, _settings: 0)
+    monkeypatch.setattr(jobs_mod, "run_next", lambda _db_path, _settings: None)
+
+    run_worker(
+        db_path,
+        settings,
+        StopAfterOneIdle(),
+        idle_sleep=0,
+        reclaim_interval=0,
+        remind_interval=0,
+    )
+
+    assert calls == ["proposals"]
+
+
 def test_list_jobs_is_tenant_scoped(db_path):
     _enq(db_path, kind="test.ok", tenant_id="ta")
     _enq(db_path, kind="test.ok", tenant_id="tb")
