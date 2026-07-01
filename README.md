@@ -120,6 +120,11 @@ The hosted product is intentionally one price: **Hestia Studio — $40/month aft
 14-day free trial, cancel anytime.** There are no paid tiers; the $40 plan includes
 the full studio command center.
 
+First-run onboarding lives at `/onboarding` and seeds real tenant-owned objects:
+booking types, service packages, an intake questionnaire, and draft site copy for
+wedding, food & beverage, or real-estate studios. Optional demo data creates one
+sample lead so new customers can see the full workflow immediately.
+
 ## Mock-first provider seams
 
 Everything runs with **no external keys** by default. Each integration is a seam that

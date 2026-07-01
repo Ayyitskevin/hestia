@@ -51,6 +51,7 @@ from .routes import (
     invoices,
     library,
     media,
+    onboarding,
     packages,
     pay,
     payment_plans,
@@ -183,6 +184,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(testimonials.router, dependencies=csrf)
     app.include_router(finances.router, dependencies=csrf)
     app.include_router(billing.router, dependencies=csrf)
+    app.include_router(onboarding.router, dependencies=csrf)
     app.include_router(pipeline_ui.router, dependencies=csrf)
     app.include_router(api.router)
     app.include_router(client.router)

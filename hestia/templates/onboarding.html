@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Onboarding - Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Choose your studio preset</h1>
+    <span class="muted">Seed the first booking menu, service packages, intake form, and draft site copy.</span>
+  </div>
+  <a class="btn secondary" href="/dashboard">Back to dashboard</a>
+</div>
+
+{% if applied %}
+<div class="alert ok">
+  This studio already has starter setup. Applying a preset will keep existing booking types,
+  packages, forms, and site copy intact.
+</div>
+{% endif %}
+
+<div class="grid cols-3">
+  {% for key, preset in presets.items() %}
+  <form class="card stack" method="post" action="/onboarding">
+    {% include "_csrf.html" %}
+    <input type="hidden" name="preset" value="{{ key }}">
+    <div>
+      <h3 style="margin:0 0 6px">{{ preset.label }}</h3>
+      <p class="muted" style="margin:0">{{ preset.blurb }}</p>
+    </div>
+    <div class="stack" style="gap:8px">
+      <div><span class="label">Booking</span><br><span class="muted">{{ preset.booking_types|length }} session types</span></div>
+      <div><span class="label">Packages</span><br><span class="muted">{{ preset.packages|length }} priced offers</span></div>
+      <div><span class="label">Forms</span><br><span class="muted">{{ preset.questionnaire_prompts|length }} intake questions</span></div>
+    </div>
+    <label class="check">
+      <input type="checkbox" name="include_demo" value="1" checked>
+      <span>Include a sample client and lead project</span>
+    </label>
+    <button class="btn" type="submit">Use {{ preset.label }}</button>
+  </form>
+  {% endfor %}
+</div>
+{% endblock %}

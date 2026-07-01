@@ -181,10 +181,10 @@ def test_setup_checklist_tracks_activation(conn, settings, storage):
     fresh = setup_checklist(conn, t["id"], published=False)
     assert fresh["done"] == 0 and fresh["complete"] is False
     assert [s["stage"] for s in fresh["steps"]] == [
-        "Launch", "Book", "Client", "Deliver", "Sell", "Collect"
+        "Preset", "Launch", "Book", "Client", "Deliver", "Sell", "Collect"
     ]
-    assert [s["done"] for s in fresh["steps"]] == [False] * 6
-    assert fresh["next"]["stage"] == "Launch"
+    assert [s["done"] for s in fresh["steps"]] == [False] * 7
+    assert fresh["next"]["stage"] == "Preset"
 
     c = create_client(conn, tenant_id=t["id"], name="Cli")
     create_booking_type(conn, tenant_id=t["id"], title="Portrait session")
@@ -201,7 +201,7 @@ def test_setup_checklist_tracks_activation(conn, settings, storage):
     conn.commit()
 
     done = setup_checklist(conn, t["id"], published=True)
-    assert done["done"] == 6 and done["complete"] is True and done["next"] is None
+    assert done["done"] == 7 and done["complete"] is True and done["next"] is None
 
 
 def test_dashboard_shows_get_started_for_fresh_studio(client):

@@ -10,6 +10,7 @@ import sqlite3
 from .config import Settings
 from .email import notify
 from .invoices import accounts_receivable, money
+from .presets import preset_applied
 from .reports import monthly_pnl
 
 
@@ -138,6 +139,8 @@ def setup_checklist(conn: sqlite3.Connection, tenant_id: str, *, published: bool
     data instead of a separate onboarding state machine, so the checklist stays honest
     when owners skip around."""
     steps = [
+        {"stage": "Preset", "label": "Choose a studio preset", "done": preset_applied(conn, tenant_id),
+         "href": "/onboarding", "value": "booking, packages, forms"},
         {"stage": "Launch", "label": "Publish studio site", "done": bool(published),
          "href": "/settings/site", "value": "public lead capture"},
         {"stage": "Book", "label": "Add a bookable session", "done": _has_active_booking_type(conn, tenant_id),
