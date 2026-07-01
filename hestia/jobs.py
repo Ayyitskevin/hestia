@@ -278,6 +278,24 @@ def _send_launch_digest(db_path: str | Path, settings: Settings) -> int:
         conn.close()
 
 
+def _send_gallery_sales_campaigns(db_path: str | Path, settings: Settings) -> int:
+    """Worker-cadence wrapper: launch and email post-delivery gallery sale campaigns.
+
+    The campaign module decides readiness and cooldown from tenant-scoped gallery,
+    offer, client, order, active-campaign, and audit-log state. This wrapper keeps
+    worker imports one-directional and commits the sweep as one observable unit.
+    """
+    from .campaigns import send_gallery_sales_campaigns
+    from .db import connect
+    conn = connect(db_path)
+    try:
+        n = send_gallery_sales_campaigns(conn, settings)
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
 def _generate_recurring(db_path: str | Path, settings: Settings) -> int:
     """Worker-cadence wrapper: generate any due recurring invoices. Each profile is claimed
     atomically (next_run_at advanced past today) and committed on its own inside
@@ -341,6 +359,11 @@ def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_slee
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
                 log.warning("worker launch-digest sweep failed",
                             extra={"action": "jobs.launch_digest"}, exc_info=True)
+            try:
+                _send_gallery_sales_campaigns(db_path, settings)
+            except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
+                log.warning("worker gallery-sales sweep failed",
+                            extra={"action": "jobs.gallery_sales"}, exc_info=True)
             try:
                 _generate_recurring(db_path, settings)
             except Exception:  # noqa: BLE001 - a billing miss must never kill the worker

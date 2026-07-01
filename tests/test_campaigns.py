@@ -9,11 +9,15 @@ from hestia.campaigns import (
     create_campaign,
     discount_bundle,
     end_campaign,
+    gallery_sales_opportunity,
     get_active_campaign,
     get_campaign,
+    launch_gallery_sales_campaign,
+    send_gallery_sales_campaigns,
 )
 from hestia.crm import assign_gallery_to_project, create_client, create_project
 from hestia.db import connect
+from hestia.delivery import enable_delivery
 from hestia.email import list_emails
 from hestia.galleries import add_image, create_gallery, publish_gallery
 from hestia.sales import create_or_update_offer
@@ -104,6 +108,98 @@ def test_tenant_isolation(conn):
     c = create_campaign(conn, tenant_id=t1["id"], gallery_id=g["id"], headline="S",
                         discount_pct=10, days=7)
     assert get_campaign(conn, t2["id"], c["id"]) is None
+
+
+def _ready_sales_gallery(conn, storage, settings, tenant, *, email="sarah@example.com", title="Wedding"):
+    client = create_client(conn, tenant_id=tenant["id"], name="Sarah", email=email)
+    project = create_project(conn, tenant_id=tenant["id"], name=title, client_id=client["id"])
+    gallery = create_gallery(conn, tenant_id=tenant["id"], title=title)
+    assign_gallery_to_project(conn, tenant["id"], gallery["id"], project["id"])
+    img = add_image(conn, storage, tenant_id=tenant["id"], gallery_id=gallery["id"],
+                    filename="a.jpg", fileobj=io.BytesIO(b"jpg"), content_type="image/jpeg")
+    publish_gallery(conn, tenant["id"], gallery["id"])
+    enable_delivery(conn, tenant["id"], gallery["id"])
+    offer = create_or_update_offer(conn, tenant=tenant, gallery=gallery, run_id=None,
+                                   vision_summary={"hero_image_ids": [img["id"]], "keeper_count": 1},
+                                   flags=tenant_flags(tenant))
+    conn.commit()
+    return gallery, offer
+
+
+def test_gallery_sales_opportunity_becomes_ready_after_delivery(conn, storage, settings):
+    tenant = _tenant(conn, "Opportunity")
+    gallery, offer = _ready_sales_gallery(conn, storage, settings, tenant)
+
+    opp = gallery_sales_opportunity(conn, tenant["id"], gallery["id"])
+
+    assert opp["status"] == "ready"
+    assert opp["status_label"] == "Ready to sell"
+    assert opp["offer_token"] == offer["token"]
+    assert "Delivered" in opp["reason_line"]
+    assert "Offer ready" in opp["reason_line"]
+
+
+def test_gallery_sales_opportunity_blocks_incomplete_or_recent_gallery(conn, storage, settings):
+    tenant = _tenant(conn, "Blocks")
+    client = create_client(conn, tenant_id=tenant["id"], name="No Delivery", email="nod@example.com")
+    project = create_project(conn, tenant_id=tenant["id"], name="No Delivery", client_id=client["id"])
+    gallery = create_gallery(conn, tenant_id=tenant["id"], title="No Delivery")
+    assign_gallery_to_project(conn, tenant["id"], gallery["id"], project["id"])
+    img = add_image(conn, storage, tenant_id=tenant["id"], gallery_id=gallery["id"],
+                    filename="a.jpg", fileobj=io.BytesIO(b"jpg"), content_type="image/jpeg")
+    publish_gallery(conn, tenant["id"], gallery["id"])
+    create_or_update_offer(conn, tenant=tenant, gallery=gallery, run_id=None,
+                           vision_summary={"hero_image_ids": [img["id"]], "keeper_count": 1},
+                           flags=tenant_flags(tenant))
+    conn.commit()
+
+    assert gallery_sales_opportunity(conn, tenant["id"], gallery["id"])["status"] == "deliver"
+
+    enable_delivery(conn, tenant["id"], gallery["id"])
+    conn.execute("INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES (?, 'system', ?, ?)",
+                 (tenant["id"], "campaign.email_sent", f"gallery #{gallery['id']} · nod@example.com · auto"))
+    conn.commit()
+    assert gallery_sales_opportunity(conn, tenant["id"], gallery["id"])["status"] == "cooldown"
+
+
+def test_launch_gallery_sales_campaign_emails_and_respects_cooldown(conn, storage, settings):
+    tenant = _tenant(conn, "Launch")
+    gallery, offer = _ready_sales_gallery(conn, storage, settings, tenant, email="buyer@example.com")
+
+    result = launch_gallery_sales_campaign(conn, settings, tenant=tenant, gallery_id=gallery["id"],
+                                           headline="Weekend print sale", discount_pct=20, days=5)
+    conn.commit()
+
+    assert result["sent"] is True
+    assert result["offer_url"].endswith(f"/{offer['token']}")
+    assert get_active_campaign(conn, gallery["id"], tenant_id=tenant["id"])["discount_pct"] == 20
+    outbox = list_emails(conn, tenant["id"], to_addr="buyer@example.com")
+    assert len(outbox) == 1 and "20% off" in outbox[0]["subject"]
+
+    end_campaign(conn, tenant["id"], gallery["id"])
+    result2 = launch_gallery_sales_campaign(conn, settings, tenant=tenant, gallery_id=gallery["id"],
+                                            headline="Another sale", discount_pct=20, days=5)
+    conn.commit()
+
+    assert result2["sent"] is False and result2["status"] == "cooldown"
+    assert len(list_emails(conn, tenant["id"], to_addr="buyer@example.com")) == 1
+
+
+def test_auto_gallery_sales_sweep_sends_only_ready_once(conn, storage, settings):
+    ready = _tenant(conn, "Auto Ready")
+    ready_gallery, _offer = _ready_sales_gallery(conn, storage, settings, ready, email="ready@example.com")
+    blocked = _tenant(conn, "Auto Blocked")
+    _ready_sales_gallery(conn, storage, settings, blocked, email="blocked@example.com")
+    conn.execute("UPDATE galleries SET delivery_token = NULL WHERE tenant_id = ?", (blocked["id"],))
+    conn.commit()
+
+    assert send_gallery_sales_campaigns(conn, settings) == 1
+    conn.commit()
+
+    assert len(list_emails(conn, ready["id"], to_addr="ready@example.com")) == 1
+    assert list_emails(conn, blocked["id"], to_addr="blocked@example.com") == []
+    assert get_active_campaign(conn, ready_gallery["id"], tenant_id=ready["id"]) is not None
+    assert send_gallery_sales_campaigns(conn, settings) == 0
 
 
 def _setup_for_tenant(app, tenant_id, slug):

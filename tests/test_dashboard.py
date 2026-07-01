@@ -6,7 +6,7 @@ from conftest import login_owner, onboard_studio
 
 from hestia.booking import create_booking_type
 from hestia.contracts import create_contract, send_contract
-from hestia.crm import create_client, create_project
+from hestia.crm import assign_gallery_to_project, create_client, create_project
 from hestia.dashboard import (
     hot_leads,
     money_snapshot,
@@ -197,6 +197,36 @@ def test_dashboard_page_shows_lead_intelligence(client, app):
     assert "Mini-session buyer" in page.text
     assert "Hot lead" in page.text
     assert "Collect retainer" in page.text
+
+
+def test_dashboard_page_shows_gallery_sales_queue(client, app):
+    creds = onboard_studio(client, name="Sales Queue Studio", email="salesq@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        t = dict(conn.execute("SELECT * FROM tenants LIMIT 1").fetchone())
+        buyer = create_client(conn, tenant_id=t["id"], name="Gallery Buyer", email="buyer@example.com")
+        project = create_project(conn, tenant_id=t["id"], name="Delivered wedding", client_id=buyer["id"],
+                                 shoot_type="wedding", status="delivered")
+        gallery = create_gallery(conn, tenant_id=t["id"], title="Delivered Gallery")
+        conn.commit()
+        assign_gallery_to_project(conn, t["id"], gallery["id"], project["id"])
+        img = add_image(conn, app.state.storage, tenant_id=t["id"], gallery_id=gallery["id"],
+                        filename="a.jpg", fileobj=BytesIO(b"jpg"), content_type="image/jpeg")
+        publish_gallery(conn, t["id"], gallery["id"])
+        enable_delivery(conn, t["id"], gallery["id"])
+        create_or_update_offer(conn, tenant=t, gallery=gallery, run_id=None,
+                               vision_summary={"hero_image_ids": [img["id"]], "keeper_count": 1},
+                               flags=flags_for(t["shoot_type"]))
+        conn.commit()
+    finally:
+        conn.close()
+
+    page = client.get("/dashboard")
+    assert page.status_code == 200
+    assert "Gallery sales" in page.text
+    assert "Delivered Gallery" in page.text
+    assert "Launch 15% sale" in page.text
 
 
 def test_dashboard_all_clear_for_fresh_studio(client):

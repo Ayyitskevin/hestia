@@ -16,6 +16,7 @@ from ..auth import (
 )
 from ..billing import plan_status
 from ..booking import list_booking_types
+from ..campaigns import gallery_sales_opportunities
 from ..crm import list_clients, list_projects
 from ..dashboard import (
     hot_leads,
@@ -516,6 +517,7 @@ def dashboard(request: Request):
         snapshot = money_snapshot(conn, tenant["id"])
         proposal_stats = proposal_metrics(conn, tenant["id"])
         lead_intelligence = hot_leads(conn, tenant["id"])
+        gallery_sales = gallery_sales_opportunities(conn, tenant["id"], ready_only=True)
         setup = setup_checklist(conn, tenant["id"], published=profile["published"])
         subscription = get_subscription(conn, tenant["id"])
         trial = trial_cockpit(tenant, subscription, settings_of(request), setup)
@@ -524,7 +526,7 @@ def dashboard(request: Request):
                   galleries=galleries, runs=runs, plan=plan, counts=counts, profile=profile,
                   attention=attention, snapshot=snapshot, setup=setup, trial=trial,
                   reconnect=reconnect, proposal_stats=proposal_stats,
-                  lead_intelligence=lead_intelligence)
+                  lead_intelligence=lead_intelligence, gallery_sales=gallery_sales)
 
 
 @router.post("/dashboard/digest")

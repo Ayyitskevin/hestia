@@ -8,7 +8,12 @@ from fastapi.responses import RedirectResponse, Response
 from .. import messaging
 from ..albums import get_album_for_gallery
 from ..auth import context_from_session
-from ..campaigns import create_campaign, end_campaign, get_active_campaign
+from ..campaigns import (
+    end_campaign,
+    gallery_sales_opportunity,
+    get_active_campaign,
+    launch_gallery_sales_campaign,
+)
 from ..crm import assign_gallery_to_project, get_client, get_project, list_projects
 from ..db import audit
 from ..delivery import delivery_url, enable_delivery, regenerate_delivery_token, set_delivery_expiry
@@ -115,6 +120,7 @@ def gallery_detail(request: Request, gallery_id: int):
         favorites = favorite_image_ids(conn, gallery_id, tenant_id=auth.tenant["id"])
         comments = comments_for_gallery(conn, auth.tenant["id"], gallery_id)
         campaign = get_active_campaign(conn, gallery_id, tenant_id=auth.tenant["id"])
+        sales_opportunity = gallery_sales_opportunity(conn, auth.tenant["id"], gallery_id)
         orders = list_orders(conn, auth.tenant["id"], gallery_id=gallery_id)
         fulfillments = list_fulfillments(conn, auth.tenant["id"],
                                          order_ids=[o["id"] for o in orders])
@@ -136,8 +142,8 @@ def gallery_detail(request: Request, gallery_id: int):
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
                   storage=storage_of(request), flags=flags, project=project, album=album,
                   product_set=product_set, favorites=favorites, comments=comments, campaign=campaign,
-                  orders=orders, fulfillments=fulfillments, cull=cull, cull_pending=cull_pending,
-                  hidden_count=hidden_count, analysis=analysis, hero_ids=hero_ids,
+                  sales_opportunity=sales_opportunity, orders=orders, fulfillments=fulfillments,
+                  cull=cull, cull_pending=cull_pending, hidden_count=hidden_count, analysis=analysis, hero_ids=hero_ids,
                   flagged_pending=flagged_pending,
                   cover_id=gallery.get("cover_image_id"), delivery_link=delivery_link)
 
@@ -232,20 +238,16 @@ def gallery_campaign_launch(request: Request, gallery_id: int, headline: str = F
             span = int(days)
         except (ValueError, TypeError):
             span = 7
-        create_campaign(conn, tenant_id=auth.tenant["id"], gallery_id=gallery_id,
-                        headline=headline, discount_pct=pct, days=span)
-        # Send the sale to the client (the campaign's automated "send").
-        offer = get_offer_for_gallery(conn, auth.tenant["id"], gallery_id)
-        project = get_project(conn, auth.tenant["id"], gallery["project_id"]) if gallery.get("project_id") else None
-        client = get_client(conn, auth.tenant["id"], project["client_id"]) if project and project.get("client_id") else None
-        if offer and client and client.get("email"):
-            url = offer_public_url(settings, auth.tenant["slug"], offer["token"])
-            studio = auth.tenant.get("name", "your photographer")
-            ctx = {"client": client["name"], "studio": studio, "discount": max(0, pct),
-                   "headline": headline or "A limited-time sale", "offer_url": url}
-            msg = messaging.render(conn, auth.tenant["id"], "print_offer", ctx)
-            notify(conn, settings, to=client["email"], tenant_id=auth.tenant["id"],
-                   subject=msg["subject"], body=msg["body"])
+        launch_gallery_sales_campaign(
+            conn,
+            settings,
+            tenant=auth.tenant,
+            gallery_id=gallery_id,
+            headline=headline,
+            discount_pct=pct,
+            days=span,
+            source="manual",
+        )
         conn.commit()
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 

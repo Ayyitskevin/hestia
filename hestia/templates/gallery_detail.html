@@ -67,9 +67,16 @@
   {% else %}
     <p class="muted">Launch a limited-time sale — the offer page shows the deadline and discounted
       prices, and (if the gallery has a client on file) Hestia emails them the offer.</p>
+    {% if sales_opportunity %}
+    <p class="muted">
+      Sales automation:
+      <span class="pill {{ 'on' if sales_opportunity.status == 'ready' else 'off' }}">{{ sales_opportunity.status_label }}</span>
+      {{ sales_opportunity.reason_line }} · {{ sales_opportunity.next_action }}
+    </p>
+    {% endif %}
     <form method="post" action="/galleries/{{ gallery.id }}/campaign" class="inline-grid-form">
       {% include "_csrf.html" %}
-      <div><label>Headline</label><input type="text" name="headline" placeholder="Holiday print sale"></div>
+      <div><label>Headline</label><input type="text" name="headline" value="Your gallery print sale"></div>
       <div><label>% off</label><input type="text" name="discount_pct" value="15" style="width:70px"></div>
       <div><label>Days</label><input type="text" name="days" value="7" style="width:70px"></div>
       <button class="btn" type="submit">Launch sale</button>
