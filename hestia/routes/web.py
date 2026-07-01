@@ -79,6 +79,21 @@ def _session_redirect(settings, token: str, target: str) -> RedirectResponse:
     return resp
 
 
+@router.get("/robots.txt")
+def robots(request: Request):
+    """Crawl policy: the marketing site, studio pages, and booking/drop pages are
+    indexable; every token-gated client surface (portals, galleries, delivery, pay,
+    sign, album review, offers, questionnaires, invites, auth links) is disallowed —
+    belt and braces on top of the per-page noindex meta, so a leaked private link
+    never ends up in a search index."""
+    from fastapi.responses import PlainTextResponse
+
+    private = ["/portal/", "/d/", "/pay/", "/a/", "/sign/", "/g/", "/s/", "/book/",
+               "/q/", "/t/", "/invite/", "/verify/", "/reset/", "/calendar/", "/media/"]
+    lines = ["User-agent: *"] + [f"Disallow: {p}" for p in private] + ["Allow: /", ""]
+    return PlainTextResponse("\n".join(lines))
+
+
 @router.get("/")
 def landing(request: Request):
     settings = settings_of(request)
