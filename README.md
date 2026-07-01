@@ -93,6 +93,7 @@ Hestia is ready for a simple solo-founder hosted launch:
 - Stripe subscriptions locked to the flat $40/month plan
 - Operator trial conversion cockpit for activation and churn-risk signals
 - First-party signup attribution from the public demo and pricing pages
+- Shareable public beta landing page for the $40/month hosted offer
 - Public beta interest capture with private invite links and interest-to-trial conversion tracking
 - Beta revenue pipeline from interest to paid $40/month account
 - Founder weekly launch digest for pipeline, stalled studios, beta interest, and paid MRR
@@ -182,7 +183,8 @@ Useful URLs:
 - `/` landing
 - `/demo` public buyer tour for wedding, food & beverage, and real-estate workflows
 - `/pricing` flat $40/month value stack and trial conversion page
-- `/interest` public beta access form with first-party attribution
+- `/beta` shareable public beta landing page with first-party attribution and embedded access request
+- `/interest` compatibility beta access form for existing links
 - `/invite/{token}` private beta invite signup path for approved interest leads
 - `/signup` hosted signup when `HESTIA_SIGNUP_ENABLED=true`
 - `/login` owner login
@@ -236,7 +238,7 @@ bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke
 bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
 
-The test suite covers tenant isolation, hosted routing, public demo and pricing
+The test suite covers tenant isolation, hosted routing, public demo, beta landing, and pricing
 pages, first-party signup attribution, private beta invites, beta launch kit, flat-plan billing, signup,
 onboarding presets, beta revenue pipeline, founder weekly launch digest, trial conversion analytics, custom domains, proposal accept
 flows, offer idempotency, public tokens, payments, client portal flows, and safe
@@ -331,7 +333,7 @@ Near-term product work:
 - Deepen the live vision backend for culling, duplicate detection, blink detection,
   and studio style profiles.
 - Add operator backup/restore runbooks for SQLite volumes and media storage.
-- Deepen the public demo into short hosted walkthrough videos once the first
+- Deepen the public beta and demo pages into short hosted walkthrough videos once the first
   studios have shipped real workflows.
 
 ## License

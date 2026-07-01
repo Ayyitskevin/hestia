@@ -65,6 +65,8 @@ def test_beta_launch_kit_builds_invite_links_and_followup_queue(conn, settings):
     ]
     assert kit["operating_checklist"][0]["rank"] == 1
     assert kit["operating_checklist"][0]["href"] == "/admin/launch"
+    assert any(link["url"] == "https://hestia.example/beta?source=beta&path=/beta"
+               for link in kit["invite_links"])
     assert any(link["url"] == "https://hestia.example/signup?source=pricing&path=/pricing"
                for link in kit["invite_links"])
     assert any(item["label"] == "Start first hosted trial" and item["complete"]

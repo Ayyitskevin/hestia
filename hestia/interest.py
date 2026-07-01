@@ -278,6 +278,7 @@ def _label(field: str, value: str) -> str:
         "landing": "Landing",
         "pricing": "Pricing",
         "demo": "Demo",
+        "beta": "Beta page",
         "interest": "Beta interest",
         "": "Direct / unknown",
     }.get(raw, raw.title() if raw else "Direct / unknown")

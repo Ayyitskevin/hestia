@@ -23,7 +23,7 @@ from .features import flags_for, normalize_shoot_type
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _SIGNUP_SOURCE_RE = re.compile(r"[^a-z0-9_-]+")
-_SIGNUP_SOURCES = {"landing", "pricing", "demo", "interest"}
+_SIGNUP_SOURCES = {"landing", "pricing", "demo", "beta", "interest"}
 _SIGNUP_PATHS = {
     "/",
     "/pricing",
@@ -31,6 +31,7 @@ _SIGNUP_PATHS = {
     "/demo/wedding",
     "/demo/food",
     "/demo/real-estate",
+    "/beta",
     "/interest",
 }
 
@@ -64,6 +65,8 @@ def _source_from_path(path: str) -> str:
         return "demo"
     if path == "/":
         return "landing"
+    if path == "/beta":
+        return "beta"
     if path == "/interest":
         return "interest"
     return ""

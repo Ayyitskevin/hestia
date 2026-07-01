@@ -123,16 +123,13 @@ def pricing(request: Request):
 @router.get("/interest")
 def interest_form(request: Request, source: str = "", path: str = ""):
     attribution = signup_attribution(source, path)
-    return render(
-        request,
-        "interest.html",
-        auth=None,
-        sent=False,
-        error=None,
-        interest=None,
-        signup_source=attribution["source"],
-        signup_landing_path=attribution["landing_path"],
-    )
+    return _interest_page(request, "interest.html", attribution=attribution)
+
+
+@router.get("/beta")
+def beta_landing(request: Request, source: str = "beta", path: str = "/beta"):
+    attribution = signup_attribution(source or "beta", path or "/beta")
+    return _interest_page(request, "beta.html", attribution=attribution)
 
 
 @router.post("/interest")
@@ -146,21 +143,79 @@ def interest_submit(
     signup_source: str = Form(""),
     signup_landing_path: str = Form(""),
 ):
+    return _interest_submit(
+        request,
+        "interest.html",
+        name=name,
+        studio_name=studio_name,
+        email=email,
+        shoot_type=shoot_type,
+        note=note,
+        signup_source=signup_source,
+        signup_landing_path=signup_landing_path,
+    )
+
+
+@router.post("/beta")
+def beta_submit(
+    request: Request,
+    name: str = Form(""),
+    studio_name: str = Form(""),
+    email: str = Form(...),
+    shoot_type: str = Form("other"),
+    note: str = Form(""),
+    signup_source: str = Form("beta"),
+    signup_landing_path: str = Form("/beta"),
+):
+    return _interest_submit(
+        request,
+        "beta.html",
+        name=name,
+        studio_name=studio_name,
+        email=email,
+        shoot_type=shoot_type,
+        note=note,
+        signup_source=signup_source,
+        signup_landing_path=signup_landing_path,
+    )
+
+
+def _interest_page(
+    request: Request,
+    template: str,
+    *,
+    attribution: dict,
+    sent: bool = False,
+    error: str | None = None,
+    interest: dict | None = None,
+):
+    return render(
+        request,
+        template,
+        auth=None,
+        sent=sent,
+        error=error,
+        interest=interest,
+        signup_source=attribution["source"],
+        signup_landing_path=attribution["landing_path"],
+    )
+
+
+def _interest_submit(
+    request: Request,
+    template: str,
+    *,
+    name: str,
+    studio_name: str,
+    email: str,
+    shoot_type: str,
+    note: str,
+    signup_source: str,
+    signup_landing_path: str,
+):
     enforce(request, "interest")
     settings = settings_of(request)
     attribution = signup_attribution(signup_source, signup_landing_path)
-
-    def _again(error: str):
-        return render(
-            request,
-            "interest.html",
-            auth=None,
-            sent=False,
-            error=error,
-            interest=None,
-            signup_source=attribution["source"],
-            signup_landing_path=attribution["landing_path"],
-        )
 
     with db_conn(request) as conn:
         try:
@@ -176,17 +231,8 @@ def interest_submit(
                 landing_path=attribution["landing_path"],
             )
         except ValueError as exc:
-            return _again(str(exc))
-    return render(
-        request,
-        "interest.html",
-        auth=None,
-        sent=True,
-        error=None,
-        interest=interest,
-        signup_source=attribution["source"],
-        signup_landing_path=attribution["landing_path"],
-    )
+            return _interest_page(request, template, attribution=attribution, error=str(exc))
+    return _interest_page(request, template, attribution=attribution, sent=True, interest=interest)
 
 
 @router.get("/invite/{token}")

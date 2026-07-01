@@ -660,20 +660,21 @@ def _parse_time(value: str | None) -> datetime | None:
 def _invite_links(settings: Settings) -> list[dict]:
     base = settings.public_url.rstrip("/") or "http://127.0.0.1:8500"
     links = [
-        ("Pricing page", "pricing", "/pricing"),
-        ("Wedding demo", "demo", "/demo/wedding"),
-        ("Food & beverage demo", "demo", "/demo/food"),
-        ("Real-estate demo", "demo", "/demo/real-estate"),
-        ("Direct landing", "landing", "/"),
+        ("Beta landing", "beta", "/beta", "/beta"),
+        ("Pricing page", "pricing", "/pricing", "/signup"),
+        ("Wedding demo", "demo", "/demo/wedding", "/signup"),
+        ("Food & beverage demo", "demo", "/demo/food", "/signup"),
+        ("Real-estate demo", "demo", "/demo/real-estate", "/signup"),
+        ("Direct landing", "landing", "/", "/signup"),
     ]
     return [
         {
             "label": label,
             "source": source,
             "path": path,
-            "url": f"{base}/signup?source={source}&path={path}",
+            "url": f"{base}{target}?source={source}&path={path}",
         }
-        for label, source, path in links
+        for label, source, path, target in links
     ]
 
 

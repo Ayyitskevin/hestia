@@ -221,6 +221,7 @@ def _source_label(source: str | None) -> str:
         "landing": "Landing",
         "pricing": "Pricing",
         "demo": "Demo",
+        "beta": "Beta page",
         "interest": "Beta interest",
     }
     return labels.get((source or "").strip().lower(), "Direct / unknown")

@@ -106,7 +106,7 @@ label.check input { width: auto; margin-top: 3px; flex: none; }
 .qa-prompt { font-weight: 600; margin: 0 0 4px; color: var(--ink-soft); }
 .qa-answer { white-space: pre-wrap; word-break: break-word; margin: 0; color: var(--ink); }
 .hint { color: var(--muted); font-size: .85rem; margin-top: 4px; }
-.form-actions { margin-top: 22px; display: flex; gap: 12px; align-items: center; }
+.form-actions { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 
 /* Tables */
 table { width: 100%; border-collapse: collapse; }

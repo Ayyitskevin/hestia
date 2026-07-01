@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Hestia beta - $40/month photography studio OS{% endblock %}
+{% block content %}
+{% if sent %}
+<section class="pricing-hero">
+  <div>
+    <div class="eyebrow">Beta access requested</div>
+    <h1>You're on the Hestia beta list.</h1>
+    <p class="lead">
+      Kevin will follow up when the next hosted studio spot is ready. The beta is
+      opening in small batches so every photographer gets a clean launch.
+    </p>
+    <div class="form-actions">
+      <a class="btn" href="/demo">View demo tour</a>
+      <a class="btn secondary" href="/pricing">Review the $40/month plan</a>
+    </div>
+  </div>
+  <aside class="price-card">
+    <div class="eyebrow">What happens next</div>
+    <h2>Private invite, then 14 days free.</h2>
+    <p>Approved beta studios get a private invite link, apply a niche preset, and test the complete client-to-cash workflow before the flat plan starts.</p>
+    <ul>
+      <li>Wedding, food &amp; beverage, and real-estate presets</li>
+      <li>Booking, contracts, galleries, invoices, AI offers, and follow-up</li>
+      <li>Exactly $40/month after trial, no tiers</li>
+    </ul>
+  </aside>
+</section>
+{% else %}
+<section class="pricing-hero">
+  <div>
+    <div class="eyebrow">Founder beta for photographers</div>
+    <h1>Run the whole photography studio for $40/month.</h1>
+    <p class="lead">
+      Hestia is a hosted command center for growing studios: inquiries, booking,
+      contracts, AI-assisted galleries, payments, and retention in one maintained home.
+    </p>
+    <div class="loop-line">
+      <strong>Inquiry</strong> <span class="arrow">-&gt;</span>
+      <strong>Booked</strong> <span class="arrow">-&gt;</span>
+      <strong>Gallery</strong> <span class="arrow">-&gt;</span>
+      <strong>Paid</strong> <span class="arrow">-&gt;</span>
+      <strong>Repeat</strong>
+    </div>
+    <div class="form-actions">
+      <a class="btn" href="#join">Request beta access</a>
+      <a class="btn secondary" href="/demo">View demo tour</a>
+      <a class="btn ghost" href="/pricing">See pricing</a>
+    </div>
+    <p class="muted">$40/month after a 14-day free trial. No setup fee, no upgrade maze, cancel anytime.</p>
+  </div>
+  <aside class="demo-visual" aria-label="Hestia workflow preview">
+    <div class="demo-photo-grid" aria-hidden="true">
+      <span class="demo-photo main"></span>
+      <span class="demo-photo warm"></span>
+      <span class="demo-photo cool"></span>
+    </div>
+    <div class="demo-panel">
+      <span>Hestia command center</span>
+      <strong>Lead -&gt; booked -&gt; delivered -&gt; paid</strong>
+      <small>Preset workflows for weddings, food &amp; beverage, and real estate.</small>
+    </div>
+  </aside>
+</section>
+
+<section class="pricing-band">
+  <div>
+    <div class="eyebrow">Why it feels underpriced</div>
+    <h2>One hosted system replaces the scattered studio stack.</h2>
+  </div>
+  <p class="muted">
+    Hestia keeps the revenue loop in one place so a photographer is not paying for
+    separate booking, CRM, contract, gallery, invoice, AI helper, and follow-up tools.
+  </p>
+</section>
+
+<section class="value-grid" aria-label="Hestia beta value stack">
+  <article>
+    <span>01</span>
+    <h3>Capture and book</h3>
+    <p>Public studio links, inquiries, booking types, packages, proposals, contracts, deposits, and intake forms.</p>
+  </article>
+  <article>
+    <span>02</span>
+    <h3>Deliver the gallery</h3>
+    <p>Client galleries, favorites, proofing comments, delivery links, activity history, and client portal access.</p>
+  </article>
+  <article>
+    <span>03</span>
+    <h3>Grow the order</h3>
+    <p>AI culling signals, hero picks, print and album offers, invoices, Stripe checkout, and payment plans.</p>
+  </article>
+  <article>
+    <span>04</span>
+    <h3>Keep clients warm</h3>
+    <p>Owner digest, proposal nudges, review asks, reconnect prompts, and retention automation in one dashboard.</p>
+  </article>
+</section>
+
+<section class="demo-proof">
+  <div>
+    <div class="eyebrow">Niche presets included</div>
+    <h2>Start from the workflow photographers already recognize.</h2>
+  </div>
+  <ul>
+    <li><strong>Wedding:</strong> inquiry to proposal, contract, timeline, gallery, album, and anniversary follow-up.</li>
+    <li><strong>Food &amp; beverage:</strong> brand/content inquiry, shoot packet, selects, delivery, licensing invoice, and reorder prompts.</li>
+    <li><strong>Real estate:</strong> listing intake, appointment, delivery, invoice, brokerage follow-up, and repeat-agent reminders.</li>
+  </ul>
+</section>
+
+<section id="join" class="pricing-hero">
+  <div>
+    <div class="eyebrow">Beta access</div>
+    <h2>Join the next hosted cohort.</h2>
+    <p class="muted">
+      Share what you want Hestia to replace first. Strong fits are solo and small
+      studios that want one command center instead of a subscription pile.
+    </p>
+  </div>
+  <form method="post" action="/beta" class="price-card stack">
+    {% include "_csrf.html" %}
+    <input type="hidden" name="signup_source" value="{{ signup_source or '' }}">
+    <input type="hidden" name="signup_landing_path" value="{{ signup_landing_path or '' }}">
+
+    {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+
+    <label for="name">Your name</label>
+    <input type="text" id="name" name="name" placeholder="Kevin Lee">
+
+    <label for="studio_name">Studio name</label>
+    <input type="text" id="studio_name" name="studio_name" placeholder="Kevin Lee Photography">
+
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" required autofocus>
+
+    <label for="shoot_type">Primary niche</label>
+    <select id="shoot_type" name="shoot_type">
+      {% for st in shoot_types %}<option value="{{ st }}">{{ shoot_type_labels.get(st, st) }}</option>{% endfor %}
+    </select>
+
+    <label for="note">What should Hestia replace first?</label>
+    <textarea id="note" name="note" rows="4" placeholder="Booking, contracts, galleries, invoices, AI culling, client follow-up..."></textarea>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Request beta access</button>
+      <a class="btn ghost" href="/demo">Preview workflow</a>
+    </div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
