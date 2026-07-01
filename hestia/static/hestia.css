@@ -180,6 +180,145 @@ th { color: var(--muted); font-weight: 600; font-size: .82rem; text-transform: u
 }
 .loop-line .arrow { color: var(--muted); }
 
+/* Public demo tour */
+.demo-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr);
+  gap: 34px;
+  align-items: center;
+  padding: 52px 0 30px;
+}
+.demo-hero h1 { font-size: 2.65rem; margin: 0 0 14px; }
+.demo-hero p.lead { color: var(--ink-soft); font-size: 1.16rem; max-width: 620px; }
+.demo-visual {
+  min-height: 360px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, #fffdf9 0%, #f6ecdd 100%);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  position: relative;
+  overflow: hidden;
+}
+.demo-visual::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(224, 164, 88, .18), transparent 42%),
+    repeating-linear-gradient(90deg, rgba(43, 38, 34, .04) 0 1px, transparent 1px 34px);
+}
+.demo-photo-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1.25fr .75fr;
+  grid-template-rows: 158px 118px;
+  gap: 10px;
+}
+.demo-photo {
+  border-radius: 8px;
+  border: 1px solid rgba(43, 38, 34, .12);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.08), rgba(0,0,0,.06)),
+    linear-gradient(135deg, #8f4e32, #e0a458 54%, #faf6f0);
+  box-shadow: 0 12px 30px rgba(43, 38, 34, .14);
+}
+.demo-photo.main { grid-row: span 2; }
+.demo-photo.warm { background: linear-gradient(135deg, #3f593f, #e7f0e5 58%, #c0552f); }
+.demo-photo.cool { background: linear-gradient(135deg, #62564a, #f3ead8 58%, #4f7a52); }
+.demo-panel {
+  position: absolute;
+  z-index: 2;
+  left: 28px;
+  right: 28px;
+  bottom: 24px;
+  background: rgba(255, 253, 249, .94);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+.demo-panel span, .demo-panel small { display: block; color: var(--muted); }
+.demo-panel strong { display: block; font-size: 1.08rem; margin: 3px 0; }
+.demo-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0 28px;
+}
+.demo-tabs a {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  background: var(--paper);
+  padding: 8px 14px;
+  font-weight: 600;
+}
+.demo-tabs a:hover, .demo-tabs a.on {
+  text-decoration: none;
+  border-color: var(--terracotta);
+  color: var(--terracotta-dark);
+  background: #fff7ec;
+}
+.demo-band, .demo-proof, .demo-cta {
+  margin-top: 28px;
+  padding: 28px 0;
+  border-top: 1px solid var(--line);
+}
+.demo-band {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(280px, 1.1fr);
+  gap: 28px;
+  align-items: start;
+}
+.demo-band h2, .demo-proof h2, .demo-cta h2 { margin: 4px 0 0; font-size: 1.65rem; }
+.demo-before {
+  margin: 0;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+}
+.demo-flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.demo-step {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 190px;
+}
+.demo-step span {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--cream);
+  border: 1px solid var(--line);
+  color: var(--terracotta-dark);
+  font-weight: 700;
+}
+.demo-step h3 { margin: 14px 0 6px; font-size: 1.12rem; }
+.demo-step p { margin: 0; color: var(--muted); font-size: .94rem; }
+.demo-proof {
+  display: grid;
+  grid-template-columns: minmax(0, .95fr) minmax(300px, 1.05fr);
+  gap: 26px;
+}
+.demo-proof ul { margin: 0; padding-left: 20px; color: var(--ink-soft); }
+.demo-proof li + li { margin-top: 10px; }
+.demo-cta {
+  margin-bottom: 16px;
+  background: linear-gradient(180deg, rgba(255, 253, 249, .65), rgba(243, 234, 216, .35));
+}
+
 /* Alerts */
 .alert { padding: 12px 16px; border-radius: 10px; margin-bottom: 18px; font-size: .94rem; border: 1px solid; }
 .alert.error { background: #fbeaea; border-color: #f0c9c9; color: #8c2f2f; }
@@ -307,6 +446,10 @@ body.client { background: var(--cream); }
   .page-title { flex-direction: column; align-items: flex-start; }
   .page-title h1 { font-size: 1.4rem; }
   .page-title > div { flex-wrap: wrap; }
+  .demo-hero, .demo-band, .demo-proof { grid-template-columns: 1fr; }
+  .demo-hero { padding-top: 34px; }
+  .demo-hero h1 { font-size: 2.15rem; }
+  .demo-visual { min-height: 320px; }
 
   /* Wide tables scroll horizontally rather than break the layout. Cells still
      wrap (no nowrap), so prose tables fit and only genuinely wide ones scroll. */

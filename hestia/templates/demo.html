@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ tour.label }} demo - Hestia{% endblock %}
+{% block content %}
+<section class="demo-hero demo-{{ tour.accent }}">
+  <div class="demo-copy">
+    <div class="eyebrow">Hestia Studio demo</div>
+    <h1>{{ tour.headline }}</h1>
+    <p class="lead">{{ tour.summary }}</p>
+    <div class="form-actions">
+      <a class="btn" href="/signup">Start 14-day free trial</a>
+      <a class="btn secondary" href="/login">Sign in</a>
+    </div>
+    <p class="muted">$40/month after trial. No tiers. Cancel anytime.</p>
+  </div>
+  <div class="demo-visual" aria-label="{{ tour.label }} workflow preview">
+    <div class="demo-photo-grid" aria-hidden="true">
+      <span class="demo-photo main"></span>
+      <span class="demo-photo warm"></span>
+      <span class="demo-photo cool"></span>
+    </div>
+    <div class="demo-panel">
+      <span>{{ tour.label }} workflow</span>
+      <strong>Inquiry -> booked -> gallery -> paid</strong>
+      <small>All inside one hosted studio command center.</small>
+    </div>
+  </div>
+</section>
+
+<nav class="demo-tabs" aria-label="Demo tours">
+  {% for demo in demos %}
+    <a class="{% if demo.key == tour.key %}on{% endif %}" href="/demo/{{ demo.key }}">{{ demo.label }}</a>
+  {% endfor %}
+</nav>
+
+<section class="demo-band">
+  <div>
+    <div class="eyebrow">What it replaces</div>
+    <h2>One $40/month workflow instead of stacked subscriptions.</h2>
+  </div>
+  <p class="demo-before">{{ tour.before }}</p>
+</section>
+
+<section class="demo-flow" aria-label="{{ tour.label }} studio workflow">
+  {% for step, detail in tour.workflow %}
+    <article class="demo-step">
+      <span>{{ loop.index }}</span>
+      <h3>{{ step }}</h3>
+      <p>{{ detail }}</p>
+    </article>
+  {% endfor %}
+</section>
+
+<section class="demo-proof">
+  <div>
+    <div class="eyebrow">Why studios stay</div>
+    <h2>Retention comes from keeping client work, money, and follow-up together.</h2>
+  </div>
+  <ul>
+    {% for item in tour.proof %}
+      <li>{{ item }}</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="demo-cta">
+  <h2>Launch a professional studio OS in minutes.</h2>
+  <p class="muted">Pick a niche preset, open the trial cockpit, and start running inquiry to revenue from one place.</p>
+  <div class="form-actions">
+    <a class="btn" href="/signup">Start 14-day free trial</a>
+    <a class="btn ghost" href="/">Back to overview</a>
+  </div>
+</section>
+{% endblock %}

@@ -15,11 +15,12 @@
     <strong>Print &amp; album offer</strong> <span class="arrow">→</span>
     <strong>Client buys</strong>
   </div>
-  <p style="margin-top:28px">
+  <p style="margin-top:28px" class="form-actions">
     {% if auth and auth.tenant %}
       <a class="btn" href="/dashboard">Go to your dashboard →</a>
     {% else %}
-      <a class="btn" href="/login">Sign in to your studio →</a>
+      <a class="btn" href="/signup">Start 14-day trial →</a>
+      <a class="btn secondary" href="/demo">View demo tour</a>
     {% endif %}
   </p>
 </section>

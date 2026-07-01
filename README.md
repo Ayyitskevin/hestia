@@ -176,6 +176,7 @@ bash scripts/start-hestia.sh
 Useful URLs:
 
 - `/` landing
+- `/demo` public buyer tour for wedding, food & beverage, and real-estate workflows
 - `/signup` hosted signup when `HESTIA_SIGNUP_ENABLED=true`
 - `/login` owner login
 - `/dashboard` studio command center
@@ -227,10 +228,10 @@ bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke
 bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
 
-The test suite covers tenant isolation, hosted routing, flat-plan billing, signup,
-onboarding presets, trial conversion analytics, custom domains, proposal accept
-flows, offer idempotency, public tokens, payments, client portal flows, and safe
-mock-provider operation.
+The test suite covers tenant isolation, hosted routing, public demo tours,
+flat-plan billing, signup, onboarding presets, trial conversion analytics, custom
+domains, proposal accept flows, offer idempotency, public tokens, payments,
+client portal flows, and safe mock-provider operation.
 
 `scripts/hosted-preflight.sh` reads the same `.env`/environment values as the app
 and fails on hosted blockers: default secrets, non-HTTPS public URL, missing hosted
@@ -320,7 +321,8 @@ Near-term product work:
 - Deepen the live vision backend for culling, duplicate detection, blink detection,
   and studio style profiles.
 - Add operator backup/restore runbooks for SQLite volumes and media storage.
-- Build a polished public marketing site from this README copy.
+- Deepen the public demo into short hosted walkthrough videos once the first
+  studios have shipped real workflows.
 
 ## License
 

@@ -26,6 +26,7 @@ from ..dashboard import (
     trial_cockpit,
 )
 from ..db import audit
+from ..demo import demo_nav, demo_tour
 from ..email import notify
 from ..galleries import list_galleries
 from ..hosted import tenant_from_custom_domain, tenant_slug_from_request
@@ -93,6 +94,16 @@ def landing(request: Request):
                           packages=packages, has_booking=has_booking)
         auth = context_from_session(conn, request)
     return render(request, "landing.html", auth=auth)
+
+
+@router.get("/demo")
+def demo(request: Request, niche: str = "wedding"):
+    return render(request, "demo.html", auth=None, tour=demo_tour(niche), demos=demo_nav())
+
+
+@router.get("/demo/{niche}")
+def demo_niche(request: Request, niche: str):
+    return render(request, "demo.html", auth=None, tour=demo_tour(niche), demos=demo_nav())
 
 
 @router.get("/login")
