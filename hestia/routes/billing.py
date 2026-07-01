@@ -168,6 +168,10 @@ def cancel(request: Request):
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
+        # Nothing to cancel on the free plan — a no-op keeps repeat POSTs from writing
+        # junk 'canceled' subscription rows and audit noise.
+        if get_tenant(conn, auth.tenant["id"])["plan"] == "beta":
+            return RedirectResponse("/settings/billing", status_code=303)
         # Downgrade to the free Beta plan. (Stripe cancellation also arrives via webhook.)
         apply_plan(conn, auth.tenant["id"], plan="beta", status="canceled",
                    provider=build_subscriptions(settings).backend)
