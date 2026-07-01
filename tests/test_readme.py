@@ -18,6 +18,7 @@ def test_readme_positions_hestia_as_flat_price_hosted_microsaas():
         "first-party signup attribution",
         "/admin/launch",
         "CSV export",
+        "trial nudges",
         "docker compose up --build -d",
         "scripts/hosted-preflight.sh",
         "Hosted Launch Checklist",

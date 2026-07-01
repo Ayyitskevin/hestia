@@ -67,7 +67,36 @@ def test_admin_launch_page_renders_invites_and_followups(settings, conn):
     assert "Follow up today" in page.text
     assert 'href="/admin/launch/export.csv"' in page.text
     assert "Launch Admin" in page.text
+    assert "Send nudge" in page.text
     assert 'href="/admin/launch"' in admin.get("/admin/tenants").text
+
+
+def test_admin_launch_nudge_sends_email_and_records_audit(settings, conn):
+    tenant = create_tenant(conn, name="Nudge Studio", shoot_type="wedding",
+                           signup_source="demo", signup_landing_path="/demo/wedding")
+    _owner(conn, tenant["id"], "nudge@example.com", verified=0)
+    conn.commit()
+
+    app = create_app(settings)
+    admin = CSRFClient(app)
+    admin.post("/admin/login", data={"token": ADMIN_TOKEN})
+    response = admin.post(f"/admin/launch/{tenant['id']}/nudge", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/admin/launch?nudged=1"
+    email = conn.execute(
+        "SELECT * FROM emails WHERE tenant_id = ? AND to_addr = ?",
+        (tenant["id"], "nudge@example.com"),
+    ).fetchone()
+    assert email["subject"] == "Next Hestia step for Nudge Studio"
+    assert "Can I help you verify your owner email" in email["body"]
+    audit = conn.execute(
+        "SELECT action, detail FROM audit_log WHERE tenant_id = ?",
+        (tenant["id"],),
+    ).fetchone()
+    assert audit["action"] == "launch.nudge_sent"
+    assert audit["detail"] == "nudge@example.com"
+    assert "Nudge recorded" in admin.get("/admin/launch?nudged=1").text
 
 
 def test_admin_launch_export_csv_is_auth_gated_and_spreadsheet_safe(settings, conn):

@@ -28,7 +28,7 @@ from ..db import applied_migrations, audit
 from ..domains import custom_domain_summary, set_custom_domain_status
 from ..integrity import tenant_integrity_overview
 from ..jobs import failed_jobs, queue_stats, requeue_job, stale_jobs
-from ..launch import beta_launch_export_rows, beta_launch_kit
+from ..launch import beta_launch_export_rows, beta_launch_kit, send_beta_launch_nudge
 from ..ratelimit import enforce
 from ..tenants import (
     create_tenant,
@@ -150,14 +150,14 @@ def trials(request: Request):
 
 
 @router.get("/launch")
-def launch(request: Request):
+def launch(request: Request, nudged: str = ""):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = _admin_ctx(request, conn)
         if not auth:
             return _redirect_login()
         kit = beta_launch_kit(conn, settings)
-    return render(request, "admin/launch.html", auth=auth, kit=kit)
+    return render(request, "admin/launch.html", auth=auth, kit=kit, nudged=bool(nudged))
 
 
 @router.get("/launch/export.csv")
@@ -169,6 +169,25 @@ def launch_export(request: Request):
             return _redirect_login()
         rows = beta_launch_export_rows(conn, settings)
     return _csv_response("hestia-beta-launch.csv", rows)
+
+
+@router.post("/launch/{tenant_id}/nudge")
+def launch_nudge(request: Request, tenant_id: str):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _admin_ctx(request, conn)
+        if not auth:
+            return _redirect_login()
+        result = send_beta_launch_nudge(conn, settings, tenant_id)
+        if result:
+            audit(
+                conn,
+                actor="admin",
+                action="launch.nudge_sent",
+                tenant_id=tenant_id,
+                detail=result["owner_email"],
+            )
+    return RedirectResponse("/admin/launch?nudged=1", status_code=303)
 
 
 @router.get("/system")

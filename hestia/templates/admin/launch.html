@@ -12,6 +12,10 @@
   </div>
 </div>
 
+{% if nudged %}
+  <div class="alert ok">Nudge recorded through the Hestia email seam.</div>
+{% endif %}
+
 <div class="grid cols-4" style="margin-top:18px">
   <div class="card"><div class="label">Studios</div><div style="font-size:1.8rem;font-weight:800">{{ kit.summary.studios }}/{{ kit.target }}</div></div>
   <div class="card"><div class="label">Verified owners</div><div style="font-size:1.8rem;font-weight:800">{{ kit.summary.verified }}</div></div>
@@ -74,7 +78,11 @@
           </td>
           <td>
             {% if f.mailto %}
-              <a class="btn secondary" href="{{ f.mailto }}">Email owner</a>
+              <form method="post" action="/admin/launch/{{ f.tenant_id }}/nudge" style="display:inline">
+                {% include "_csrf.html" %}
+                <button class="btn" type="submit">Send nudge</button>
+              </form>
+              <a class="btn secondary" href="{{ f.mailto }}">Draft</a>
             {% else %}
               <span class="muted">Find contact first</span>
             {% endif %}

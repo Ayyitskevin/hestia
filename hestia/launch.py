@@ -6,7 +6,9 @@ import sqlite3
 from urllib.parse import quote
 
 from .config import Settings
-from .trial_conversion import trial_conversion_cockpit
+from .email import notify
+from .tenants import get_tenant
+from .trial_conversion import trial_conversion_cockpit, trial_conversion_for_tenant
 
 BETA_TARGET_STUDIOS = 5
 
@@ -69,6 +71,30 @@ def beta_launch_export_rows(conn: sqlite3.Connection, settings: Settings) -> lis
     return rows
 
 
+def send_beta_launch_nudge(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    tenant_id: str,
+) -> dict | None:
+    tenant = get_tenant(conn, tenant_id)
+    if not tenant:
+        return None
+    studio = trial_conversion_for_tenant(conn, tenant, settings)
+    followup = _followup(studio)
+    if not followup["owner_email"]:
+        return None
+    status = notify(
+        conn,
+        settings,
+        to=followup["owner_email"],
+        tenant_id=tenant_id,
+        signed=False,
+        subject=followup["email_subject"],
+        body=followup["email_body"],
+    )
+    return {**followup, "email_status": status}
+
+
 def _invite_links(settings: Settings) -> list[dict]:
     base = settings.public_url.rstrip("/") or "http://127.0.0.1:8500"
     links = [
@@ -118,6 +144,7 @@ def _followups(studios: list[dict], *, limit: int = 5) -> list[dict]:
 
 def _followup(studio: dict) -> dict:
     prompt = _prompt(studio)
+    subject = f"Next Hestia step for {studio['name']}"
     body = (
         f"Hi,\n\nI noticed {studio['name']} is at "
         f"{studio['activation_done']}/{studio['activation_total']} launch steps in Hestia. "
@@ -125,9 +152,9 @@ def _followup(studio: dict) -> dict:
     )
     mailto = ""
     if studio["owner_email"]:
-        subject = quote(f"Next Hestia step for {studio['name']}", safe="")
+        subject_q = quote(subject, safe="")
         body_q = quote(body, safe="")
-        mailto = f"mailto:{studio['owner_email']}?subject={subject}&body={body_q}"
+        mailto = f"mailto:{studio['owner_email']}?subject={subject_q}&body={body_q}"
     return {
         "tenant_id": studio["tenant_id"],
         "name": studio["name"],
@@ -140,6 +167,8 @@ def _followup(studio: dict) -> dict:
         "owner_path": studio["next_href"],
         "prompt": prompt,
         "mailto": mailto,
+        "email_subject": subject,
+        "email_body": body,
     }
 
 
