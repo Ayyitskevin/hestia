@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Request beta access - Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>Request beta access</h1>
+  {% if sent %}
+    <div class="alert ok">You're on the Hestia beta list. Kevin will follow up when a hosted studio spot is ready.</div>
+    <p class="muted">Want to preview the workflow now? <a href="/demo">View the demo tour</a> or <a href="/pricing">review the $40/month plan</a>.</p>
+  {% else %}
+    <p class="muted">Hestia is opening the hosted photography studio OS in small batches: 14-day trial, then $40/month. No tiers.</p>
+    {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+    <form method="post" action="/interest" class="stack">
+      {% include "_csrf.html" %}
+      <input type="hidden" name="signup_source" value="{{ signup_source or '' }}">
+      <input type="hidden" name="signup_landing_path" value="{{ signup_landing_path or '' }}">
+
+      <label for="name">Your name</label>
+      <input type="text" id="name" name="name" placeholder="Kevin Lee">
+
+      <label for="studio_name">Studio name</label>
+      <input type="text" id="studio_name" name="studio_name" placeholder="Kevin Lee Photography">
+
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required autofocus>
+
+      <label for="shoot_type">Primary niche</label>
+      <select id="shoot_type" name="shoot_type">
+        {% for st in shoot_types %}<option value="{{ st }}">{{ shoot_type_labels.get(st, st) }}</option>{% endfor %}
+      </select>
+
+      <label for="note">What do you want Hestia to replace?</label>
+      <textarea id="note" name="note" rows="4" placeholder="Booking, contracts, galleries, invoices, AI culling, client follow-up..."></textarea>
+
+      <div class="form-actions">
+        <button class="btn" type="submit">Request beta access</button>
+        <a class="btn secondary" href="/demo">View demo</a>
+        <a class="btn ghost" href="/pricing">Pricing</a>
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

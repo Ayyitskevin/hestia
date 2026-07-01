@@ -4,6 +4,7 @@ import dataclasses
 
 from conftest import ADMIN_TOKEN, CSRFClient
 
+from hestia.interest import record_beta_interest
 from hestia.launch import beta_launch_export_rows, beta_launch_kit
 from hestia.main import create_app
 from hestia.presets import apply_preset
@@ -158,6 +159,38 @@ def test_admin_launch_nudge_cools_down_duplicate_sends(settings, conn):
                if r["slug"] == "cooldown-studio")
     assert row["nudge_status"] == "Cooling down 3 days"
     assert row["last_nudged_at"]
+
+
+def test_admin_launch_surfaces_beta_interest_leads(settings, conn):
+    record_beta_interest(
+        conn,
+        settings,
+        name="Interest Owner",
+        studio_name="Interest Studio",
+        email="interest@example.com",
+        shoot_type="wedding",
+        note="Replacing HoneyBook and galleries.",
+        source="pricing",
+        landing_path="/pricing",
+    )
+    conn.commit()
+
+    kit = beta_launch_kit(conn, settings)
+    assert kit["interest"]["total"] == 1
+    assert kit["interest"]["recent"][0]["studio_name"] == "Interest Studio"
+    assert kit["interest"]["recent"][0]["source_label"] == "Pricing"
+    assert kit["operating_checklist"][0]["label"] == "Review beta interest leads"
+
+    app = create_app(settings)
+    admin = CSRFClient(app)
+    admin.post("/admin/login", data={"token": ADMIN_TOKEN})
+    page = admin.get("/admin/launch")
+
+    assert page.status_code == 200
+    assert "Beta interest" in page.text
+    assert "Interest Studio" in page.text
+    assert "interest@example.com" in page.text
+    assert "Replacing HoneyBook and galleries." in page.text
 
 
 def test_admin_launch_export_csv_is_auth_gated_and_spreadsheet_safe(settings, conn):

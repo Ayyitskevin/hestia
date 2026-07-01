@@ -102,6 +102,37 @@
   </div>
 </section>
 
+<section class="card stack" style="margin-top:18px">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">
+    <div>
+      <h3>Beta interest</h3>
+      <p class="muted">{{ kit.interest.total }} photographer{{ '' if kit.interest.total == 1 else 's' }} requested access · {{ kit.interest.last_7_days }} in the last 7 days.</p>
+    </div>
+    <a class="btn ghost" href="/interest">Open public form</a>
+  </div>
+  {% if kit.interest.recent %}
+    <table>
+      <thead><tr><th>Lead</th><th>Niche</th><th>Source</th><th>Updated</th></tr></thead>
+      <tbody>
+        {% for lead in kit.interest.recent %}
+          <tr>
+            <td>
+              <strong>{{ lead.studio_name or lead.name or lead.email }}</strong><br>
+              <span class="muted">{{ lead.email }}</span>
+              {% if lead.note %}<br><span class="muted">{{ lead.note }}</span>{% endif %}
+            </td>
+            <td>{{ lead.shoot_type_label }}</td>
+            <td><span class="pill">{{ lead.source_label }}</span> <span class="mono">{{ lead.landing_path }}</span></td>
+            <td class="muted">{{ lead.updated_at }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No beta interest yet. Share pricing and demo links to start the queue.</p>
+  {% endif %}
+</section>
+
 <section class="grid cols-2" style="margin-top:18px">
   <div class="card stack">
     <h3>5-studio beta checklist</h3>

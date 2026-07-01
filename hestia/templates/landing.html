@@ -19,7 +19,11 @@
     {% if auth and auth.tenant %}
       <a class="btn" href="/dashboard">Go to your dashboard →</a>
     {% else %}
-      <a class="btn" href="/signup?source=landing&amp;path=/">Start 14-day trial →</a>
+      {% if settings.signup_enabled %}
+        <a class="btn" href="/signup?source=landing&amp;path=/">Start 14-day trial →</a>
+      {% else %}
+        <a class="btn" href="/interest?source=landing&amp;path=/">Request beta access →</a>
+      {% endif %}
       <a class="btn secondary" href="/demo">View demo tour</a>
       <a class="btn ghost" href="/pricing">See pricing</a>
     {% endif %}

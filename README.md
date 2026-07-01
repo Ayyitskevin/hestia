@@ -179,13 +179,14 @@ Useful URLs:
 - `/` landing
 - `/demo` public buyer tour for wedding, food & beverage, and real-estate workflows
 - `/pricing` flat $40/month value stack and trial conversion page
+- `/interest` public beta access form with first-party attribution
 - `/signup` hosted signup when `HESTIA_SIGNUP_ENABLED=true`
 - `/login` owner login
 - `/dashboard` studio command center
 - `/settings/account` hosted account, URLs, custom domain, billing actions
 - `/settings/billing` flat plan billing page
 - `/admin` operator admin with `HESTIA_API_TOKEN`
-- `/admin/launch` beta launch kit with founder operating checklist, cohort summary, tagged invite links, CSV export, cooldown-safe trial nudges, and owner follow-up queue
+- `/admin/launch` beta launch kit with founder operating checklist, beta interest leads, cohort summary, tagged invite links, CSV export, cooldown-safe trial nudges, and owner follow-up queue
 - `/admin/trials` trial conversion cockpit for stalled and activated studios; tenant detail includes a beta conversion timeline
 - `/healthz` liveness
 - `/readyz` readiness

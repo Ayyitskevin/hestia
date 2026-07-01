@@ -30,6 +30,7 @@ from ..demo import demo_nav, demo_tour
 from ..email import notify
 from ..galleries import list_galleries
 from ..hosted import tenant_from_custom_domain, tenant_slug_from_request
+from ..interest import record_beta_interest
 from ..invoices import money
 from ..packages import list_packages
 from ..pipeline import list_runs
@@ -112,6 +113,75 @@ def pricing(request: Request):
     settings = settings_of(request)
     price = f"${settings.flat_price_cents // 100}/month"
     return render(request, "pricing.html", auth=None, price=price, trial_days=settings.trial_days)
+
+
+@router.get("/interest")
+def interest_form(request: Request, source: str = "", path: str = ""):
+    attribution = signup_attribution(source, path)
+    return render(
+        request,
+        "interest.html",
+        auth=None,
+        sent=False,
+        error=None,
+        interest=None,
+        signup_source=attribution["source"],
+        signup_landing_path=attribution["landing_path"],
+    )
+
+
+@router.post("/interest")
+def interest_submit(
+    request: Request,
+    name: str = Form(""),
+    studio_name: str = Form(""),
+    email: str = Form(...),
+    shoot_type: str = Form("other"),
+    note: str = Form(""),
+    signup_source: str = Form(""),
+    signup_landing_path: str = Form(""),
+):
+    enforce(request, "interest")
+    settings = settings_of(request)
+    attribution = signup_attribution(signup_source, signup_landing_path)
+
+    def _again(error: str):
+        return render(
+            request,
+            "interest.html",
+            auth=None,
+            sent=False,
+            error=error,
+            interest=None,
+            signup_source=attribution["source"],
+            signup_landing_path=attribution["landing_path"],
+        )
+
+    with db_conn(request) as conn:
+        try:
+            interest = record_beta_interest(
+                conn,
+                settings,
+                name=name,
+                studio_name=studio_name,
+                email=email,
+                shoot_type=shoot_type,
+                note=note,
+                source=attribution["source"],
+                landing_path=attribution["landing_path"],
+            )
+        except ValueError as exc:
+            return _again(str(exc))
+    return render(
+        request,
+        "interest.html",
+        auth=None,
+        sent=True,
+        error=None,
+        interest=interest,
+        signup_source=attribution["source"],
+        signup_landing_path=attribution["landing_path"],
+    )
 
 
 @router.get("/login")

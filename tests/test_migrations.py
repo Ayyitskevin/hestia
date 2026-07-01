@@ -8,6 +8,7 @@ CORE_TABLES = {
     "tenants", "users", "sessions", "tenant_api_keys", "clients", "projects",
     "galleries", "images", "image_analyses", "pipeline_runs", "offers", "albums",
     "product_sets", "content_packs", "invoices", "studio_profiles", "audit_log",
+    "beta_interests",
 }
 
 

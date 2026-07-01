@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 from .config import Settings
 from .email import notify
+from .interest import beta_interest_summary
 from .tenants import get_tenant
 from .trial_conversion import trial_conversion_cockpit, trial_conversion_for_tenant
 
@@ -19,6 +20,7 @@ def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
     cockpit = trial_conversion_cockpit(conn, settings)
     studios = cockpit["studios"]
     nudge_activity = _launch_nudge_activity(conn)
+    interest = beta_interest_summary(conn)
     verified = sum(1 for studio in studios if studio["owner_verified"])
     presets_started = sum(1 for studio in studios if studio["activation_done"] > 0)
     sourced = sum(1 for studio in studios if studio["signup_source"] in ("pricing", "demo"))
@@ -30,7 +32,12 @@ def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
         "invite_links": _invite_links(settings),
         "followups": _followups(studios, nudge_activity=nudge_activity),
         "cohort": _cohort_summary(studios, nudge_activity=nudge_activity),
-        "operating_checklist": _operating_checklist(studios, nudge_activity=nudge_activity),
+        "interest": interest,
+        "operating_checklist": _operating_checklist(
+            studios,
+            nudge_activity=nudge_activity,
+            interest=interest,
+        ),
         "milestones": [
             _milestone("Invite 5 studios", len(studios), BETA_TARGET_STUDIOS),
             _milestone("Verify 3 owners", verified, 3),
@@ -144,6 +151,7 @@ def _operating_checklist(
     studios: list[dict],
     *,
     nudge_activity: dict[str, dict],
+    interest: dict | None = None,
 ) -> list[dict]:
     total = len(studios)
     verified = sum(1 for studio in studios if studio["owner_verified"])
@@ -164,8 +172,17 @@ def _operating_checklist(
         s for s in studios
         if s["trial_state"] == "ready" and s["activation_percent"] >= 50
     ]
+    interest_total = int((interest or {}).get("total") or 0)
 
     candidates: list[dict] = []
+    if interest_total:
+        candidates.append(_operator_task(
+            96 + min(interest_total, 10),
+            "Review beta interest leads",
+            f"{interest_total} interested photographer{'s' if interest_total != 1 else ''} waiting.",
+            "/admin/launch",
+            "acquisition",
+        ))
     if at_risk and ready_to_contact:
         overlap = [s for s in at_risk if s in ready_to_contact]
         count = len(overlap) or min(len(at_risk), len(ready_to_contact))
