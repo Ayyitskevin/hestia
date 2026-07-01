@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Pricing - Hestia{% endblock %}
+{% block content %}
+<section class="pricing-hero">
+  <div>
+    <div class="eyebrow">Simple hosted pricing</div>
+    <h1>One flat plan for a complete photography studio OS.</h1>
+    <p class="lead">
+      Everything you need to run a professional studio, fully hosted and maintained
+      for {{ price }} after a {{ trial_days }}-day free trial.
+    </p>
+    <div class="form-actions">
+      <a class="btn" href="/signup">Start {{ trial_days }}-day free trial</a>
+      <a class="btn secondary" href="/demo">View demo tour</a>
+    </div>
+  </div>
+  <aside class="price-card" aria-label="Hestia Studio flat plan">
+    <div class="eyebrow">Hestia Studio</div>
+    <div class="price">{{ price }}</div>
+    <p>No setup fee. No tiers. Cancel anytime.</p>
+    <ul>
+      <li>{{ trial_days }}-day free trial</li>
+      <li>Hosted, updated, and maintained for you</li>
+      <li>All current modules included</li>
+      <li>Wedding, food &amp; beverage, and real-estate presets</li>
+    </ul>
+  </aside>
+</section>
+
+<section class="pricing-band">
+  <div>
+    <div class="eyebrow">Value stack</div>
+    <h2>Replace the scattered studio toolchain.</h2>
+  </div>
+  <p class="muted">
+    Hestia is priced to feel like a bargain because the value is not one feature.
+    It is the complete client-to-cash workflow in one maintained home.
+  </p>
+</section>
+
+<section class="value-grid" aria-label="Hestia value stack">
+  <article>
+    <span>01</span>
+    <h3>Book the client</h3>
+    <p>Public studio site, inquiries, booking types, package-backed proposals, contracts, deposits, and intake forms.</p>
+  </article>
+  <article>
+    <span>02</span>
+    <h3>Deliver the work</h3>
+    <p>Native galleries, proofing, favorites, comments, delivery links, client portal, and studio activity history.</p>
+  </article>
+  <article>
+    <span>03</span>
+    <h3>Grow the order</h3>
+    <p>AI culling, hero picks, metadata, print and album offers, invoices, payments, payment plans, and fulfillment seams.</p>
+  </article>
+  <article>
+    <span>04</span>
+    <h3>Keep the studio warm</h3>
+    <p>Proposal follow-ups, review asks, reconnect surfaces, owner digest, trial cockpit, and retention-ready automation.</p>
+  </article>
+</section>
+
+<section class="compare-table" aria-label="What Hestia replaces">
+  <h2>One bill instead of 5-7 separate subscriptions.</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Common stack</th>
+        <th>Hestia at {{ price }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Booking scheduler, CRM, proposal app</td>
+        <td>Inquiry, booking, clients, projects, package proposals, view tracking, and follow-up nudges</td>
+      </tr>
+      <tr>
+        <td>Contract app, forms, invoice tool</td>
+        <td>Templates, e-signature, questionnaires, invoices, deposits, payment plans, and Stripe checkout</td>
+      </tr>
+      <tr>
+        <td>Gallery host, proofing, delivery links</td>
+        <td>Native galleries, favorites, comments, client portal, delivery tracking, and public studio links</td>
+      </tr>
+      <tr>
+        <td>AI helper, sales spreadsheet, retention reminders</td>
+        <td>AI culling/offers, print and album campaigns, owner digest, reconnect surfaces, and automations</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="faq-list" aria-label="Pricing FAQ">
+  <h2>Pricing FAQ</h2>
+  <details open>
+    <summary>Are there any paid tiers?</summary>
+    <p>No. Hestia has one flat paid plan: {{ price }} after the {{ trial_days }}-day free trial.</p>
+  </details>
+  <details>
+    <summary>What happens during the trial?</summary>
+    <p>You can create a studio, apply a niche preset, launch your public site, build proposals, deliver galleries, and test the client-to-cash workflow before billing starts.</p>
+  </details>
+  <details>
+    <summary>Who is this built for?</summary>
+    <p>Solo and small photography studios that want a professional hosted command center without stitching together booking, CRM, gallery, invoice, AI, and retention tools.</p>
+  </details>
+</section>
+
+<section class="demo-cta">
+  <h2>Start with the whole studio workflow.</h2>
+  <p class="muted">No setup project, no feature gating, and no upgrade maze. Pick a preset and start building the studio from day one.</p>
+  <div class="form-actions">
+    <a class="btn" href="/signup">Start {{ trial_days }}-day free trial</a>
+    <a class="btn secondary" href="/demo">View demo tour</a>
+  </div>
+</section>
+{% endblock %}

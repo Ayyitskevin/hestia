@@ -177,6 +177,7 @@ Useful URLs:
 
 - `/` landing
 - `/demo` public buyer tour for wedding, food & beverage, and real-estate workflows
+- `/pricing` flat $40/month value stack and trial conversion page
 - `/signup` hosted signup when `HESTIA_SIGNUP_ENABLED=true`
 - `/login` owner login
 - `/dashboard` studio command center
@@ -228,9 +229,9 @@ bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke
 bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
 
-The test suite covers tenant isolation, hosted routing, public demo tours,
-flat-plan billing, signup, onboarding presets, trial conversion analytics, custom
-domains, proposal accept flows, offer idempotency, public tokens, payments,
+The test suite covers tenant isolation, hosted routing, public demo and pricing
+pages, flat-plan billing, signup, onboarding presets, trial conversion analytics,
+custom domains, proposal accept flows, offer idempotency, public tokens, payments,
 client portal flows, and safe mock-provider operation.
 
 `scripts/hosted-preflight.sh` reads the same `.env`/environment values as the app

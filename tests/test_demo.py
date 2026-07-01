@@ -45,3 +45,25 @@ def test_landing_and_signup_link_to_public_demo(client, settings):
     assert signup.status_code == 200
     assert 'href="/demo"' in landing.text
     assert 'href="/demo"' in signup.text
+
+
+def test_pricing_public_flat_plan_conversion_page(client):
+    page = client.get("/pricing")
+    text = unescape(page.text)
+
+    assert page.status_code == 200
+    assert "One flat plan for a complete photography studio OS." in text
+    assert "$40/month" in text
+    assert "14-day free trial" in text
+    assert "No setup fee. No tiers. Cancel anytime." in text
+    assert "One bill instead of 5-7 separate subscriptions." in text
+    assert 'href="/signup"' in page.text
+    assert 'href="/demo"' in page.text
+
+
+def test_public_navigation_links_to_demo_and_pricing(client):
+    page = client.get("/")
+
+    assert page.status_code == 200
+    assert 'href="/demo"' in page.text
+    assert 'href="/pricing"' in page.text

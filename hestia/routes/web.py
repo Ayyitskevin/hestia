@@ -106,6 +106,13 @@ def demo_niche(request: Request, niche: str):
     return render(request, "demo.html", auth=None, tour=demo_tour(niche), demos=demo_nav())
 
 
+@router.get("/pricing")
+def pricing(request: Request):
+    settings = settings_of(request)
+    price = f"${settings.flat_price_cents // 100}/month"
+    return render(request, "pricing.html", auth=None, price=price, trial_days=settings.trial_days)
+
+
 @router.get("/login")
 def login_form(request: Request):
     return render(request, "login.html", auth=None, error=None)
