@@ -56,6 +56,33 @@
   </div>
 </section>
 
+<section class="card stack" style="margin-top:18px">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">
+    <div>
+      <h3>Beta revenue pipeline</h3>
+      <p class="muted">
+        Interest → invite → studio → verified → preset → trial → paid.
+        Bottleneck: {{ kit.revenue_pipeline.bottleneck.label }}.
+      </p>
+    </div>
+    <span class="pill">{{ kit.revenue_pipeline.paid }} paid · {{ kit.revenue_pipeline.bottleneck.dropoff }} drop-off</span>
+  </div>
+  <div class="grid cols-4">
+    {% for stage in kit.revenue_pipeline.stages %}
+      <div class="launch-meter">
+        <div>
+          <span class="pill">{{ stage.percent }}%</span>
+          <strong>{{ stage.label }}</strong><br>
+          <span style="font-size:1.5rem;font-weight:800">{{ stage.count }}</span>
+          {% if stage.dropoff %}<span class="muted"> · -{{ stage.dropoff }}</span>{% endif %}
+          <br><span class="muted">{{ stage.detail }}</span>
+        </div>
+        <a class="btn ghost" href="{{ stage.href }}">{{ stage.action }}</a>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
 <section class="grid cols-4" style="margin-top:18px">
   <div class="card stack">
     <h3>Beta cohort</h3>

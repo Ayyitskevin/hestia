@@ -4,7 +4,11 @@ import dataclasses
 
 from conftest import ADMIN_TOKEN, CSRFClient
 
-from hestia.interest import record_beta_interest
+from hestia.interest import (
+    mark_beta_interest_converted,
+    record_beta_interest,
+    send_beta_interest_invite,
+)
 from hestia.launch import beta_launch_export_rows, beta_launch_kit
 from hestia.main import create_app
 from hestia.presets import apply_preset
@@ -64,6 +68,75 @@ def test_beta_launch_kit_builds_invite_links_and_followup_queue(conn, settings):
     assert kit["followups"][0]["mailto"].startswith("mailto:stalled@example.com")
 
 
+def test_beta_launch_kit_tracks_revenue_pipeline(conn, settings):
+    record_beta_interest(
+        conn,
+        settings,
+        name="New Lead",
+        studio_name="New Lead Studio",
+        email="new-lead@example.com",
+        shoot_type="wedding",
+    )
+    invited = record_beta_interest(
+        conn,
+        settings,
+        name="Invited Lead",
+        studio_name="Invited Lead Studio",
+        email="invited-lead@example.com",
+        shoot_type="wedding",
+    )
+    send_beta_interest_invite(conn, settings, invited["id"])
+
+    def converted_stage(name: str, email: str, *, verified=1, preset=False, plan_status=""):
+        interest = record_beta_interest(
+            conn,
+            settings,
+            name=f"{name} Owner",
+            studio_name=name,
+            email=email,
+            shoot_type="wedding",
+        )
+        tenant = create_tenant(conn, name=name, shoot_type="wedding",
+                               signup_source="interest", signup_landing_path="/interest")
+        _owner(conn, tenant["id"], email, verified=verified)
+        mark_beta_interest_converted(conn, interest["id"], tenant["id"])
+        if preset:
+            apply_preset(conn, tenant["id"], "wedding", include_demo=False)
+        if plan_status:
+            apply_plan(conn, tenant["id"], plan="studio", status=plan_status, provider="mock")
+        return tenant
+
+    converted_stage("Created Studio", "created@example.com", verified=0)
+    converted_stage("Verified Studio", "verified@example.com")
+    converted_stage("Preset Studio", "preset@example.com", preset=True)
+    converted_stage("Trialing Studio", "trialing@example.com", preset=True,
+                    plan_status="trialing")
+    converted_stage("Paid Studio", "paid@example.com", preset=True, plan_status="active")
+    conn.commit()
+
+    kit = beta_launch_kit(conn, settings)
+    pipeline = kit["revenue_pipeline"]
+    stages = {stage["label"]: stage for stage in pipeline["stages"]}
+
+    assert [stage["label"] for stage in pipeline["stages"]] == [
+        "Interest",
+        "Invited",
+        "Studio created",
+        "Verified",
+        "Preset started",
+        "Trialing",
+        "Paid",
+    ]
+    assert [stage["count"] for stage in pipeline["stages"]] == [7, 6, 5, 4, 3, 2, 1]
+    assert stages["Invited"]["dropoff"] == 1
+    assert stages["Invited"]["action"] == "Send 1 private invite"
+    assert stages["Studio created"]["detail"] == "1 invited lead has not created a studio yet."
+    assert stages["Paid"]["detail"] == "$40/month in current flat-plan MRR."
+    assert pipeline["bottleneck"]["label"] == "Invited"
+    assert pipeline["paid"] == 1
+    assert pipeline["mrr_cents"] == 4000
+
+
 def test_admin_launch_page_renders_invites_and_followups(settings, conn):
     tenant = create_tenant(conn, name="Launch Admin", shoot_type="wedding",
                            signup_source="pricing", signup_landing_path="/pricing")
@@ -79,6 +152,10 @@ def test_admin_launch_page_renders_invites_and_followups(settings, conn):
     assert page.status_code == 200
     assert "Beta launch kit" in page.text
     assert "Founder operating checklist" in page.text
+    assert "Beta revenue pipeline" in page.text
+    assert "Interest → invite → studio → verified → preset → trial → paid." in page.text
+    assert "Studio created" in page.text
+    assert "Paid" in page.text
     assert "Nudge at-risk studios" in page.text
     assert "Beta cohort" in page.text
     assert "Source mix" in page.text

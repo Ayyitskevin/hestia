@@ -33,6 +33,7 @@ def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
         "followups": _followups(studios, nudge_activity=nudge_activity),
         "cohort": _cohort_summary(studios, nudge_activity=nudge_activity),
         "interest": interest,
+        "revenue_pipeline": _revenue_pipeline(conn, settings, studios, interest=interest),
         "operating_checklist": _operating_checklist(
             studios,
             nudge_activity=nudge_activity,
@@ -327,6 +328,157 @@ def _cohort_summary(
             order=["Never nudged", "Cooling down", "Ready after cooldown", "No owner email"],
         ),
     }
+
+
+def _revenue_pipeline(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    studios: list[dict],
+    *,
+    interest: dict,
+) -> dict:
+    rows = conn.execute(
+        """
+        SELECT status, tenant_id, invited_at
+          FROM beta_interests
+        """
+    ).fetchall()
+    converted_tenant_ids = {
+        row["tenant_id"]
+        for row in rows
+        if (row["tenant_id"] or "").strip()
+    }
+    direct_studios = [
+        studio for studio in studios
+        if studio["tenant_id"] not in converted_tenant_ids
+    ]
+    direct_count = len(direct_studios)
+    prospect_count = int(interest["total"]) + direct_count
+    uninvited_count = sum(
+        1 for row in rows
+        if (row["status"] or "").strip().lower() != "converted"
+        and not (row["invited_at"] or "").strip()
+    )
+    invited_count = (
+        sum(
+            1 for row in rows
+            if (row["invited_at"] or "").strip()
+            or (row["status"] or "").strip().lower() == "converted"
+        )
+        + direct_count
+    )
+    created_count = len(studios)
+    verified_count = sum(1 for studio in studios if studio["owner_verified"])
+    preset_count = sum(1 for studio in studios if studio["activation_done"] > 0)
+    trialing_count = sum(
+        1 for studio in studios if studio["trial_state"] in ("trialing", "active")
+    )
+    paid_count = sum(1 for studio in studios if studio["trial_state"] == "active")
+
+    stage_specs = [
+        ("Interest", prospect_count, "Prospects captured from beta interest plus direct signups.",
+         _pipeline_action("Share beta access links", "/admin/launch")),
+        ("Invited", invited_count, _invite_detail(interest, direct_count, uninvited_count),
+         _pipeline_action(_invite_action(uninvited_count), "/admin/launch")),
+        ("Studio created", created_count, _created_detail(invited_count, created_count),
+         _pipeline_action("Follow up invited leads", "/admin/launch")),
+        ("Verified", verified_count, _stage_gap_detail(created_count, verified_count, "owner verification"),
+         _pipeline_action("Verify owner emails", "/admin/trials")),
+        ("Preset started", preset_count, _stage_gap_detail(verified_count, preset_count, "niche preset"),
+         _pipeline_action("Install niche presets", "/admin/trials")),
+        ("Trialing", trialing_count, _stage_gap_detail(preset_count, trialing_count, "trial checkout"),
+         _pipeline_action("Move ready studios into trial", "/admin/trials")),
+        ("Paid", paid_count, f"{_price_label(settings, paid_count)} in current flat-plan MRR.",
+         _pipeline_action("Protect paid accounts", "/admin/trials")),
+    ]
+    stages = []
+    previous = None
+    for label, count, detail, action in stage_specs:
+        stages.append(_pipeline_stage(label, count, previous, detail, action))
+        previous = count
+    bottleneck = next(
+        (stage for stage in stages[1:] if stage["dropoff"] > 0),
+        stages[-1],
+    )
+    return {
+        "stages": stages,
+        "bottleneck": bottleneck,
+        "mrr_cents": paid_count * int(settings.flat_price_cents),
+        "direct_studios": direct_count,
+        "uninvited": uninvited_count,
+        "paid": paid_count,
+    }
+
+
+def _pipeline_stage(
+    label: str,
+    count: int,
+    previous: int | None,
+    detail: str,
+    action: dict,
+) -> dict:
+    if previous is None:
+        dropoff = 0
+        percent = 100
+    else:
+        dropoff = max(0, previous - count)
+        percent = round(100 * count / max(1, previous))
+    return {
+        "label": label,
+        "count": count,
+        "dropoff": dropoff,
+        "percent": percent,
+        "detail": detail,
+        "action": action["label"],
+        "href": action["href"],
+    }
+
+
+def _pipeline_action(label: str, href: str) -> dict:
+    return {"label": label, "href": href}
+
+
+def _invite_detail(interest: dict, direct_count: int, uninvited_count: int) -> str:
+    invited_total = int(interest["invited_total"])
+    converted_total = int(interest["converted_total"])
+    if uninvited_count:
+        return (
+            f"{uninvited_count} interest lead{'s' if uninvited_count != 1 else ''} "
+            "still need a private invite."
+        )
+    return (
+        f"{invited_total} invited, {converted_total} converted, "
+        f"{direct_count} direct signup{'s' if direct_count != 1 else ''} bypassed invite."
+    )
+
+
+def _invite_action(uninvited_count: int) -> str:
+    if uninvited_count:
+        return f"Send {uninvited_count} private invite{'s' if uninvited_count != 1 else ''}"
+    return "Follow up invited leads"
+
+
+def _created_detail(invited_count: int, created_count: int) -> str:
+    gap = max(0, invited_count - created_count)
+    if gap:
+        noun = "leads" if gap != 1 else "lead"
+        verb = "have" if gap != 1 else "has"
+        return f"{gap} invited {noun} {verb} not created a studio yet."
+    return "Every invited or direct prospect has reached studio creation."
+
+
+def _stage_gap_detail(previous: int, count: int, label: str) -> str:
+    gap = max(0, previous - count)
+    if gap:
+        return f"{gap} studio{'s' if gap != 1 else ''} still need {label}."
+    return f"No drop-off at {label}."
+
+
+def _price_label(settings: Settings, paid_count: int) -> str:
+    cents = paid_count * int(settings.flat_price_cents)
+    if settings.currency.lower() == "usd" and cents % 100 == 0:
+        return f"${cents // 100}/month"
+    return f"{cents / 100:.2f} {settings.currency.upper()}/month"
 
 
 def _metric(label: str, count: int) -> dict:
