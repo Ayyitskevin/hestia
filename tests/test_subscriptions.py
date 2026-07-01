@@ -202,7 +202,7 @@ def test_account_page_shows_flat_plan_and_urls(settings):
     login_owner(client, creds)
     page = client.get("/settings/account")
     assert page.status_code == 200
-    assert "Account" in page.text
+    assert "Hosted account" in page.text
     assert "acct@e.com" in page.text
     assert "http://app.hestia.test/studio/account-studio" in page.text
     assert "https://account-studio.hestia.test" in page.text

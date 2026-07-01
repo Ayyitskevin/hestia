@@ -280,9 +280,10 @@ def test_dashboard_shows_trial_cockpit_for_fresh_studio(client):
     login_owner(client, onboard_studio(client, name="Cockpit", email="cockpit@example.com"))
     page = client.get("/dashboard")
     assert page.status_code == 200
-    assert "Trial cockpit" in page.text
+    assert "Hosted studio cockpit" in page.text
     assert "14-day trial ready" in page.text
     assert "$40/month" in page.text
+    assert "flat monthly plan" in page.text
     assert "Start 14-day trial" in page.text
     assert "Next: Choose a studio preset" in page.text
 
@@ -293,5 +294,5 @@ def test_dashboard_trial_cockpit_next_action_after_preset(client, app):
     client.post("/onboarding", data={"preset": "wedding"})
     page = client.get("/dashboard")
     assert page.status_code == 200
-    assert "Trial cockpit" in page.text
+    assert "Hosted studio cockpit" in page.text
     assert "Next: Publish studio site" in page.text

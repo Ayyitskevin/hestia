@@ -1,14 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Create your studio — Hestia{% endblock %}
+{% block title %}Start your hosted studio — Hestia{% endblock %}
 {% block wrap_class %}narrow{% endblock %}
 {% block content %}
 <div class="card stack">
-  <h1>Create your studio</h1>
+  <h1>Start your hosted studio</h1>
   {% if sent %}
-    <div class="alert ok">Almost there — check your email for a link to activate your studio (it expires in 2 days).</div>
+    <div class="alert ok">Almost there — check your email to activate your hosted studio. The link opens onboarding and expires in 2 days.</div>
     <p class="hint"><a href="/login">Back to sign in</a></p>
   {% else %}
-    <p class="muted">Start your Hestia studio. We'll email a link to confirm your address.</p>
+    <p class="muted">Everything a growing photography studio needs: booking, CRM, contracts,
+      galleries, AI offers, invoices, payments, and retention. 14-day trial, then
+      $40/month. No tiers.</p>
     {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
     <form method="post" action="/signup">
       {% include "_csrf.html" %}
@@ -23,7 +25,7 @@
       <label for="password">Password <span class="muted">(at least 8 characters)</span></label>
       <input type="password" id="password" name="password" required minlength="8">
       <div class="form-actions">
-        <button class="btn" type="submit">Create studio</button>
+        <button class="btn" type="submit">Start 14-day trial</button>
         <a class="btn ghost" href="/login">Sign in</a>
       </div>
     </form>

@@ -1,18 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Onboarding - Hestia{% endblock %}
+{% block title %}Studio setup - Hestia{% endblock %}
 {% block content %}
 <div class="page-title">
   <div>
-    <h1>Choose your studio preset</h1>
-    <span class="muted">Seed the first booking menu, service packages, intake form, and draft site copy.</span>
+    <h1>Set up your studio command center</h1>
+    <span class="muted">Choose a niche and Hestia will create your booking menu, packages,
+      intake form, draft site copy, and optional sample lead.</span>
   </div>
   <a class="btn secondary" href="/dashboard">Back to dashboard</a>
 </div>
 
 {% if applied %}
 <div class="alert ok">
-  This studio already has starter setup. Applying a preset will keep existing booking types,
-  packages, forms, and site copy intact.
+  This studio already has setup. Applying another preset only fills empty booking types,
+  packages, forms, and site copy.
 </div>
 {% endif %}
 
@@ -26,15 +27,15 @@
       <p class="muted" style="margin:0">{{ preset.blurb }}</p>
     </div>
     <div class="stack" style="gap:8px">
-      <div><span class="label">Booking</span><br><span class="muted">{{ preset.booking_types|length }} session types</span></div>
-      <div><span class="label">Packages</span><br><span class="muted">{{ preset.packages|length }} priced offers</span></div>
-      <div><span class="label">Forms</span><br><span class="muted">{{ preset.questionnaire_prompts|length }} intake questions</span></div>
+      <div><span class="label">Booking menu</span><br><span class="muted">{{ preset.booking_types|length }} session types</span></div>
+      <div><span class="label">Priced packages</span><br><span class="muted">{{ preset.packages|length }} ready-to-sell offers</span></div>
+      <div><span class="label">Intake form</span><br><span class="muted">{{ preset.questionnaire_prompts|length }} client questions</span></div>
     </div>
     <label class="check">
       <input type="checkbox" name="include_demo" value="1" checked>
-      <span>Include a sample client and lead project</span>
+      <span>Include a sample lead so you can try the workflow</span>
     </label>
-    <button class="btn" type="submit">Use {{ preset.label }}</button>
+    <button class="btn" type="submit">Install {{ preset.label }} preset</button>
   </form>
   {% endfor %}
 </div>

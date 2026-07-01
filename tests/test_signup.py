@@ -32,7 +32,10 @@ def test_signup_disabled_redirects_to_login(settings):
 
 def test_signup_form_renders_when_enabled(settings):
     r = _client(settings).get("/signup")
-    assert r.status_code == 200 and "Create your studio" in r.text
+    assert r.status_code == 200
+    assert "Start your hosted studio" in r.text
+    assert "14-day trial, then" in r.text and "$40/month" in r.text
+    assert "No tiers" in r.text
 
 
 # ── happy path ──────────────────────────────────────────────────────────────
@@ -66,7 +69,7 @@ def test_verify_activates_and_starts_onboarding_session(settings, conn):
     done = c.get(f"/verify/{token}", follow_redirects=False)
     assert done.status_code == 303 and done.headers["location"] == "/onboarding"
     assert conn.execute("SELECT verified FROM users WHERE email='act@s.com'").fetchone()["verified"] == 1
-    assert "Choose your studio preset" in c.get("/onboarding").text
+    assert "Set up your studio command center" in c.get("/onboarding").text
 
 
 def test_login_routes_fresh_studio_to_onboarding(settings, conn):

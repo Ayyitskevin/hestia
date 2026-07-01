@@ -96,6 +96,8 @@ def test_onboarding_page_and_post_seed_food_preset(client, app):
 
     page = client.get("/onboarding")
     assert page.status_code == 200
+    assert "Set up your studio command center" in page.text
+    assert "booking menu" in page.text and "optional sample lead" in page.text
     assert "Wedding" in page.text and "Food &amp; Beverage" in page.text and "Real Estate" in page.text
 
     response = client.post(

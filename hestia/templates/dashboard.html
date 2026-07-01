@@ -20,7 +20,7 @@
 <div class="card stack" style="margin-bottom:18px">
   <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-start; flex-wrap:wrap">
     <div style="flex:1 1 360px">
-      <h3 style="margin-bottom:4px">Trial cockpit <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ trial.title }}</span></h3>
+      <h3 style="margin-bottom:4px">Hosted studio cockpit <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ trial.title }}</span></h3>
       <p class="muted" style="margin:0">{{ trial.message }}</p>
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap">
@@ -29,8 +29,8 @@
     </div>
   </div>
   <div class="health-strip">
-    <span class="health-item"><span class="svc">{{ trial.trial_days }}</span> <span class="url">day trial</span></span>
-    <span class="health-item"><span class="svc">{{ trial.price }}</span> <span class="url">flat plan</span></span>
+    <span class="health-item"><span class="svc">{{ trial.trial_days }}</span> <span class="url">day hosted trial</span></span>
+    <span class="health-item"><span class="svc">{{ trial.price }}</span> <span class="url">flat monthly plan</span></span>
     <span class="health-item"><span class="svc">all</span> <span class="url">modules included</span></span>
     <span class="health-item"><span class="svc">anytime</span> <span class="url">cancel</span></span>
   </div>
@@ -41,7 +41,7 @@
   <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">
     <div>
       <h3 style="margin-bottom:4px">Launch path <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ setup.done }}/{{ setup.total }} live</span></h3>
-      <p class="muted" style="margin:0">Book → deliver → sell → collect. Complete the first revenue loop.</p>
+      <p class="muted" style="margin:0">Publish → book → deliver → sell → collect. Complete the first paid-client loop.</p>
     </div>
     {% if setup.next %}
     <a class="btn" href="{{ setup.next.href }}">Next: {{ setup.next.label }}</a>

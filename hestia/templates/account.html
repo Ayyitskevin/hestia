@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Account - Hestia{% endblock %}
+{% block title %}Hosted account - Hestia{% endblock %}
 {% block content %}
 <div class="page-title">
   <div>
-    <h1>Account</h1>
+    <h1>Hosted account</h1>
     <span class="muted">{{ tenant.name }} · {{ plan.name }} · {{ plan.price }}</span>
   </div>
   <a class="btn secondary" href="/dashboard">Dashboard</a>
@@ -71,7 +71,8 @@
       <span class="pill on">{{ plan.name }} · {{ plan.price }}</span>
       {% if subscription %}<span class="pill">{{ subscription.status }}</span>{% endif %}
     </div>
-    <p class="muted" style="margin:0">One hosted plan: 14-day trial, then $40/month. Cancel anytime.</p>
+    <p class="muted" style="margin:0">One hosted command center: 14-day trial, then $40/month.
+      No tiers, no setup, cancel anytime.</p>
     {% if plan.plan == 'studio' %}
       <form method="post" action="/settings/billing/portal">
         {% include "_csrf.html" %}
