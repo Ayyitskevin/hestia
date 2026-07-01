@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ proposal.title }} — Proposal{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <p class="muted" style="margin:0">{{ tenant.name if tenant else "Your studio" }}</p>
+  <h1>{{ proposal.title }}</h1>
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  <div class="stack">
+    <h3>{{ proposal.package_name }}</h3>
+    {% if proposal.summary %}<p>{{ proposal.summary }}</p>{% endif %}
+    <p><strong>{{ proposal.package_price_display }}</strong>{% if proposal.package_deposit_display %} · {{ proposal.package_deposit_display }} due to reserve{% endif %}</p>
+  </div>
+
+  {% if proposal.status == 'accepted' %}
+    <div class="alert ok">Proposal accepted{% if proposal.accepted_name %} by {{ proposal.accepted_name }}{% endif %}.</div>
+    <div class="grid-2">
+      <a class="btn" href="{{ sign_url }}">Sign agreement</a>
+      <a class="btn secondary" href="{{ pay_url }}">Pay booking invoice</a>
+    </div>
+  {% else %}
+    <form method="post" action="/proposal/{{ proposal.token }}/accept" class="stack">
+      <label for="accepted_name">Your name</label>
+      <input type="text" id="accepted_name" name="accepted_name" value="{{ proposal.client_name or '' }}" required>
+
+      <label for="accepted_email">Email <span class="muted">(optional)</span></label>
+      <input type="email" id="accepted_email" name="accepted_email" value="{{ proposal.client_email or '' }}">
+
+      <label style="display:flex; gap:8px; align-items:flex-start">
+        <input type="checkbox" name="agree" value="1" required style="width:auto; margin-top:3px">
+        <span>I accept this proposal and understand booking is complete after signing and payment.</span>
+      </label>
+
+      <button class="btn" type="submit">Accept proposal</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

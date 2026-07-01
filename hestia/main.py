@@ -58,6 +58,7 @@ from .routes import (
     pipeline_ui,
     portal,
     products,
+    proposals,
     questionnaires,
     recurring,
     scheduler,
@@ -170,6 +171,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(products.router, dependencies=csrf)
     app.include_router(invoices.router, dependencies=csrf)
     app.include_router(packages.router, dependencies=csrf)
+    app.include_router(proposals.router, dependencies=csrf)
     app.include_router(discounts.router, dependencies=csrf)
     app.include_router(giftcards.router, dependencies=csrf)
     app.include_router(payment_plans.router, dependencies=csrf)
@@ -189,6 +191,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(api.router)
     app.include_router(client.router)
     app.include_router(pay.router)
+    app.include_router(proposals.public_router)
     app.include_router(sign.router)
     app.include_router(portal.router)
     app.include_router(delivery.router)

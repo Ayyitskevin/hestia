@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Proposals — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Proposals</h1>
+    <span class="muted">Send one client link for package, agreement, and booking invoice.</span>
+  </div>
+  <a class="btn" href="/proposals/new">New proposal</a>
+</div>
+
+<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px">
+  {% for s in ["", "draft", "sent", "accepted", "void"] %}
+    <a class="pill {{ 'on' if active_status == s else 'off' }}" href="/proposals{% if s %}?status={{ s }}{% endif %}">{{ s or "all" }}</a>
+  {% endfor %}
+</div>
+
+{% if proposals %}
+<div class="card">
+  <table>
+    <thead><tr><th>Proposal</th><th>Client</th><th>Package</th><th>Status</th><th>Due now</th><th></th></tr></thead>
+    <tbody>
+      {% for p in proposals %}
+      <tr>
+        <td>
+          <a href="/proposals/{{ p.id }}">{{ p.title }}</a>
+          {% if p.project_id %}<br><span class="muted" style="font-size:.85rem">{{ p.project_name }}</span>{% endif %}
+        </td>
+        <td>{% if p.client_id %}<a href="/clients/{{ p.client_id }}">{{ p.client_name }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{{ p.package_name or "—" }}</td>
+        <td><span class="pill {{ 'on' if p.status == 'accepted' else 'off' }}">{{ p.status }}</span></td>
+        <td>{{ p.invoice_amount_display }}</td>
+        <td style="text-align:right"><a class="btn ghost" href="/proposals/{{ p.id }}">Open</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card stack">
+  <h3>No proposals yet</h3>
+  <p class="muted">Create service packages first, then turn the right package into a polished booking proposal.</p>
+  <div><a class="btn" href="/proposals/new">New proposal</a> <a class="btn ghost" href="/packages">Manage packages</a></div>
+</div>
+{% endif %}
+{% endblock %}

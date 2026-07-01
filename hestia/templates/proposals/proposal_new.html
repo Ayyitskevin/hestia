@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}New proposal — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>New proposal</h1>
+  {% if packages %}
+  <div class="stack" style="margin-bottom:6px">
+    <strong>Start from a package</strong>
+    <div style="display:flex; flex-wrap:wrap; gap:8px">
+      {% for pk in packages %}
+        <a class="btn ghost" href="/proposals/new?package_id={{ pk.id }}{% if preselect_client %}&client_id={{ preselect_client }}{% endif %}{% if preselect_project %}&project_id={{ preselect_project }}{% endif %}">{{ pk.name }}</a>
+      {% endfor %}
+    </div>
+    <a class="muted" href="/packages" style="font-size:.85rem">Manage packages -></a>
+  </div>
+  {% else %}
+  <div class="alert">Add a service package before creating a proposal.</div>
+  {% endif %}
+
+  <form method="post" action="/proposals">
+    {% include "_csrf.html" %}
+    <label for="package_id">Package</label>
+    <select id="package_id" name="package_id" required>
+      <option value="">Choose package</option>
+      {% for pk in packages %}
+        <option value="{{ pk.id }}" {{ 'selected' if prefill and prefill.id == pk.id else '' }}>{{ pk.name }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="title">Proposal title</label>
+    <input type="text" id="title" name="title" placeholder="Wedding Collection"
+           value="{{ prefill.name if prefill else '' }}" required autofocus>
+
+    <label for="summary">Client-facing summary</label>
+    <textarea id="summary" name="summary" rows="4"
+      placeholder="A concise description of what is included.">{{ prefill.description if prefill else '' }}</textarea>
+
+    <label for="client_id">Client <span class="muted">(optional)</span></label>
+    <select id="client_id" name="client_id">
+      <option value="">— none —</option>
+      {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if preselect_client == c.id else '' }}>{{ c.name }}</option>{% endfor %}
+    </select>
+
+    <label for="project_id">Project <span class="muted">(optional)</span></label>
+    <select id="project_id" name="project_id">
+      <option value="">— none —</option>
+      {% for p in projects %}<option value="{{ p.id }}" {{ 'selected' if preselect_project == p.id else '' }}>{{ p.name }}</option>{% endfor %}
+    </select>
+
+    <label for="signer_name">Signer name <span class="muted">(optional)</span></label>
+    <input type="text" id="signer_name" name="signer_name" placeholder="Client name">
+
+    <label for="signer_email">Signer email <span class="muted">(optional)</span></label>
+    <input type="email" id="signer_email" name="signer_email" placeholder="client@example.com">
+
+    <label for="terms">Agreement terms <span class="muted">(optional — Hestia creates a simple default)</span></label>
+    <textarea id="terms" name="terms" rows="7"
+      placeholder="Paste your booking agreement terms here, or leave blank to start from the package default."></textarea>
+
+    <div class="form-actions">
+      <button class="btn" type="submit" {{ 'disabled' if not packages else '' }}>Create proposal</button>
+      <a class="btn ghost" href="/proposals">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

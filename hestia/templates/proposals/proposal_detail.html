@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ proposal.title }} — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>{{ proposal.title }}</h1>
+    <span class="muted">
+      {% if proposal.client_id %}<a href="/clients/{{ proposal.client_id }}">{{ proposal.client_name }}</a>{% endif %}
+      {% if proposal.project_id %} · <a href="/projects/{{ proposal.project_id }}">{{ proposal.project_name }}</a>{% endif %}
+      · <span class="pill {{ 'on' if proposal.status == 'accepted' else 'off' }}">{{ proposal.status }}</span>
+    </span>
+  </div>
+  <div style="display:flex; gap:10px">
+    {% if proposal.status in ('draft', 'sent') %}
+      <form method="post" action="/proposals/{{ proposal.id }}/send">{% include "_csrf.html" %}<button class="btn" type="submit">{{ 'Re-send' if proposal.status == 'sent' else 'Publish proposal' }}</button></form>
+    {% endif %}
+    {% if proposal.status not in ('accepted', 'void') %}
+      <form method="post" action="/proposals/{{ proposal.id }}/void">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Void</button></form>
+    {% endif %}
+  </div>
+</div>
+
+{% if proposal.status == 'accepted' %}
+<div class="alert ok">Accepted by <strong>{{ proposal.accepted_name }}</strong> on {{ proposal.accepted_at }}.</div>
+{% endif %}
+
+<div class="grid-2">
+  <div class="card stack">
+    <h3>Proposal link</h3>
+    {% if proposal.status in ('sent', 'accepted') %}
+      <a class="offer-url" href="{{ proposal_url }}" target="_blank">{{ proposal_url }}</a>
+      <p class="muted">This is the single link to send the client.</p>
+    {% else %}
+      <p class="muted">Publish the proposal to make the client link live.</p>
+    {% endif %}
+  </div>
+  <div class="card stack">
+    <h3>Booking package</h3>
+    <p><strong>{{ proposal.package_name }}</strong></p>
+    <p class="muted">Package {{ proposal.package_price_display }}{% if proposal.package_deposit_display %} · due now {{ proposal.package_deposit_display }}{% endif %}</p>
+  </div>
+</div>
+
+<div class="grid-2" style="margin-top:18px">
+  <div class="card stack">
+    <h3>Agreement</h3>
+    <p>Status: <span class="pill {{ 'on' if proposal.contract_status == 'signed' else 'off' }}">{{ proposal.contract_status }}</span></p>
+    <a class="btn ghost" href="/contracts/{{ proposal.contract_id }}">Open contract</a>
+    {% if proposal.status in ('sent', 'accepted') %}<a class="offer-url" href="{{ sign_url }}" target="_blank">{{ sign_url }}</a>{% endif %}
+  </div>
+  <div class="card stack">
+    <h3>Booking invoice</h3>
+    <p>{{ proposal.invoice_amount_display }} · <span class="pill {{ 'on' if proposal.invoice_status == 'paid' else 'off' }}">{{ proposal.invoice_status }}</span></p>
+    <a class="btn ghost" href="/invoices/{{ proposal.invoice_id }}">Open invoice</a>
+    {% if proposal.status in ('sent', 'accepted') %}<a class="offer-url" href="{{ pay_url }}" target="_blank">{{ pay_url }}</a>{% endif %}
+  </div>
+</div>
+
+<div class="card stack" style="margin-top:18px">
+  <h3>Summary</h3>
+  {% if proposal.summary %}<p>{{ proposal.summary }}</p>{% else %}<p class="muted">No summary entered.</p>{% endif %}
+</div>
+{% endblock %}

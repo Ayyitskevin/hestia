@@ -26,6 +26,7 @@ full hosted operating system:
 |----------|-----------------|
 | Booking scheduler | Public booking pages, availability rules, confirmations, reminders |
 | CRM spreadsheet | Clients, projects, timelines, tags, notes, files, statements |
+| Proposal app | Package-backed proposals with one client link for quote, agreement, and deposit |
 | Contract tool | Templates, sent agreements, typed e-signature, audit trail |
 | Intake forms | Questionnaires, reusable templates, client portal responses |
 | Gallery host | Native galleries, delivery links, proofing, favorites, comments |
@@ -54,7 +55,7 @@ The first hosted presets target:
 
 ```text
 signup -> email verification -> onboarding preset -> trial cockpit
-  -> public studio site -> inquiry/booking -> contract + deposit
+  -> public studio site -> inquiry/booking -> proposal -> contract + deposit
   -> questionnaire -> shoot -> gallery -> AI offer -> order/payment
   -> fulfillment -> review/rebooking/retention
 ```
@@ -144,6 +145,7 @@ Hestia is a modular monolith, not a bundle of disconnected services.
 | `studio` | Public studio site and inquiries |
 | `crm` | Clients, projects, tags, files, timelines |
 | `scheduler` | Availability, booking, confirmations, reminders |
+| `proposals` | Package-backed proposals, accept flow, linked agreement + deposit invoice |
 | `contracts` | Contract templates, sent agreements, e-signature |
 | `questionnaires` | Intake forms, answers, reusable templates |
 | `galleries` / `storage` | Gallery hosting, uploads, delivery |
@@ -223,8 +225,8 @@ bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
 
 The test suite covers tenant isolation, hosted routing, flat-plan billing, signup,
-onboarding presets, custom domains, offer idempotency, public tokens, payments,
-client portal flows, and safe mock-provider operation.
+onboarding presets, custom domains, proposal accept flows, offer idempotency,
+public tokens, payments, client portal flows, and safe mock-provider operation.
 
 `scripts/hosted-preflight.sh` reads the same `.env`/environment values as the app
 and fails on hosted blockers: default secrets, non-HTTPS public URL, missing hosted
@@ -269,8 +271,8 @@ for $40/month.
 
 The wedge: Hestia owns the full client-to-cash workflow.
 
-Inquiry -> booking -> contract -> deposit -> questionnaire -> gallery -> AI-curated
-offer -> payment -> fulfillment -> retention.
+Inquiry -> booking -> proposal -> contract -> deposit -> questionnaire -> gallery
+-> AI-curated offer -> payment -> fulfillment -> retention.
 
 One studio command center instead of duct tape.
 
@@ -303,7 +305,7 @@ Hestia is the hosted studio OS at a flat, accessible price.
 The whole studio lifecycle is implemented end to end:
 
 ```text
-visitor -> inquiry -> booking -> contract -> deposit -> questionnaire
+visitor -> inquiry -> booking -> proposal -> contract -> deposit -> questionnaire
   -> shoot -> gallery -> proofing -> AI-curated offer -> sale
   -> fulfillment -> retention
 ```
