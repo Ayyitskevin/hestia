@@ -1,15 +1,20 @@
 """The 'today' dashboard — needs-attention aggregation across the studio."""
 
+from io import BytesIO
+
 from conftest import login_owner, onboard_studio
 
+from hestia.booking import create_booking_type
 from hestia.contracts import create_contract, send_contract
 from hestia.crm import create_client, create_project
 from hestia.dashboard import money_snapshot, needs_attention, setup_checklist
 from hestia.db import connect
 from hestia.delivery import enable_delivery
-from hestia.galleries import create_gallery, publish_gallery
-from hestia.invoices import create_invoice
+from hestia.features import flags_for
+from hestia.galleries import add_image, create_gallery, publish_gallery
+from hestia.invoices import create_invoice, send_invoice
 from hestia.questionnaires import create_questionnaire, send_questionnaire
+from hestia.sales import create_or_update_offer
 from hestia.tenants import create_tenant
 
 
@@ -171,26 +176,37 @@ def test_money_snapshot_is_tenant_scoped(conn, settings):
     assert snap["month"]["revenue_cents"] == 0 and snap["ar"]["outstanding_cents"] == 0
 
 
-def test_setup_checklist_tracks_activation(conn, settings):
+def test_setup_checklist_tracks_activation(conn, settings, storage):
     t = create_tenant(conn, name="New Studio", shoot_type="wedding")
     fresh = setup_checklist(conn, t["id"], published=False)
     assert fresh["done"] == 0 and fresh["complete"] is False
-    assert [s["done"] for s in fresh["steps"]] == [False] * 5
+    assert [s["stage"] for s in fresh["steps"]] == [
+        "Launch", "Book", "Client", "Deliver", "Sell", "Collect"
+    ]
+    assert [s["done"] for s in fresh["steps"]] == [False] * 6
+    assert fresh["next"]["stage"] == "Launch"
 
     c = create_client(conn, tenant_id=t["id"], name="Cli")
+    create_booking_type(conn, tenant_id=t["id"], title="Portrait session")
     create_project(conn, tenant_id=t["id"], name="P", client_id=c["id"], shoot_type="wedding",
                    status="lead")
-    create_gallery(conn, tenant_id=t["id"], title="G")
-    create_invoice(conn, settings, tenant_id=t["id"], title="Inv", amount_cents=1000)
+    g = create_gallery(conn, tenant_id=t["id"], title="G")
+    add_image(conn, storage, tenant_id=t["id"], gallery_id=g["id"], filename="one.jpg",
+              fileobj=BytesIO(b"x" * 32), content_type="image/jpeg")
+    create_or_update_offer(conn, tenant=t, gallery=g, run_id=None,
+                           vision_summary={"keeper_count": 1, "hero_image_ids": []},
+                           flags=flags_for(t["shoot_type"]))
+    inv = create_invoice(conn, settings, tenant_id=t["id"], title="Inv", amount_cents=1000)
+    send_invoice(conn, t["id"], inv["id"])
     conn.commit()
 
-    done = setup_checklist(conn, t["id"], published=True)        # all four + published
-    assert done["done"] == 5 and done["complete"] is True
+    done = setup_checklist(conn, t["id"], published=True)
+    assert done["done"] == 6 and done["complete"] is True and done["next"] is None
 
 
 def test_dashboard_shows_get_started_for_fresh_studio(client):
     login_owner(client, onboard_studio(client, name="Fresh", email="fresh@example.com"))
-    assert "Get started" in client.get("/dashboard").text
+    assert "Launch path" in client.get("/dashboard").text
 
 
 def test_dashboard_hides_get_started_once_set_up(client, app):
@@ -198,16 +214,24 @@ def test_dashboard_hides_get_started_once_set_up(client, app):
     conn = connect(app.state.settings.db_path)
     try:
         tid = conn.execute("SELECT id FROM tenants ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        tenant = conn.execute("SELECT * FROM tenants WHERE id = ?", (tid,)).fetchone()
         c = create_client(conn, tenant_id=tid, name="Cli")
+        create_booking_type(conn, tenant_id=tid, title="Portrait session")
         create_project(conn, tenant_id=tid, name="P", client_id=c["id"], shoot_type="wedding",
                        status="lead")
-        create_gallery(conn, tenant_id=tid, title="G")
-        create_invoice(conn, app.state.settings, tenant_id=tid, title="Inv", amount_cents=1000)
+        g = create_gallery(conn, tenant_id=tid, title="G")
+        add_image(conn, app.state.storage, tenant_id=tid, gallery_id=g["id"], filename="one.jpg",
+                  fileobj=BytesIO(b"x" * 32), content_type="image/jpeg")
+        create_or_update_offer(conn, tenant=dict(tenant), gallery=g, run_id=None,
+                               vision_summary={"keeper_count": 1, "hero_image_ids": []},
+                               flags=flags_for("wedding"))
+        inv = create_invoice(conn, app.state.settings, tenant_id=tid, title="Inv", amount_cents=1000)
+        send_invoice(conn, tid, inv["id"])
         conn.commit()
     finally:
         conn.close()
     client.post("/settings/site", data={"headline": "Hi", "published": "1"})  # last step
-    assert "Get started" not in client.get("/dashboard").text
+    assert "Launch path" not in client.get("/dashboard").text
 
 
 def test_dashboard_page_shows_money_card(client, app):

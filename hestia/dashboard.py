@@ -104,23 +104,63 @@ def _has_any(conn: sqlite3.Connection, tenant_id: str, table: str) -> bool:
     ).fetchone() is not None
 
 
+def _has_active_booking_type(conn: sqlite3.Connection, tenant_id: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM booking_types WHERE tenant_id = ? AND active = 1 LIMIT 1",
+        (tenant_id,),
+    ).fetchone() is not None
+
+
+def _has_uploaded_gallery(conn: sqlite3.Connection, tenant_id: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM images WHERE tenant_id = ? LIMIT 1",
+        (tenant_id,),
+    ).fetchone() is not None
+
+
+def _has_active_offer(conn: sqlite3.Connection, tenant_id: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM offers WHERE tenant_id = ? AND status = 'active' LIMIT 1",
+        (tenant_id,),
+    ).fetchone() is not None
+
+
+def _has_money_link(conn: sqlite3.Connection, tenant_id: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM invoices WHERE tenant_id = ? AND status IN ('sent', 'paid') LIMIT 1",
+        (tenant_id,),
+    ).fetchone() is not None
+
+
 def setup_checklist(conn: sqlite3.Connection, tenant_id: str, *, published: bool) -> dict:
-    """A new studio's activation steps — the first actions that turn an empty account
-    into a working studio. Each step links to its action; once every step is done the
-    dashboard stops showing the checklist, so an established studio never sees it."""
+    """A studio's commercial activation path — the first loop from public presence to
+    a shareable offer and money link. These checks intentionally use existing tenant
+    data instead of a separate onboarding state machine, so the checklist stays honest
+    when owners skip around."""
     steps = [
-        {"label": "Add your first client", "done": _has_any(conn, tenant_id, "clients"),
-         "href": "/clients/new"},
-        {"label": "Start a project", "done": _has_any(conn, tenant_id, "projects"),
-         "href": "/projects/new"},
-        {"label": "Create a gallery", "done": _has_any(conn, tenant_id, "galleries"),
-         "href": "/galleries/new"},
-        {"label": "Send an invoice", "done": _has_any(conn, tenant_id, "invoices"),
-         "href": "/invoices/new"},
-        {"label": "Publish your studio site", "done": bool(published), "href": "/settings/site"},
+        {"stage": "Launch", "label": "Publish studio site", "done": bool(published),
+         "href": "/settings/site", "value": "public lead capture"},
+        {"stage": "Book", "label": "Add a bookable session", "done": _has_active_booking_type(conn, tenant_id),
+         "href": "/settings/booking-types", "value": "self-serve booking path"},
+        {"stage": "Client", "label": "Start a client project", "done": _has_any(conn, tenant_id, "projects"),
+         "href": "/projects/new", "value": "CRM spine"},
+        {"stage": "Deliver", "label": "Upload gallery images", "done": _has_uploaded_gallery(conn, tenant_id),
+         "href": "/galleries/new", "value": "client delivery"},
+        {"stage": "Sell", "label": "Generate an offer link", "done": _has_active_offer(conn, tenant_id),
+         "href": "/galleries", "value": "print and album upsell"},
+        {"stage": "Collect", "label": "Send an invoice or retainer", "done": _has_money_link(conn, tenant_id),
+         "href": "/invoices/new", "value": "cash collection"},
     ]
     done = sum(1 for s in steps if s["done"])
-    return {"steps": steps, "done": done, "total": len(steps), "complete": done == len(steps)}
+    next_step = next((s for s in steps if not s["done"]), None)
+    return {
+        "steps": steps,
+        "done": done,
+        "total": len(steps),
+        "remaining": len(steps) - done,
+        "complete": done == len(steps),
+        "next": next_step,
+    }
 
 
 def reconnect_due(conn: sqlite3.Connection, tenant_id: str, *,
