@@ -17,6 +17,25 @@
   </div>
 </div>
 
+<div class="card stack" style="margin-bottom:18px">
+  <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-start; flex-wrap:wrap">
+    <div style="flex:1 1 360px">
+      <h3 style="margin-bottom:4px">Trial cockpit <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ trial.title }}</span></h3>
+      <p class="muted" style="margin:0">{{ trial.message }}</p>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap">
+      {% if trial.next %}<a class="btn" href="{{ trial.next.href }}">Next: {{ trial.next.label }}</a>{% endif %}
+      <a class="btn secondary" href="/settings/billing">{{ trial.billing_label }}</a>
+    </div>
+  </div>
+  <div class="health-strip">
+    <span class="health-item"><span class="svc">{{ trial.trial_days }}</span> <span class="url">day trial</span></span>
+    <span class="health-item"><span class="svc">{{ trial.price }}</span> <span class="url">flat plan</span></span>
+    <span class="health-item"><span class="svc">all</span> <span class="url">modules included</span></span>
+    <span class="health-item"><span class="svc">anytime</span> <span class="url">cancel</span></span>
+  </div>
+</div>
+
 {% if not setup.complete %}
 <div class="card stack" style="margin-bottom:18px">
   <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">

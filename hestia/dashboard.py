@@ -6,6 +6,7 @@ aggregation over the modules that already own each thing."""
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime, timedelta
 
 from .config import Settings
 from .email import notify
@@ -95,6 +96,79 @@ def money_snapshot(conn: sqlite3.Connection, tenant_id: str) -> dict:
     month = monthly_pnl(conn, tenant_id, months=1)[0]   # current month, with displays
     ar = accounts_receivable(conn, tenant_id)
     return {"month": month, "ar": ar}
+
+
+def _parse_created_at(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    raw = str(value).replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw) if "T" in raw else datetime.strptime(raw, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
+
+
+def _days_left(started_at: str | None, trial_days: int) -> int:
+    started = _parse_created_at(started_at)
+    if started is None:
+        return max(0, trial_days)
+    remaining = (started + timedelta(days=trial_days)) - datetime.now(UTC)
+    if remaining.total_seconds() <= 0:
+        return 0
+    return max(1, (remaining.days + (1 if remaining.seconds or remaining.microseconds else 0)))
+
+
+def _flat_price(settings: Settings) -> str:
+    cents = int(settings.flat_price_cents)
+    if settings.currency.lower() == "usd" and cents % 100 == 0:
+        return f"${cents // 100}/month"
+    return f"{money(cents, settings.currency)}/month"
+
+
+def trial_cockpit(
+    tenant: dict,
+    subscription: dict | None,
+    settings: Settings,
+    setup: dict,
+) -> dict:
+    """Hosted-SaaS trial/billing summary for the owner dashboard."""
+    trial_days = max(0, int(settings.trial_days))
+    price = _flat_price(settings)
+    plan = tenant.get("plan", "beta")
+    if plan == "studio_pro":
+        plan = "studio"
+    status = (subscription or {}).get("status") or ("active" if plan == "studio" else "ready")
+
+    if plan == "studio" and status == "trialing":
+        days = _days_left((subscription or {}).get("created_at"), trial_days)
+        return {
+            "title": "Trial active",
+            "message": f"Your {trial_days}-day trial is active. {days} days left before {price}. Cancel anytime.",
+            "price": price,
+            "trial_days": trial_days,
+            "billing_label": "Manage billing",
+            "next": setup.get("next"),
+        }
+    if plan == "studio":
+        return {
+            "title": "Hestia Studio active",
+            "message": f"You are on the flat {price} studio plan. Every module is included.",
+            "price": price,
+            "trial_days": trial_days,
+            "billing_label": "Manage billing",
+            "next": setup.get("next"),
+        }
+    return {
+        "title": f"{trial_days}-day trial ready",
+        "message": f"Start the hosted {trial_days}-day trial when ready; after that Hestia is {price}. No tiers.",
+        "price": price,
+        "trial_days": trial_days,
+        "billing_label": f"Start {trial_days}-day trial",
+        "next": setup.get("next"),
+    }
 
 
 def _has_any(conn: sqlite3.Connection, tenant_id: str, table: str) -> bool:

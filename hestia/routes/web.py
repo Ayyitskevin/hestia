@@ -23,6 +23,7 @@ from ..dashboard import (
     reconnect_due,
     send_owner_digest_now,
     setup_checklist,
+    trial_cockpit,
 )
 from ..db import audit
 from ..email import notify
@@ -35,6 +36,7 @@ from ..presets import preset_applied
 from ..ratelimit import enforce
 from ..resets import consume_reset, create_reset, find_reset
 from ..studio import get_profile
+from ..subscriptions import get_subscription
 from ..tenants import (
     create_tenant,
     create_user,
@@ -252,10 +254,13 @@ def dashboard(request: Request):
         attention = needs_attention(conn, tenant["id"])
         snapshot = money_snapshot(conn, tenant["id"])
         setup = setup_checklist(conn, tenant["id"], published=profile["published"])
+        subscription = get_subscription(conn, tenant["id"])
+        trial = trial_cockpit(tenant, subscription, settings_of(request), setup)
         reconnect = reconnect_due(conn, tenant["id"])
     return render(request, "dashboard.html", auth=auth, tenant=tenant, flags=flags,
                   galleries=galleries, runs=runs, plan=plan, counts=counts, profile=profile,
-                  attention=attention, snapshot=snapshot, setup=setup, reconnect=reconnect)
+                  attention=attention, snapshot=snapshot, setup=setup, trial=trial,
+                  reconnect=reconnect)
 
 
 @router.post("/dashboard/digest")

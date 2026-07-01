@@ -7,7 +7,7 @@ from conftest import login_owner, onboard_studio
 from hestia.booking import create_booking_type
 from hestia.contracts import create_contract, send_contract
 from hestia.crm import create_client, create_project
-from hestia.dashboard import money_snapshot, needs_attention, setup_checklist
+from hestia.dashboard import money_snapshot, needs_attention, setup_checklist, trial_cockpit
 from hestia.db import connect
 from hestia.delivery import enable_delivery
 from hestia.features import flags_for
@@ -15,6 +15,7 @@ from hestia.galleries import add_image, create_gallery, publish_gallery
 from hestia.invoices import create_invoice, send_invoice
 from hestia.questionnaires import create_questionnaire, send_questionnaire
 from hestia.sales import create_or_update_offer
+from hestia.subscriptions import apply_plan, get_subscription
 from hestia.tenants import create_tenant
 
 
@@ -250,3 +251,47 @@ def test_dashboard_page_shows_money_card(client, app):
     page = client.get("/dashboard")
     assert page.status_code == 200
     assert "Money" in page.text and "$1,250.00" in page.text     # outstanding A/R shown
+
+
+def test_trial_cockpit_summarizes_ready_trial(conn, settings):
+    t = create_tenant(conn, name="Trial Studio", shoot_type="wedding")
+    setup = setup_checklist(conn, t["id"], published=False)
+    trial = trial_cockpit(t, None, settings, setup)
+    assert trial["title"] == "14-day trial ready"
+    assert trial["trial_days"] == 14
+    assert trial["price"] == "$40/month"
+    assert trial["billing_label"] == "Start 14-day trial"
+    assert trial["next"]["stage"] == "Preset"
+
+
+def test_trial_cockpit_summarizes_active_trial(conn, settings):
+    t = create_tenant(conn, name="Active Trial", shoot_type="wedding")
+    apply_plan(conn, t["id"], plan="studio", status="trialing", provider="mock")
+    conn.commit()
+    tenant = conn.execute("SELECT * FROM tenants WHERE id = ?", (t["id"],)).fetchone()
+    setup = setup_checklist(conn, t["id"], published=False)
+    trial = trial_cockpit(dict(tenant), get_subscription(conn, t["id"]), settings, setup)
+    assert trial["title"] == "Trial active"
+    assert "days left before $40/month" in trial["message"]
+    assert trial["billing_label"] == "Manage billing"
+
+
+def test_dashboard_shows_trial_cockpit_for_fresh_studio(client):
+    login_owner(client, onboard_studio(client, name="Cockpit", email="cockpit@example.com"))
+    page = client.get("/dashboard")
+    assert page.status_code == 200
+    assert "Trial cockpit" in page.text
+    assert "14-day trial ready" in page.text
+    assert "$40/month" in page.text
+    assert "Start 14-day trial" in page.text
+    assert "Next: Choose a studio preset" in page.text
+
+
+def test_dashboard_trial_cockpit_next_action_after_preset(client, app):
+    creds = onboard_studio(client, name="Preset Done", email="presetdone@example.com")
+    login_owner(client, creds)
+    client.post("/onboarding", data={"preset": "wedding"})
+    page = client.get("/dashboard")
+    assert page.status_code == 200
+    assert "Trial cockpit" in page.text
+    assert "Next: Publish studio site" in page.text
