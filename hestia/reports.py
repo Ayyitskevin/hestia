@@ -37,7 +37,8 @@ def ar_aging(conn: sqlite3.Connection, tenant_id: str) -> dict:
         # a parseable past due_date yields its age in days; empty/free-text or future
         # dates collapse to 0 ("not yet due")
         "  CASE WHEN date(due_date) IS NULL THEN 0 "
-        "       ELSE CAST(julianday('now') - julianday(date(due_date)) AS INTEGER) END AS overdue_days "
+        "       ELSE CAST(julianday('now', 'localtime') - julianday(date(due_date)) AS INTEGER) "
+        "  END AS overdue_days "
         "FROM invoices WHERE tenant_id = ? AND status = 'sent' AND plan_id IS NULL",
         (tenant_id,),
     ).fetchall()
@@ -82,14 +83,16 @@ def monthly_pnl(conn: sqlite3.Connection, tenant_id: str, *, months: int = 6) ->
     parseable, else when they were logged."""
     rev: dict[str, int] = {}
     for r in conn.execute(
-        "SELECT strftime('%Y-%m', COALESCE(paid_at, created_at)) AS ym, amount_cents AS cents "
+        "SELECT strftime('%Y-%m', COALESCE(paid_at, created_at), 'localtime') AS ym, "
+        "amount_cents AS cents "
         "FROM invoices WHERE tenant_id = ? AND status = 'paid' AND id NOT IN "
         "(SELECT invoice_id FROM orders WHERE tenant_id = ? AND invoice_id IS NOT NULL)",
         (tenant_id, tenant_id)).fetchall():
         if r["ym"]:
             rev[r["ym"]] = rev.get(r["ym"], 0) + int(r["cents"])
     for r in conn.execute(
-        "SELECT strftime('%Y-%m', COALESCE(i.paid_at, o.created_at)) AS ym, o.amount_cents AS cents "
+        "SELECT strftime('%Y-%m', COALESCE(i.paid_at, o.created_at), 'localtime') AS ym, "
+        "o.amount_cents AS cents "
         "FROM orders o LEFT JOIN invoices i ON i.id = o.invoice_id AND i.tenant_id = o.tenant_id "
         "WHERE o.tenant_id = ? AND o.status = 'paid'",
         (tenant_id,)).fetchall():
@@ -97,7 +100,8 @@ def monthly_pnl(conn: sqlite3.Connection, tenant_id: str, *, months: int = 6) ->
             rev[r["ym"]] = rev.get(r["ym"], 0) + int(r["cents"])
     exp: dict[str, int] = {}
     for r in conn.execute(
-        "SELECT strftime('%Y-%m', COALESCE(date(incurred_on), created_at)) AS ym, "
+        "SELECT strftime('%Y-%m', CASE WHEN date(incurred_on) IS NOT NULL THEN date(incurred_on) "
+        "ELSE datetime(created_at, 'localtime') END) AS ym, "
         "SUM(amount_cents) AS cents FROM expenses WHERE tenant_id = ? GROUP BY ym",
         (tenant_id,)).fetchall():
         if r["ym"]:

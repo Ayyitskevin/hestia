@@ -80,7 +80,7 @@ def delivery_expired(conn: sqlite3.Connection, gallery: dict) -> bool:
     exp = (gallery.get("delivery_expires_at") or "").strip()
     if not exp:
         return False
-    row = conn.execute("SELECT date(?) AS d, date('now') AS today", (exp,)).fetchone()
+    row = conn.execute("SELECT date(?) AS d, date('now', 'localtime') AS today", (exp,)).fetchone()
     return bool(row["d"]) and row["d"] < row["today"]
 
 

@@ -188,7 +188,8 @@ def agenda(conn: sqlite3.Connection, tenant_id: str, *, days: int = 21) -> list[
         "FROM appointments a "
         "LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id "
         "WHERE a.tenant_id = ? AND a.status = 'confirmed' AND datetime(a.starts_at) IS NOT NULL "
-        "  AND date(a.starts_at) >= date('now') AND date(a.starts_at) <= date('now', ?) "
+        "  AND date(a.starts_at) >= date('now', 'localtime') "
+        "  AND date(a.starts_at) <= date('now', 'localtime', ?) "
         "ORDER BY datetime(a.starts_at)",
         (tenant_id, f"+{int(days)} days"),
     ).fetchall()

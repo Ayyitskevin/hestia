@@ -13,6 +13,7 @@ from ..booking import list_booking_types
 from ..dashboard import set_digest_enabled
 from ..db import list_audit
 from ..email import list_emails, notify
+from ..integrity import integrity_report, repair_integrity
 from ..invoices import money
 from ..packages import get_package, list_packages
 from ..ratelimit import enforce
@@ -132,8 +133,9 @@ def site_settings(request: Request):
             return RedirectResponse("/login", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
         profile = get_profile(conn, tenant["id"])
+        integrity = integrity_report(conn, tenant["id"], sample_limit=0)
     return render(request, "studio/settings.html", auth=auth, tenant=tenant, profile=profile,
-                  can_style=can_use_style_profile(tenant))
+                  can_style=can_use_style_profile(tenant), integrity=integrity)
 
 
 @router.post("/settings/vision-style")
@@ -194,6 +196,26 @@ def signature_save(request: Request, email_signature: str = Form("")):
             return RedirectResponse("/login", status_code=303)
         set_email_signature(conn, auth.tenant["id"], email_signature)
     return RedirectResponse("/settings/site", status_code=303)
+
+
+@router.get("/settings/integrity")
+def integrity_settings(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        report = integrity_report(conn, auth.tenant["id"])
+    return render(request, "studio/integrity.html", auth=auth, report=report, repaired=None)
+
+
+@router.post("/settings/integrity/repair")
+def integrity_repair(request: Request):
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        result = repair_integrity(conn, auth.tenant["id"])
+    return render(request, "studio/integrity.html", auth=auth, report=result["report"], repaired=result)
 
 
 @router.get("/settings/messages")

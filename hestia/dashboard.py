@@ -26,7 +26,7 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         "SELECT i.id, i.title, i.amount_cents, i.currency, i.status, c.name AS client_name, "
         # flag the overdue ones (sent, past a parseable due_date) and float them up
         "  CASE WHEN i.status = 'sent' AND date(i.due_date) IS NOT NULL "
-        "       AND date(i.due_date) < date('now') THEN 1 ELSE 0 END AS is_overdue "
+        "       AND date(i.due_date) < date('now', 'localtime') THEN 1 ELSE 0 END AS is_overdue "
         "FROM invoices i LEFT JOIN clients c ON c.id = i.client_id AND c.tenant_id = i.tenant_id "
         # plan_id IS NULL: installments live under their payment plan, not this list,
         # so they don't get double-counted here and under /payment-plans
@@ -44,7 +44,8 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         "FROM appointments a LEFT JOIN clients c ON c.id = a.client_id AND c.tenant_id = a.tenant_id "
         # a 'blocked' entry is the studio's own busy-time, not a client session — exclude it
         "WHERE a.tenant_id = ? AND a.status != 'canceled' AND a.kind != 'blocked' "
-        "AND datetime(a.starts_at) IS NOT NULL AND datetime(a.starts_at) >= datetime('now') "
+        "AND datetime(a.starts_at) IS NOT NULL "
+        "AND datetime(a.starts_at) >= datetime('now', 'localtime') "
         "ORDER BY datetime(a.starts_at) ASC LIMIT ?",
         (tenant_id, limit))]
 

@@ -65,6 +65,18 @@
 </div>
 
 <div class="card stack" style="margin-top:18px">
+  <h3>Data integrity</h3>
+  {% if integrity.total %}
+    <p class="muted">{{ integrity.total }} hidden relationship issue{{ '' if integrity.total == 1 else 's' }}
+      detected. {{ integrity.repairable_total }} can be repaired automatically.</p>
+    <div><a class="btn secondary" href="/settings/integrity">Review integrity →</a></div>
+  {% else %}
+    <p class="muted">No hidden relationship issues detected.</p>
+    <div><a class="btn secondary" href="/settings/integrity">Review integrity →</a></div>
+  {% endif %}
+</div>
+
+<div class="card stack" style="margin-top:18px">
   <h3>Weekly digest</h3>
   <p class="muted">A once-a-week email of what needs you — new leads, unpaid invoices,
     upcoming sessions, galleries to deliver, and clients to reconnect with. You can always

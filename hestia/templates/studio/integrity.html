@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Data integrity — Hestia{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Data integrity</h1>
+    <span class="muted">Hidden legacy links that Hestia ignores in normal views.</span>
+  </div>
+  <a class="btn secondary" href="/settings/site">← Settings</a>
+</div>
+
+{% if repaired %}
+  {% if repaired.fixed_total %}
+    <div class="alert ok">{{ repaired.fixed_total }} issue{{ '' if repaired.fixed_total == 1 else 's' }} repaired.</div>
+  {% else %}
+    <div class="alert ok">No repairable issues remained.</div>
+  {% endif %}
+{% endif %}
+
+<div class="grid cols-2">
+  <div class="card stack">
+    <h3>Summary</h3>
+    <div class="health-strip">
+      <div class="health-item"><span class="svc">{{ report.total }}</span><span class="url">total</span></div>
+      <div class="health-item"><span class="svc">{{ report.repairable_total }}</span><span class="url">repairable</span></div>
+      <div class="health-item"><span class="svc">{{ report.manual_total }}</span><span class="url">manual</span></div>
+    </div>
+    {% if report.clean %}
+      <p class="muted">No hidden relationship issues detected.</p>
+    {% else %}
+      <p class="muted">Repair clears optional bad links and removes invalid proofing rows.
+        Manual rows need an owner decision because their required parent is missing or belongs elsewhere.</p>
+    {% endif %}
+  </div>
+  <div class="card stack">
+    <h3>Repair</h3>
+    {% if report.repairable_total %}
+      <p class="muted">This will not delete clients, projects, invoices, galleries, albums, or images.</p>
+      <form method="post" action="/settings/integrity/repair">
+        {% include "_csrf.html" %}
+        <button class="btn" type="submit">Repair {{ report.repairable_total }} issue{{ '' if report.repairable_total == 1 else 's' }}</button>
+      </form>
+    {% else %}
+      <p class="muted">No automatic repair is available for the current report.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if report.active_rules %}
+  {% for rule in report.active_rules %}
+    <div class="card stack" style="margin-top:18px">
+      <div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline">
+        <div>
+          <h3 style="margin:0">{{ rule.label }}</h3>
+          <p class="muted" style="margin:6px 0 0">{{ rule.detail }}</p>
+        </div>
+        <span class="pill {{ 'on' if rule.repairable else 'off' }}">{{ rule.action }}</span>
+      </div>
+      <table>
+        <thead><tr><th>Row</th><th>Item</th><th>Bad value</th><th>Reason</th></tr></thead>
+        <tbody>
+          {% for row in rule.rows %}
+            <tr>
+              <td class="mono muted">#{{ row.id }}</td>
+              <td>{{ row.item }}</td>
+              <td class="mono muted">{{ row.bad_value }}</td>
+              <td class="muted">{{ row.reason }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if rule.more %}
+        <p class="hint">{{ rule.more }} more row{{ '' if rule.more == 1 else 's' }} hidden from this preview.</p>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="card stack" style="margin-top:18px">
+    <h3>All clear</h3>
+    <p class="muted">No malformed legacy links are currently hidden from normal views.</p>
+  </div>
+{% endif %}
+{% endblock %}
