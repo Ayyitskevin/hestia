@@ -28,7 +28,7 @@ from ..dashboard import (
 from ..db import audit
 from ..email import notify
 from ..galleries import list_galleries
-from ..hosted import tenant_slug_from_request
+from ..hosted import tenant_from_custom_domain, tenant_slug_from_request
 from ..invoices import money
 from ..packages import list_packages
 from ..pipeline import list_runs
@@ -70,10 +70,14 @@ def _session_redirect(settings, token: str, target: str) -> RedirectResponse:
 @router.get("/")
 def landing(request: Request):
     with db_conn(request) as conn:
+        tenant = None
         if slug := tenant_slug_from_request(request):
             tenant = get_tenant_by_slug(conn, slug)
             if not tenant:
                 return render(request, "offer_missing.html", auth=None, status_code=404)
+        else:
+            tenant = tenant_from_custom_domain(conn, request)
+        if tenant:
             profile = get_profile(conn, tenant["id"])
             if not profile["published"]:
                 return render(request, "studio/coming_soon.html", auth=None, tenant=tenant)

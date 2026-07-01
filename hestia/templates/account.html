@@ -33,6 +33,38 @@
   </div>
 
   <div class="card stack">
+    <h3 style="margin:0">Custom domain</h3>
+    {% if domain_error %}<div class="alert error">{{ domain_error }}</div>{% endif %}
+    <form method="post" action="/settings/account/domain" class="stack">
+      {% include "_csrf.html" %}
+      <label for="custom_domain">Domain</label>
+      <input type="text" id="custom_domain" name="custom_domain"
+             value="{{ custom_domain.domain }}" placeholder="photos.example.com">
+      <button class="btn" type="submit">Save domain</button>
+    </form>
+    {% if custom_domain.domain %}
+      <div>
+        <div class="label">Status</div>
+        <span class="pill {{ 'on' if custom_domain.status == 'verified' else 'off' }}">{{ custom_domain.status }}</span>
+      </div>
+      <div>
+        <div class="label">CNAME target</div>
+        <div class="mono">{{ custom_domain.target }}</div>
+      </div>
+      <div>
+        <div class="label">TXT record</div>
+        <div class="mono">{{ custom_domain.dns_name }}</div>
+        <div class="mono">{{ custom_domain.token }}</div>
+      </div>
+      {% if custom_domain.url %}
+      <a class="btn secondary" href="{{ custom_domain.url }}" target="_blank">Open custom domain</a>
+      {% endif %}
+    {% else %}
+      <p class="hint">Leave blank to use the hosted Hestia subdomain.</p>
+    {% endif %}
+  </div>
+
+  <div class="card stack">
     <h3 style="margin:0">Billing</h3>
     <div>
       <div class="label">Current plan</div>

@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
 from ..billing import PLANS, plan_status
+from ..domains import custom_domain_summary, set_custom_domain
 from ..subscriptions import (
     SubscriptionError,
     apply_plan,
@@ -51,6 +52,7 @@ def account(request: Request):
         tenant = get_tenant(conn, auth.tenant["id"])
         sub = get_subscription(conn, tenant["id"])
         owner_email = _owner_email(conn, tenant["id"])
+        custom_domain = custom_domain_summary(settings, tenant)
     studio_url = f"{settings.public_url.rstrip('/')}/studio/{tenant['slug']}"
     return render(
         request,
@@ -63,7 +65,46 @@ def account(request: Request):
         owner_email=owner_email,
         studio_url=studio_url,
         hosted_url=_hosted_url(settings, tenant),
+        custom_domain=custom_domain,
+        domain_error="",
     )
+
+
+@router.post("/settings/account/domain")
+def account_domain(request: Request, custom_domain: str = Form("")):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        try:
+            set_custom_domain(
+                conn,
+                auth.tenant["id"],
+                custom_domain,
+                hosted_domain=settings.hosted_domain,
+            )
+        except ValueError:
+            tenant = get_tenant(conn, auth.tenant["id"])
+            sub = get_subscription(conn, tenant["id"])
+            owner_email = _owner_email(conn, tenant["id"])
+            studio_url = f"{settings.public_url.rstrip('/')}/studio/{tenant['slug']}"
+            return render(
+                request,
+                "account.html",
+                auth=auth,
+                tenant=tenant,
+                plan=plan_status(tenant),
+                subscription=sub,
+                backend=settings.subscription_backend,
+                owner_email=owner_email,
+                studio_url=studio_url,
+                hosted_url=_hosted_url(settings, tenant),
+                custom_domain=custom_domain_summary(settings, tenant),
+                domain_error="Enter a valid domain you control, like photos.example.com.",
+                status_code=400,
+            )
+    return RedirectResponse("/settings/account", status_code=303)
 
 
 @router.get("/settings/billing")

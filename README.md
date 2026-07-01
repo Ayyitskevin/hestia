@@ -131,6 +131,13 @@ stay local and deterministic; with `HESTIA_SUBSCRIPTION_BACKEND=stripe`, the sam
 control opens Stripe's customer billing portal for payment method and cancellation
 self-service.
 
+Custom domains are prepared from `/settings/account` as a pending domain with a
+CNAME target (`HESTIA_DOMAIN`) and TXT verification token (`_hestia.<domain>`).
+After DNS is confirmed, mark the tenant's `custom_domain_status` as `verified`;
+only verified custom domains route to the public studio site. The default Caddyfile
+covers `HESTIA_DOMAIN` and `*.HESTIA_DOMAIN`; custom domains need an operator-added
+Caddy host entry or a later on-demand TLS policy.
+
 ## Mock-first provider seams
 
 Everything runs with **no external keys** by default. Each integration is a seam that
