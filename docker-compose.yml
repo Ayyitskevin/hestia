@@ -1,0 +1,30 @@
+services:
+  hestia:
+    build: .
+    env_file: .env
+    environment:
+      HESTIA_DATA_DIR: /data
+      HESTIA_MEDIA_DIR: /data/media
+    volumes:
+      - hestia-data:/data
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    depends_on:
+      - hestia
+    environment:
+      HESTIA_DOMAIN: ${HESTIA_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  hestia-data:
+  caddy-data:
+  caddy-config:

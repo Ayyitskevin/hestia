@@ -42,8 +42,10 @@ async def stripe_webhook(request: Request):
                 fulfill_for_invoice_token(conn, token)
         if sub:
             tenant_id, plan, ref = sub
-            apply_plan(conn, tenant_id, plan=plan, provider="stripe", provider_ref=ref)
-            result["subscription"] = f"{plan}:active"
+            status = "trialing" if settings.trial_days > 0 else "active"
+            apply_plan(conn, tenant_id, plan=plan, status=status,
+                       provider="stripe", provider_ref=ref)
+            result["subscription"] = f"{plan}:{status}"
         elif canceled:
             apply_plan(conn, canceled, plan="beta", status="canceled", provider="stripe")
             result["subscription"] = "beta:canceled"

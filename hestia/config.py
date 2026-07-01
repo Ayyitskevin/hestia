@@ -31,6 +31,7 @@ class Settings:
     signup_enabled: bool = False
     data_dir: Path = field(default_factory=lambda: Path("./data"))
     public_url: str = "http://127.0.0.1:8500"
+    hosted_domain: str = ""
 
     # Observability. json = one structured line per log record (default).
     log_format: str = "json"  # json | plain
@@ -69,12 +70,12 @@ class Settings:
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     currency: str = "usd"
+    flat_price_cents: int = 4000
+    trial_days: int = 14
 
     # Studio subscriptions (billing the studios). mock = activate the plan instantly
     # (no charge, testable). stripe = Checkout Session in subscription mode + webhook.
     subscription_backend: str = "mock"  # mock | stripe
-    stripe_price_studio: str = ""
-    stripe_price_studio_pro: str = ""
 
     # Email (transactional). mock = record to the outbox, send nothing (testable
     # default). smtp = deliver over SMTP and still record. See hestia/email.py.
@@ -101,6 +102,7 @@ class Settings:
             signup_enabled=_env_bool("HESTIA_SIGNUP_ENABLED", False),
             data_dir=data_dir,
             public_url=os.getenv("HESTIA_PUBLIC_URL", "http://127.0.0.1:8500"),
+            hosted_domain=os.getenv("HESTIA_DOMAIN", ""),
             log_format=os.getenv("HESTIA_LOG_FORMAT", "json"),
             log_level=os.getenv("HESTIA_LOG_LEVEL", "INFO"),
             api_token=os.getenv("HESTIA_API_TOKEN", "CHANGE_ME_ADMIN"),
@@ -123,6 +125,8 @@ class Settings:
             stripe_secret_key=os.getenv("HESTIA_STRIPE_SECRET_KEY", os.getenv("STRIPE_SECRET_KEY", "")),
             stripe_webhook_secret=os.getenv("HESTIA_STRIPE_WEBHOOK_SECRET", os.getenv("STRIPE_WEBHOOK_SECRET", "")),
             currency=os.getenv("HESTIA_CURRENCY", "usd"),
+            flat_price_cents=4000,
+            trial_days=int(os.getenv("HESTIA_TRIAL_DAYS", "14")),
             email_backend=os.getenv("HESTIA_EMAIL_BACKEND", "mock"),
             smtp_host=os.getenv("HESTIA_SMTP_HOST", ""),
             smtp_port=int(os.getenv("HESTIA_SMTP_PORT", "587")),
@@ -130,16 +134,15 @@ class Settings:
             smtp_password=os.getenv("HESTIA_SMTP_PASSWORD", ""),
             smtp_from=os.getenv("HESTIA_SMTP_FROM", ""),
             subscription_backend=os.getenv("HESTIA_SUBSCRIPTION_BACKEND", "mock"),
-            stripe_price_studio=os.getenv("HESTIA_STRIPE_PRICE_STUDIO", ""),
-            stripe_price_studio_pro=os.getenv("HESTIA_STRIPE_PRICE_STUDIO_PRO", ""),
             fulfillment_backend=os.getenv("HESTIA_FULFILLMENT_BACKEND", "mock"),
             fulfillment_api_key=os.getenv("HESTIA_FULFILLMENT_API_KEY", ""),
             fulfillment_endpoint=os.getenv("HESTIA_FULFILLMENT_ENDPOINT", ""),
         )
 
     def stripe_price_id(self, plan: str) -> str:
-        return {"studio": self.stripe_price_studio,
-                "studio_pro": self.stripe_price_studio_pro}.get(plan, "")
+        # Hestia is a flat-price SaaS. Kept only for old callers; new subscription
+        # checkout uses inline Stripe price_data locked to flat_price_cents.
+        return "flat_40_month" if plan == "studio" else ""
 
     @property
     def db_path(self) -> Path:
@@ -163,10 +166,8 @@ class Settings:
         warn = [f"{s} is a default — set a real value" for s in self.insecure_secrets]
         if self.payments_backend == "stripe" and not self.stripe_secret_key:
             warn.append("payments_backend=stripe but HESTIA_STRIPE_SECRET_KEY is unset")
-        if self.subscription_backend == "stripe" and not (
-            self.stripe_secret_key and (self.stripe_price_studio or self.stripe_price_studio_pro)
-        ):
-            warn.append("subscription_backend=stripe but the Stripe key or price IDs are unset")
+        if self.subscription_backend == "stripe" and not self.stripe_secret_key:
+            warn.append("subscription_backend=stripe but HESTIA_STRIPE_SECRET_KEY is unset")
         if {self.payments_backend, self.subscription_backend} & {"stripe"} and not self.stripe_webhook_secret:
             warn.append("a stripe backend is active but HESTIA_STRIPE_WEBHOOK_SECRET is unset (webhooks 503)")
         if self.fulfillment_backend == "lab" and not (

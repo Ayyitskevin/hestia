@@ -38,11 +38,44 @@ def test_mock_subscribe_activates_now(settings):
     assert isinstance(r, SubscribeResult) and r.activated and r.simulated
 
 
-def test_stripe_subscribe_needs_key_and_price(settings):
-    s = dataclasses.replace(settings, subscription_backend="stripe", stripe_secret_key="",
-                            stripe_price_studio="")
+def test_stripe_subscribe_needs_key(settings):
+    s = dataclasses.replace(settings, subscription_backend="stripe", stripe_secret_key="")
     with pytest.raises(SubscriptionError):
         StripeSubscriptions(s).subscribe(tenant={"id": "t1"}, plan="studio", success_url="/x")
+
+
+def test_stripe_subscribe_uses_flat_40_trial(monkeypatch, settings):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"url": "https://checkout.stripe.test/session"}
+
+    def fake_post(url, *, data, auth, timeout):
+        captured.update({"url": url, "data": data, "auth": auth, "timeout": timeout})
+        return FakeResponse()
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    s = dataclasses.replace(settings, subscription_backend="stripe", stripe_secret_key="sk_test")
+    r = StripeSubscriptions(s).subscribe(
+        tenant={"id": "t1", "owner_email": "owner@example.com"},
+        plan="studio",
+        success_url="https://app.test/settings/billing",
+    )
+    assert r.url.startswith("https://checkout")
+    assert captured["auth"] == ("sk_test", "")
+    data = captured["data"]
+    assert data["mode"] == "subscription"
+    assert data["line_items[0][price_data][unit_amount]"] == "4000"
+    assert data["line_items[0][price_data][recurring][interval]"] == "month"
+    assert data["line_items[0][price_data][product_data][name]"] == "Hestia Studio"
+    assert data["subscription_data[trial_period_days]"] == "14"
+    assert data["metadata[plan]"] == "studio"
 
 
 def test_apply_plan_updates_tenant_and_records(conn, settings):
@@ -69,8 +102,8 @@ def test_apply_plan_rejects_unknown_plan(conn):
 def test_subscription_from_event_parses_completed_checkout():
     ev = json.dumps({"type": "checkout.session.completed", "data": {"object": {
         "mode": "subscription", "subscription": "sub_9",
-        "metadata": {"tenant_id": "tA", "plan": "studio_pro"}}}}).encode()
-    assert subscription_from_event(ev) == ("tA", "studio_pro", "sub_9")
+        "metadata": {"tenant_id": "tA", "plan": "studio"}}}}).encode()
+    assert subscription_from_event(ev) == ("tA", "studio", "sub_9")
     # ignores non-subscription checkouts and unknown plans
     assert subscription_from_event(json.dumps({"type": "checkout.session.completed",
         "data": {"object": {"mode": "payment"}}}).encode()) is None
@@ -97,7 +130,8 @@ def test_billing_page_lists_plans(client):
     login_owner(client, onboard_studio(client, email="bill@e.com"))
     page = client.get("/settings/billing")
     assert page.status_code == 200
-    assert "Studio Pro" in page.text and "Current plan" in page.text
+    assert "Hestia Studio" in page.text and "$40/month" in page.text
+    assert "Studio Pro" not in page.text
 
 
 def test_subscribe_switches_plan_in_mock_mode(client, conn):
@@ -105,13 +139,13 @@ def test_subscribe_switches_plan_in_mock_mode(client, conn):
     tid = _tid(conn)
     client.post("/settings/billing/subscribe", data={"plan": "studio"})
     assert conn.execute("SELECT plan FROM tenants WHERE id=?", (tid,)).fetchone()["plan"] == "studio"
-    assert get_subscription(conn, tid)["status"] == "active"
+    assert get_subscription(conn, tid)["status"] == "trialing"
 
 
 def test_cancel_downgrades_to_beta(client, conn):
     login_owner(client, onboard_studio(client, email="cancel@e.com"))
     tid = _tid(conn)
-    client.post("/settings/billing/subscribe", data={"plan": "studio_pro"})
+    client.post("/settings/billing/subscribe", data={"plan": "studio"})
     client.post("/settings/billing/cancel")
     assert conn.execute("SELECT plan FROM tenants WHERE id=?", (tid,)).fetchone()["plan"] == "beta"
     assert get_subscription(conn, tid)["status"] == "canceled"
@@ -136,6 +170,7 @@ def test_stripe_webhook_activates_subscription(settings, db_path):
 
     r = TestClient(app).post("/webhooks/stripe", content=event,
                              headers={"stripe-signature": header})
-    assert r.json()["subscription"] == "studio:active"
+    assert r.json()["subscription"] == "studio:trialing"
     with connect(db_path) as conn:
         assert conn.execute("SELECT plan FROM tenants WHERE id=?", (t["id"],)).fetchone()["plan"] == "studio"
+        assert get_subscription(conn, t["id"])["status"] == "trialing"

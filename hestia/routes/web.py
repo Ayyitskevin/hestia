@@ -15,6 +15,7 @@ from ..auth import (
     destroy_session,
 )
 from ..billing import plan_status
+from ..booking import list_booking_types
 from ..crm import list_clients, list_projects
 from ..dashboard import (
     money_snapshot,
@@ -26,6 +27,9 @@ from ..dashboard import (
 from ..db import audit
 from ..email import notify
 from ..galleries import list_galleries
+from ..hosted import tenant_slug_from_request
+from ..invoices import money
+from ..packages import list_packages
 from ..pipeline import list_runs
 from ..ratelimit import enforce
 from ..resets import consume_reset, create_reset, find_reset
@@ -34,11 +38,13 @@ from ..tenants import (
     create_tenant,
     create_user,
     get_tenant,
+    get_tenant_by_slug,
     get_user_by_email,
     mark_user_verified,
     set_user_password,
     tenant_flags,
 )
+from ..testimonials import featured_testimonials
 from ..verifications import consume_verification, create_verification
 from .deps import db_conn, render, settings_of
 
@@ -48,6 +54,22 @@ router = APIRouter()
 @router.get("/")
 def landing(request: Request):
     with db_conn(request) as conn:
+        if slug := tenant_slug_from_request(request):
+            tenant = get_tenant_by_slug(conn, slug)
+            if not tenant:
+                return render(request, "offer_missing.html", auth=None, status_code=404)
+            profile = get_profile(conn, tenant["id"])
+            if not profile["published"]:
+                return render(request, "studio/coming_soon.html", auth=None, tenant=tenant)
+            testimonials = featured_testimonials(conn, tenant["id"])
+            currency = settings_of(request).currency
+            packages = list_packages(conn, tenant["id"], active_only=True)
+            for p in packages:
+                p["price_display"] = money(p["price_cents"], currency)
+            has_booking = bool(list_booking_types(conn, tenant["id"], active_only=True))
+            return render(request, "studio/site.html", auth=None, tenant=tenant,
+                          profile=profile, testimonials=testimonials, ref="",
+                          packages=packages, has_booking=has_booking)
         auth = context_from_session(conn, request)
     return render(request, "landing.html", auth=auth)
 

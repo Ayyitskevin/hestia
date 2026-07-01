@@ -13,9 +13,8 @@ def test_stripe_payments_without_key_warns(settings):
     assert any("payments_backend=stripe" in w for w in s.config_warnings)
 
 
-def test_stripe_subscription_needs_key_and_price(settings):
-    s = dataclasses.replace(settings, subscription_backend="stripe", stripe_secret_key="sk",
-                            stripe_price_studio="", stripe_price_studio_pro="")
+def test_stripe_subscription_needs_key(settings):
+    s = dataclasses.replace(settings, subscription_backend="stripe", stripe_secret_key="")
     assert any("subscription_backend=stripe" in w for w in s.config_warnings)
 
 
@@ -47,6 +46,5 @@ def test_insecure_default_secret_warns(settings):
 
 def test_fully_configured_stripe_is_clean(settings):
     s = dataclasses.replace(settings, payments_backend="stripe", subscription_backend="stripe",
-                            stripe_secret_key="sk", stripe_price_studio="price_x",
-                            stripe_webhook_secret="whsec_x")
+                            stripe_secret_key="sk", stripe_webhook_secret="whsec_x")
     assert s.config_warnings == []

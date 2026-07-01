@@ -79,13 +79,11 @@ flat, AI gated by tier) and Pixieset (storage-tiered, **15% print commission** a
 upgrade lever) bracket the market; HoneyBook's Feb-2025 51–89% price hike drove churn
 *to* Dubsado. Annual ≈ 20% discount is segment-standard.
 
-**Hestia tiers** (map onto the existing `subscriptions` module):
-- **Solo Studio** — full CRM + booking + galleries + invoicing + baseline AI culling.
-- **Studio Pro** — + full automations, deeper AI editing/album/marketing, more storage, custom AI profile.
-- **Agency / Team** — + seats/roles, multiple AI profiles, priority.
-- **Levers:** flat base (anchor) · AI overage credits *only* for heavy/variable runs ·
-  **20% annual-commit discount** · **wedge: low/zero print commission** funded by
-  subscription (Pixieset/Pic-Time's 15% tax is a resented churn driver).
+**Hestia packaging** is now intentionally simpler than the bracketed incumbents:
+one hosted plan, **Hestia Studio at $40/month after a 14-day trial**, with the full
+command center included. No paid tiers, no annual-lock discount games, no surprise
+print commission. The wedge is a low-friction flat subscription that feels like a
+bargain next to a stack of 5-7 disconnected tools.
 
 ## Caveats & open follow-ups
 

@@ -11,28 +11,29 @@
 </div>
 
 {% if backend == 'mock' %}
-<div class="alert warn">Test mode — switching plans activates instantly with no charge.
-  Set <span class="mono">HESTIA_SUBSCRIPTION_BACKEND=stripe</span> (with price IDs) for real billing.</div>
+<div class="alert warn">Test mode — starting the trial activates instantly with no charge.
+  Set <span class="mono">HESTIA_SUBSCRIPTION_BACKEND=stripe</span> for real billing.</div>
 {% endif %}
 
-<div class="grid cols-2">
-  {% for key, p in plans.items() %}
-  <div class="card stack">
-    <h3>{{ p.name }}{% if key == plan.plan %} <span class="pill on">current</span>{% endif %}</h3>
-    <div style="font-weight:600; font-size:1.2rem">{{ p.price }}</div>
-    <p class="muted">{{ p.blurb }}</p>
-    <p class="hint">{{ 'Unlimited galleries' if p.galleries is none else (p.galleries|string) + ' galleries' }}</p>
-    {% if key == plan.plan %}
-      <button class="btn secondary" type="button" disabled>Your plan</button>
-    {% else %}
-      <form method="post" action="/settings/billing/subscribe">
-        {% include "_csrf.html" %}
-        <input type="hidden" name="plan" value="{{ key }}">
-        <button class="btn" type="submit">Switch to {{ p.name }}</button>
-      </form>
-    {% endif %}
+<div class="card stack">
+  <h2 style="margin:0">Hestia Studio</h2>
+  <div style="font-weight:700; font-size:2rem">$40/month</div>
+  <p class="muted">14-day free trial. Cancel anytime. One hosted command center for
+    booking, CRM, contracts, galleries, AI offers, invoices, payments, and retention.</p>
+  <div class="health-strip">
+    <span class="health-item"><span class="svc">∞</span> <span class="url">galleries</span></span>
+    <span class="health-item"><span class="svc">AI</span> <span class="url">offers</span></span>
+    <span class="health-item"><span class="svc">$40</span> <span class="url">flat</span></span>
   </div>
-  {% endfor %}
+  {% if plan.plan == 'studio' %}
+    <button class="btn secondary" type="button" disabled>Your plan</button>
+  {% else %}
+    <form method="post" action="/settings/billing/subscribe">
+      {% include "_csrf.html" %}
+      <input type="hidden" name="plan" value="studio">
+      <button class="btn" type="submit">Start 14-day trial</button>
+    </form>
+  {% endif %}
 </div>
 
 {% if plan.plan != 'beta' %}

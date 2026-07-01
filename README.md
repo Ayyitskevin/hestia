@@ -101,6 +101,25 @@ bash scripts/start-hestia.sh    # → http://127.0.0.1:8500
   invoices · plans · automations · site · billing
 - `/studio/{slug}` the studio's public page · `/healthz` liveness · `/readyz` readiness
 
+## Hosted MicroSaaS mode
+
+Hestia is packaged for a simple hosted launch: one Docker app container behind Caddy,
+SQLite/WAL on a persistent volume, and optional wildcard studio subdomains.
+
+```bash
+cp .env.example .env
+# set HESTIA_DOMAIN, HESTIA_PUBLIC_URL, HESTIA_* secrets, Stripe/SMTP/S3 keys as needed
+docker compose up --build -d
+```
+
+Set wildcard DNS for `*.yourdomain.com` to the host running Caddy. With
+`HESTIA_DOMAIN=yourdomain.com`, a studio at slug `oak-room` is reachable at
+`https://oak-room.yourdomain.com` as well as `/studio/oak-room`.
+
+The hosted product is intentionally one price: **Hestia Studio — $40/month after a
+14-day free trial, cancel anytime.** There are no paid tiers; the $40 plan includes
+the full studio command center.
+
 ## Mock-first provider seams
 
 Everything runs with **no external keys** by default. Each integration is a seam that

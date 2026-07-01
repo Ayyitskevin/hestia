@@ -105,7 +105,7 @@ def test_cull_summary_flags_blinks_and_dups(conn, storage, settings):
 def test_style_profile_tier_gate(conn):
     assert can_use_style_profile({"plan": "studio_pro"}) is True
     assert can_use_style_profile({"plan": "beta"}) is True
-    assert can_use_style_profile({"plan": "studio"}) is False
+    assert can_use_style_profile({"plan": "studio"}) is True
     t = _tenant(conn)
     set_vision_style(conn, t["id"], "bright and airy")
     assert get_tenant(conn, t["id"])["vision_style"] == "bright and airy"
@@ -138,16 +138,16 @@ def test_http_style_setting_is_tier_gated(client, app):
     try:
         tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
         assert get_tenant(conn, tid)["vision_style"] == "true-to-life skin tones"
-        # downgrade to studio (no style profile) → server-side gate blocks the save
+        # $40 studio keeps style profiles — no paid Pro tier needed.
         conn.execute("UPDATE tenants SET plan = 'studio' WHERE id = ?", (tid,))
         conn.commit()
     finally:
         conn.close()
     gated = client.get("/settings/site")
-    assert "Studio Pro" in gated.text and 'name="vision_style"' not in gated.text
-    client.post("/settings/vision-style", data={"vision_style": "HACKED"})
+    assert 'name="vision_style"' in gated.text
+    client.post("/settings/vision-style", data={"vision_style": "moody editorial"})
     conn = connect(app.state.settings.db_path)
     try:
-        assert get_tenant(conn, tid)["vision_style"] == "true-to-life skin tones"  # unchanged
+        assert get_tenant(conn, tid)["vision_style"] == "moody editorial"
     finally:
         conn.close()

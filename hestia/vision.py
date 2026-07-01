@@ -238,7 +238,7 @@ def analyze_gallery(
     if not images:
         raise VisionError("gallery has no images to analyze")
 
-    # The studio's AI style profile (Studio Pro) biases the keeper/hero scoring.
+    # The studio's AI style profile biases the keeper/hero scoring.
     srow = conn.execute("SELECT vision_style FROM tenants WHERE id = ?", (tenant_id,)).fetchone()
     style = (srow["vision_style"] if srow else "") or ""
 

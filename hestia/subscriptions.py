@@ -4,12 +4,12 @@ Pluggable, same shape as the payments seam:
 
 - ``mock``   — activates the chosen plan instantly, no charge. The default, so the
   whole change-plan flow is testable and demoable.
-- ``stripe`` — opens a Stripe Checkout Session in *subscription* mode; the plan is
-  activated when Stripe confirms via the webhook (mirrors the invoice money path).
+- ``stripe`` — opens a Stripe Checkout Session in *subscription* mode at Hestia's
+  flat $40/month price; the plan is activated when Stripe confirms via webhook.
 
 The authoritative plan lives on ``tenants.plan``; :func:`apply_plan` updates it and
 upserts the ``subscriptions`` row, recording an audit entry. Nothing charges money
-unless ``subscription_backend=stripe`` with real keys + price IDs.
+unless ``subscription_backend=stripe`` with real keys.
 """
 
 from __future__ import annotations
@@ -82,19 +82,29 @@ class StripeSubscriptions:
     def subscribe(self, *, tenant: dict, plan: str, success_url: str) -> SubscribeResult:
         import httpx
 
-        price = self.settings.stripe_price_id(plan)
-        if not self.settings.stripe_secret_key or not price:
-            raise SubscriptionError("stripe subscription backend needs a secret key + price id")
+        if plan != "studio":
+            raise SubscriptionError("stripe subscriptions are only available for the flat studio plan")
+        if not self.settings.stripe_secret_key:
+            raise SubscriptionError("stripe subscription backend needs a secret key")
         data = {
             "mode": "subscription",
             "success_url": success_url,
             "cancel_url": success_url,
-            "line_items[0][price]": price,
-            "line_items[0][quantity]": "1",
             "client_reference_id": tenant["id"],
+            "customer_email": tenant.get("owner_email", ""),
+            "line_items[0][price_data][currency]": self.settings.currency,
+            "line_items[0][price_data][unit_amount]": str(self.settings.flat_price_cents),
+            "line_items[0][price_data][recurring][interval]": "month",
+            "line_items[0][price_data][product_data][name]": "Hestia Studio",
+            "line_items[0][quantity]": "1",
             "metadata[tenant_id]": tenant["id"],
-            "metadata[plan]": plan,
+            "metadata[plan]": "studio",
+            "subscription_data[metadata][tenant_id]": tenant["id"],
+            "subscription_data[metadata][plan]": "studio",
+            "subscription_data[trial_period_days]": str(max(0, int(self.settings.trial_days))),
         }
+        if not data["customer_email"]:
+            data.pop("customer_email")
         try:
             resp = httpx.post("https://api.stripe.com/v1/checkout/sessions", data=data,
                               auth=(self.settings.stripe_secret_key, ""), timeout=30)

@@ -46,9 +46,14 @@ def subscribe(request: Request, plan: str = Form(...)):
         auth = _user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
-        if plan not in PLANS:
+        if plan != "studio" or plan not in PLANS:
             return RedirectResponse("/settings/billing", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
+        owner = conn.execute(
+            "SELECT email FROM users WHERE tenant_id = ? AND role = 'owner' ORDER BY id LIMIT 1",
+            (tenant["id"],),
+        ).fetchone()
+        tenant = {**tenant, "owner_email": owner["email"] if owner else ""}
         provider = build_subscriptions(settings)
         success_url = f"{settings.public_url.rstrip('/')}/settings/billing"
         try:
@@ -56,7 +61,8 @@ def subscribe(request: Request, plan: str = Form(...)):
         except SubscriptionError:
             return RedirectResponse("/settings/billing", status_code=303)
         if result.activated:  # mock: live immediately. stripe: activated by the webhook.
-            apply_plan(conn, tenant["id"], plan=plan, provider=provider.backend)
+            status = "trialing" if settings.trial_days > 0 else "active"
+            apply_plan(conn, tenant["id"], plan=plan, status=status, provider=provider.backend)
     return RedirectResponse(result.url, status_code=303)
 
 

@@ -98,8 +98,8 @@ def tenant_flags(tenant: dict):
     return flags_for(tenant.get("shoot_type"))
 
 
-# Studios on these plans can set a custom AI vision style profile (Studio Pro tier).
-STYLE_PROFILE_PLANS = ("beta", "studio_pro")
+# The flat $40 plan includes the premium AI style profile; no paid upsell tier.
+STYLE_PROFILE_PLANS = ("beta", "studio", "studio_pro")
 
 
 def can_use_style_profile(tenant: dict) -> bool:

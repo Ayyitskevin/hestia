@@ -1,0 +1,4 @@
+{$HESTIA_DOMAIN}, *.{$HESTIA_DOMAIN} {
+	encode gzip
+	reverse_proxy hestia:8500
+}

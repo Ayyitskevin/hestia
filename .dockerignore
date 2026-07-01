@@ -1,0 +1,10 @@
+.git
+.venv
+.pytest_cache
+.ruff_cache
+data
+hestia.egg-info
+*.db
+*.sqlite
+*.pyc
+__pycache__
