@@ -14,7 +14,13 @@ from hestia.features import flags_for
 from hestia.galleries import add_image, create_gallery, publish_gallery
 from hestia.invoices import create_invoice, send_invoice
 from hestia.packages import create_package
-from hestia.proposals import accept_proposal, create_proposal, proposal_followups, send_proposal
+from hestia.proposals import (
+    accept_proposal,
+    create_proposal,
+    proposal_followups,
+    record_proposal_view,
+    send_proposal,
+)
 from hestia.questionnaires import create_questionnaire, send_questionnaire
 from hestia.sales import create_or_update_offer
 from hestia.subscriptions import apply_plan, get_subscription
@@ -144,8 +150,13 @@ def test_proposal_followups_surface_conversion_bottlenecks(conn, settings):
 
     followups = proposal_followups(conn, t["id"])
     assert [p["title"] for p in followups["awaiting_acceptance"]] == ["Waiting proposal"]
+    assert followups["awaiting_acceptance"][0]["next_action"] == "Confirm delivery"
+    record_proposal_view(conn, waiting["token"])
+    followups = proposal_followups(conn, t["id"])
+    assert followups["awaiting_acceptance"][0]["next_action"] == "Nudge acceptance"
     assert [p["title"] for p in followups["finish_booking"]] == ["Accepted proposal"]
     assert followups["finish_booking"][0]["followup_label"] == "Needs signature + payment"
+    assert followups["finish_booking"][0]["next_action"] == "Finish booking"
     assert followups["open_value_cents"] == 200000
 
     attention = needs_attention(conn, t["id"])
@@ -194,12 +205,14 @@ def test_dashboard_page_shows_proposal_followup(client, app):
         p = create_proposal(conn, app.state.settings, tenant_id=tid, package_id=pkg["id"],
                             title="Follow this proposal", client_id=c["id"])
         send_proposal(conn, tid, p["id"])
+        record_proposal_view(conn, p["token"])
         conn.commit()
     finally:
         conn.close()
     page = client.get("/dashboard")
     assert page.status_code == 200
     assert "Proposal follow-up" in page.text and "Follow this proposal" in page.text
+    assert "Nudge acceptance" in page.text
     assert "Proposal conversion" in page.text
     assert "Money stuck" in page.text and "$1,000.00" in page.text
 

@@ -45,7 +45,7 @@
         <td>{{ p.invoice_amount_display }}</td>
         <td class="muted">
           {% if p.needs_followup %}
-            {{ p.followup_label }}{% if p.reminder_count %}<br><span style="font-size:.85rem">reminded {{ p.reminder_count }}x</span>{% endif %}
+            {{ p.next_action }}<br><span style="font-size:.85rem">{{ p.followup_label }} · viewed {{ p.view_count }}x{% if p.reminder_count %} · reminded {{ p.reminder_count }}x{% endif %}</span>
           {% else %}
             —
           {% endif %}

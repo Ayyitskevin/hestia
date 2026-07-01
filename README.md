@@ -26,7 +26,7 @@ full hosted operating system:
 |----------|-----------------|
 | Booking scheduler | Public booking pages, availability rules, confirmations, reminders |
 | CRM spreadsheet | Clients, projects, timelines, tags, notes, files, statements |
-| Proposal app | Package-backed proposals with one client link, follow-up reminders, agreement, and deposit |
+| Proposal app | Package-backed proposals with view tracking, follow-up reminders, agreement, and deposit |
 | Contract tool | Templates, sent agreements, typed e-signature, audit trail |
 | Intake forms | Questionnaires, reusable templates, client portal responses |
 | Gallery host | Native galleries, delivery links, proofing, favorites, comments |

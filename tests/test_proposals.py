@@ -229,6 +229,9 @@ def test_http_proposal_publish_and_accept_flow(client, app):
     page = public.get(f"/proposal/{token}")
     assert page.status_code == 200
     assert "Wedding Collection" in page.text and "$1,000.00 due to reserve" in page.text
+    detail = client.get(f"/proposals/{proposal_id}")
+    assert "Viewed 1 time" in detail.text
+    assert "Next action: Nudge acceptance" in detail.text
 
     rejected = public.post(f"/proposal/{token}/accept", data={"accepted_name": "Sarah"})
     assert rejected.status_code == 400

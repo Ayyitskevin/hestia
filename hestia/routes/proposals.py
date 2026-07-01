@@ -21,6 +21,7 @@ from ..proposals import (
     proposal_followups,
     proposal_public_url,
     record_proposal_reminder,
+    record_proposal_view,
     send_proposal,
     send_proposal_reminder,
     void_proposal,
@@ -193,6 +194,7 @@ def public_proposal(request: Request, token: str):
         proposal = get_proposal_by_token(conn, token)
         if not proposal or proposal["status"] in ("draft", "void"):
             return render(request, "offer_missing.html", auth=None, status_code=404)
+        record_proposal_view(conn, token)
         tenant = get_tenant(conn, proposal["tenant_id"])
     return render(request, "proposals/proposal_public.html", auth=None, proposal=proposal,
                   tenant=tenant, **_link_context(request, proposal))

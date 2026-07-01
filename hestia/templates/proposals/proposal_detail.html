@@ -27,7 +27,7 @@
 <div class="alert ok">Accepted by <strong>{{ proposal.accepted_name }}</strong> on {{ proposal.accepted_at }}.</div>
 {% endif %}
 {% if proposal.needs_followup %}
-<div class="alert">Follow-up: {{ proposal.followup_label }}{% if proposal.reminder_count %} · reminded {{ proposal.reminder_count }} time{{ '' if proposal.reminder_count == 1 else 's' }}{% endif %}</div>
+<div class="alert">Next action: {{ proposal.next_action }} · {{ proposal.next_action_detail }}{% if proposal.reminder_count %} · reminded {{ proposal.reminder_count }} time{{ '' if proposal.reminder_count == 1 else 's' }}{% endif %}</div>
 {% endif %}
 
 <div class="grid-2">
@@ -35,7 +35,7 @@
     <h3>Proposal link</h3>
     {% if proposal.status in ('sent', 'accepted') %}
       <a class="offer-url" href="{{ proposal_url }}" target="_blank">{{ proposal_url }}</a>
-      <p class="muted">This is the single link to send the client.</p>
+      <p class="muted">This is the single link to send the client. Viewed {{ proposal.view_count }} time{{ '' if proposal.view_count == 1 else 's' }}{% if proposal.last_viewed_at %}; last viewed {{ proposal.last_viewed_at }}{% endif %}.</p>
     {% else %}
       <p class="muted">Publish the proposal to make the client link live.</p>
     {% endif %}

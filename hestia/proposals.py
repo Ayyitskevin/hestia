@@ -254,6 +254,16 @@ def send_proposal(conn: sqlite3.Connection, tenant_id: str, proposal_id: int) ->
     return get_proposal(conn, tenant_id, proposal_id)
 
 
+def record_proposal_view(conn: sqlite3.Connection, token: str) -> bool:
+    """Count a client-facing proposal page view. Draft/void proposals are not counted."""
+    cur = conn.execute(
+        "UPDATE proposals SET view_count = view_count + 1, last_viewed_at = datetime('now') "
+        "WHERE token = ? AND status IN ('sent', 'accepted')",
+        (token,),
+    )
+    return cur.rowcount == 1
+
+
 def send_proposal_reminder(
     conn: sqlite3.Connection,
     settings: Settings,
@@ -415,7 +425,41 @@ def _hydrate(row: dict) -> dict:
         missing.append("payment")
     row["followup_label"] = "Needs " + " + ".join(missing) if missing else "Complete"
     row["reminder_email"] = (row.get("accepted_email") or row.get("client_email") or "").strip()
+    row.update(_next_action(row))
     return row
+
+
+def _next_action(row: dict) -> dict:
+    status = row.get("status")
+    views = int(row.get("view_count") or 0)
+    reminders = int(row.get("reminder_count") or 0)
+    if status == "draft":
+        return {"next_action": "Publish proposal",
+                "next_action_detail": "Make the proposal link live for the client."}
+    if status == "sent":
+        if views == 0:
+            detail = "Not viewed yet"
+            if reminders:
+                detail += f" after {reminders} reminder{'s' if reminders != 1 else ''}"
+            return {"next_action": "Confirm delivery",
+                    "next_action_detail": f"{detail}. Resend the proposal or check the client's email."}
+        return {"next_action": "Nudge acceptance",
+                "next_action_detail": "Viewed but not accepted. A short personal follow-up is the next move."}
+    if status == "accepted":
+        if row.get("needs_signature") and row.get("needs_payment"):
+            return {"next_action": "Finish booking",
+                    "next_action_detail": "Accepted, but signature and booking invoice are still open."}
+        if row.get("needs_signature"):
+            return {"next_action": "Collect signature",
+                    "next_action_detail": "Payment is handled; chase the agreement signature."}
+        if row.get("needs_payment"):
+            return {"next_action": "Collect payment",
+                    "next_action_detail": "Agreement is signed; chase the booking invoice."}
+        return {"next_action": "Booked",
+                "next_action_detail": "Accepted, signed, and paid."}
+    if status == "void":
+        return {"next_action": "Voided", "next_action_detail": "No client action needed."}
+    return {"next_action": status or "Unknown", "next_action_detail": ""}
 
 
 def _pct(part: int, whole: int) -> int:
