@@ -31,6 +31,7 @@ from ..hosted import tenant_slug_from_request
 from ..invoices import money
 from ..packages import list_packages
 from ..pipeline import list_runs
+from ..presets import preset_applied
 from ..ratelimit import enforce
 from ..resets import consume_reset, create_reset, find_reset
 from ..studio import get_profile
@@ -39,6 +40,7 @@ from ..tenants import (
     create_user,
     get_tenant,
     get_tenant_by_slug,
+    get_user,
     get_user_by_email,
     mark_user_verified,
     set_user_password,
@@ -49,6 +51,18 @@ from ..verifications import consume_verification, create_verification
 from .deps import db_conn, render, settings_of
 
 router = APIRouter()
+
+
+def _owner_home(conn, tenant_id: str) -> str:
+    """First-run studios go straight to presets; configured studios go home."""
+    return "/dashboard" if preset_applied(conn, tenant_id) else "/onboarding"
+
+
+def _session_redirect(settings, token: str, target: str) -> RedirectResponse:
+    resp = RedirectResponse(target, status_code=303)
+    resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax",
+                    secure=cookie_is_secure(settings), max_age=int(SESSION_TTL.total_seconds()))
+    return resp
 
 
 @router.get("/")
@@ -92,10 +106,8 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
                           error="Please verify your email — we sent you a link when you signed up.")
         token = create_session(conn, role=user["role"], user_id=user["id"],
                                tenant_id=user["tenant_id"])
-    resp = RedirectResponse("/dashboard", status_code=303)
-    resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax",
-                    secure=cookie_is_secure(settings), max_age=int(SESSION_TTL.total_seconds()))
-    return resp
+        target = _owner_home(conn, user["tenant_id"])
+    return _session_redirect(settings, token, target)
 
 
 @router.get("/signup")
@@ -143,8 +155,14 @@ def verify_email(request: Request, token: str):
         if user_id is None:
             return render(request, "verify_failed.html", auth=None)
         mark_user_verified(conn, user_id)
-    return render(request, "login.html", auth=None, error=None,
-                  notice="Email verified — sign in to your new studio.")
+        user = get_user(conn, user_id)
+        if not user or not user["tenant_id"]:
+            return render(request, "login.html", auth=None, error=None,
+                          notice="Email verified — sign in to your new studio.")
+        session = create_session(conn, role=user["role"], user_id=user["id"],
+                                 tenant_id=user["tenant_id"])
+        target = _owner_home(conn, user["tenant_id"])
+    return _session_redirect(settings, session, target)
 
 
 @router.get("/forgot")

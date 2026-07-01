@@ -5,6 +5,7 @@ import dataclasses
 from conftest import CSRFClient
 
 from hestia.main import create_app
+from hestia.presets import apply_preset
 
 
 def _client(settings, *, enabled=True):
@@ -57,17 +58,45 @@ def test_unverified_owner_cannot_log_in(settings):
     assert "/dashboard" not in str(r.url)
 
 
-def test_verify_activates_then_login_succeeds(settings, conn):
+def test_verify_activates_and_starts_onboarding_session(settings, conn):
     c = _client(settings)
     c.post("/signup", data={"name": "Act Studio", "email": "act@s.com", "password": "password123"})
     token = _verify_token(conn, "act@s.com")
 
-    done = c.get(f"/verify/{token}")
-    assert done.status_code == 200 and "Email verified" in done.text
+    done = c.get(f"/verify/{token}", follow_redirects=False)
+    assert done.status_code == 303 and done.headers["location"] == "/onboarding"
     assert conn.execute("SELECT verified FROM users WHERE email='act@s.com'").fetchone()["verified"] == 1
+    assert "Choose your studio preset" in c.get("/onboarding").text
 
-    login = c.post("/login", data={"email": "act@s.com", "password": "password123"})
-    assert "/dashboard" in str(login.url)
+
+def test_login_routes_fresh_studio_to_onboarding(settings, conn):
+    c = _client(settings)
+    c.post("/signup", data={"name": "Fresh Studio", "email": "fresh@s.com",
+                            "password": "password123"})
+    token = _verify_token(conn, "fresh@s.com")
+    c.get(f"/verify/{token}")
+    c.get("/logout")
+
+    login = c.post("/login", data={"email": "fresh@s.com", "password": "password123"},
+                   follow_redirects=False)
+    assert login.status_code == 303 and login.headers["location"] == "/onboarding"
+
+
+def test_login_routes_configured_studio_to_dashboard(settings, conn):
+    c = _client(settings)
+    c.post("/signup", data={"name": "Ready Studio", "email": "ready@s.com",
+                            "password": "password123"})
+    token = _verify_token(conn, "ready@s.com")
+    c.get(f"/verify/{token}")
+    tenant_id = conn.execute(
+        "SELECT tenant_id FROM users WHERE email='ready@s.com'",
+    ).fetchone()["tenant_id"]
+    apply_preset(conn, tenant_id, "wedding", include_demo=False)
+    c.get("/logout")
+
+    login = c.post("/login", data={"email": "ready@s.com", "password": "password123"},
+                   follow_redirects=False)
+    assert login.status_code == 303 and login.headers["location"] == "/dashboard"
 
 
 # ── guards ──────────────────────────────────────────────────────────────────
@@ -96,5 +125,5 @@ def test_verify_token_is_single_use(settings, conn):
     c = _client(settings)
     c.post("/signup", data={"name": "Once", "email": "once@s.com", "password": "password123"})
     token = _verify_token(conn, "once@s.com")
-    assert "Email verified" in c.get(f"/verify/{token}").text          # first use works
+    assert c.get(f"/verify/{token}", follow_redirects=False).status_code == 303  # first use works
     assert "invalid or has" in c.get(f"/verify/{token}").text.lower()  # second use fails

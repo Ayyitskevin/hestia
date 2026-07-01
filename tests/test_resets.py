@@ -66,7 +66,7 @@ def test_full_reset_flow(client, conn):
     assert "Invalid email or password" in client.post(
         "/login", data={"email": "reset@me.com", "password": "oldpassword"}).text
     ok = client.post("/login", data={"email": "reset@me.com", "password": "newpassword1"})
-    assert "/dashboard" in str(ok.url)
+    assert "/onboarding" in str(ok.url)
 
 
 def test_forgot_unknown_email_does_not_enumerate(client, conn):
