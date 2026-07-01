@@ -91,6 +91,7 @@ Hestia is ready for a simple solo-founder hosted launch:
 - Tenant isolation through shared tenant IDs and storage namespaces
 - Optional wildcard studio subdomains
 - Stripe subscriptions locked to the flat $40/month plan
+- Operator trial conversion cockpit for activation and churn-risk signals
 - Mock-first provider seams for safe local and staging runs
 
 ```bash
@@ -181,6 +182,7 @@ Useful URLs:
 - `/settings/account` hosted account, URLs, custom domain, billing actions
 - `/settings/billing` flat plan billing page
 - `/admin` operator admin with `HESTIA_API_TOKEN`
+- `/admin/trials` trial conversion cockpit for stalled and activated studios
 - `/healthz` liveness
 - `/readyz` readiness
 
@@ -226,8 +228,9 @@ bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
 
 The test suite covers tenant isolation, hosted routing, flat-plan billing, signup,
-onboarding presets, custom domains, proposal accept flows, offer idempotency,
-public tokens, payments, client portal flows, and safe mock-provider operation.
+onboarding presets, trial conversion analytics, custom domains, proposal accept
+flows, offer idempotency, public tokens, payments, client portal flows, and safe
+mock-provider operation.
 
 `scripts/hosted-preflight.sh` reads the same `.env`/environment values as the app
 and fails on hosted blockers: default secrets, non-HTTPS public URL, missing hosted
@@ -313,7 +316,6 @@ visitor -> inquiry -> booking -> proposal -> contract -> deposit -> questionnair
 
 Near-term product work:
 
-- Tighten hosted signup and trial conversion analytics.
 - Add production-grade custom-domain TLS automation.
 - Deepen the live vision backend for culling, duplicate detection, blink detection,
   and studio style profiles.

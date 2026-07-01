@@ -36,6 +36,7 @@ from ..tenants import (
     set_shoot_type,
     tenant_flags,
 )
+from ..trial_conversion import trial_conversion_cockpit, trial_conversion_for_tenant
 from .deps import db_conn, render, settings_of
 
 router = APIRouter(prefix="/admin")
@@ -98,6 +99,17 @@ def tenants_list(request: Request):
             return _redirect_login()
         tenants = list_tenants(conn)
     return render(request, "admin/tenants.html", auth=auth, tenants=tenants)
+
+
+@router.get("/trials")
+def trials(request: Request):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _admin_ctx(request, conn)
+        if not auth:
+            return _redirect_login()
+        cockpit = trial_conversion_cockpit(conn, settings)
+    return render(request, "admin/trials.html", auth=auth, cockpit=cockpit)
 
 
 @router.get("/system")
@@ -245,6 +257,7 @@ def _render_tenant_detail(request: Request, tenant_id: str, *,
             return RedirectResponse("/admin/tenants", status_code=303)
         flags = tenant_flags(tenant)
         plan = plan_status(tenant)
+        conversion = trial_conversion_for_tenant(conn, tenant, settings)
         api_keys = conn.execute(
             "SELECT prefix, created_at FROM tenant_api_keys WHERE tenant_id = ? ORDER BY id DESC",
             (tenant_id,),
@@ -252,4 +265,5 @@ def _render_tenant_detail(request: Request, tenant_id: str, *,
     return render(request, "admin/tenant_detail.html", auth=auth, tenant=tenant, flags=flags,
                   plan=plan, plans=PLANS, new_api_key=new_api_key, created=created,
                   api_keys=[dict(r) for r in api_keys],
-                  custom_domain=custom_domain_summary(settings, tenant))
+                  custom_domain=custom_domain_summary(settings, tenant),
+                  conversion=conversion)

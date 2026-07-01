@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Trial conversion — Hestia admin{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Trial conversion</h1>
+    <p class="muted">Activation and conversion signals for the hosted $40/month studio plan.</p>
+  </div>
+  <a class="btn ghost" href="/admin/tenants">All studios</a>
+</div>
+
+<div class="grid cols-4" style="margin-top:18px">
+  <div class="card"><div class="label">Studios</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.total }}</div></div>
+  <div class="card"><div class="label">Trial ready</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.trial_ready }}</div></div>
+  <div class="card"><div class="label">Trialing</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.trialing }}</div></div>
+  <div class="card"><div class="label">Stalled</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.stalled }}</div></div>
+</div>
+
+{% if cockpit.studios %}
+<div class="card" style="margin-top:18px">
+  <table>
+    <thead>
+      <tr>
+        <th>Studio</th>
+        <th>Trial</th>
+        <th>Activation</th>
+        <th>Commercial signals</th>
+        <th>Risk</th>
+        <th>Next action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in cockpit.studios %}
+      <tr>
+        <td>
+          <a href="/admin/tenants/{{ s.tenant_id }}">{{ s.name }}</a><br>
+          <span class="muted mono">{{ s.slug }}</span>
+        </td>
+        <td>
+          <span class="pill {{ 'on' if s.trial_state in ('trialing', 'active') else 'off' }}">{{ s.trial_label }}</span><br>
+          <span class="muted">{{ s.owner_email or 'no owner email' }}{% if not s.owner_verified %} · unverified{% endif %}</span>
+        </td>
+        <td>
+          <strong>{{ s.activation_done }}/{{ s.activation_total }}</strong>
+          <span class="muted">({{ s.activation_percent }}%)</span><br>
+          {% if s.setup_next %}<span class="muted">{{ s.setup_next.stage }} · {{ s.setup_next.label }}</span>{% else %}<span class="muted">complete</span>{% endif %}
+        </td>
+        <td class="muted">
+          {{ s.proposals_sent }} proposals · {{ s.proposals_accepted }} accepted<br>
+          {{ s.published_galleries }} galleries · {{ s.active_offers }} offers · {{ s.money_links }} money links
+        </td>
+        <td>
+          <span class="pill {{ 'off' if s.risk in ('high', 'medium') else 'on' if s.risk == 'low' else '' }}">{{ s.risk }}</span><br>
+          <span class="muted">{{ s.risk_reason }}</span>
+        </td>
+        <td>
+          {{ s.next_action }}<br>
+          <span class="muted">Owner path: <span class="mono">{{ s.next_href }}</span></span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card stack" style="margin-top:18px">
+  <p class="muted">No studios yet.</p>
+  <a class="btn" href="/admin/onboarding">Onboard the first studio</a>
+</div>
+{% endif %}
+{% endblock %}

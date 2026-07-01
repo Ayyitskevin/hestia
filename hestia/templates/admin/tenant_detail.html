@@ -43,6 +43,16 @@
   </div>
 
   <div class="card stack">
+    <h3>Trial conversion</h3>
+    <p class="muted"><span class="pill {{ 'on' if conversion.trial_state in ('trialing', 'active') else 'off' }}">{{ conversion.trial_label }}</span>
+      · {{ conversion.activation_done }}/{{ conversion.activation_total }} activated ({{ conversion.activation_percent }}%)</p>
+    <p><strong>{{ conversion.next_action }}</strong></p>
+    <p class="hint">{{ conversion.risk }} risk · {{ conversion.risk_reason }}</p>
+    <p class="muted">{{ conversion.proposals_sent }} proposals · {{ conversion.published_galleries }} published galleries · {{ conversion.money_links }} money links</p>
+    <a class="btn ghost" href="/admin/trials">Open trial cockpit</a>
+  </div>
+
+  <div class="card stack">
     <h3>Custom domain</h3>
     {% if custom_domain.domain %}
       <p class="muted"><span class="pill {{ 'on' if custom_domain.status == 'verified' else 'off' }}">{{ custom_domain.status }}</span>
