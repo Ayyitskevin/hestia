@@ -190,6 +190,22 @@
         {% endfor %}
       </div>
       {% endif %}
+      {% if attention.to_confirm %}
+      <div class="stack" style="gap:6px">
+        <div class="label">⏳ Awaiting a confirmed time · {{ attention.to_confirm|length }}</div>
+        {% for a in attention.to_confirm %}
+        <div><a href="/schedule/{{ a.id }}">{{ a.title }}</a>{% if a.client_name %} <span class="muted">· {{ a.client_name }}</span>{% endif %}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if attention.album_changes %}
+      <div class="stack" style="gap:6px">
+        <div class="label">📖 Album change requests · {{ attention.album_changes|length }}</div>
+        {% for al in attention.album_changes %}
+        <div><a href="/albums/{{ al.id }}">{{ al.gallery_title }}</a> <span class="muted">· “{{ al.change_request }}”</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
       {% if attention.to_deliver %}
       <div class="stack" style="gap:6px">
         <div class="label">📦 Ready to deliver · {{ attention.to_deliver|length }}</div>
