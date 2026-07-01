@@ -9,6 +9,7 @@ from .config import Settings
 from .crypto import hash_api_key, new_session_token
 from .email import notify
 from .features import SHOOT_TYPE_LABELS, normalize_shoot_type
+from .marketing import LAUNCH_PROOF_STEPS
 from .tenants import signup_attribution
 
 BETA_INVITE_TTL = timedelta(days=7)
@@ -306,7 +307,7 @@ def _notify_operator(conn: sqlite3.Connection, settings: Settings, interest: dic
 
 def _invite_body(interest: dict, invite_url: str) -> str:
     studio = interest["studio_name"] or interest["name"] or "your studio"
-    return "\n".join([
+    lines = [
         f"You're invited to start {studio} on Hestia.",
         "",
         "Use this private beta invite to create your hosted photography studio:",
@@ -315,8 +316,17 @@ def _invite_body(interest: dict, invite_url: str) -> str:
         "Your first 14 days are free. After that, Hestia is exactly $40/month with no tiers.",
         "It brings booking, contracts, galleries, invoices, AI offers, and follow-up into one studio command center.",
         "",
+        "Use the trial to prove four concrete outcomes:",
+    ]
+    lines.extend(
+        f"- {step['window']}: {step['title']} - {step['email_detail']}."
+        for step in LAUNCH_PROOF_STEPS
+    )
+    lines.extend([
+        "",
         "If the invite expires, reply and Kevin can send a fresh one.",
     ])
+    return "\n".join(lines)
 
 
 def _clean(value: str, limit: int) -> str:

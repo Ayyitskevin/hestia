@@ -131,6 +131,9 @@ def test_beta_interest_invite_records_status_and_private_link(settings, conn):
     assert mail["subject"] == "You're invited to start your Hestia studio beta"
     assert "/invite/" in mail["body"]
     assert "exactly $40/month" in mail["body"]
+    assert "Use the trial to prove four concrete outcomes:" in mail["body"]
+    assert "- Day 1: Install the right studio preset" in mail["body"]
+    assert "Deliver and monetize a gallery" in mail["body"]
 
 
 def test_private_invite_signup_works_when_public_signup_is_disabled(settings, conn):

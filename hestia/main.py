@@ -25,6 +25,7 @@ from .csrf import csrf_protect
 from .db import init_db
 from .features import LEAD_SOURCES, SHOOT_TYPE_LABELS, SHOOT_TYPES
 from .jobs import run_worker
+from .marketing import LAUNCH_PROOF_STEPS
 from .obs import access_log, configure_logging, new_request_id
 from .ratelimit import RateLimiter
 from .routes import (
@@ -84,6 +85,7 @@ def _build_templates() -> Jinja2Templates:
         shoot_types=SHOOT_TYPES,
         shoot_type_labels=SHOOT_TYPE_LABELS,
         lead_sources=LEAD_SOURCES,
+        launch_proof_steps=LAUNCH_PROOF_STEPS,
     )
     return templates
 

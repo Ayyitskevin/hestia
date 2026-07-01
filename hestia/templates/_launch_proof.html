@@ -1,0 +1,20 @@
+<section class="pricing-band">
+  <div>
+    <div class="eyebrow">Trial proof plan</div>
+    <h2>What you can prove in the {{ settings.trial_days }}-day trial.</h2>
+  </div>
+  <p class="muted">
+    The trial is not a blank workspace. It is a guided path to prove Hestia can run
+    a real client-to-cash workflow before the flat $40/month plan starts.
+  </p>
+</section>
+
+<section class="value-grid" aria-label="{{ settings.trial_days }}-day launch proof">
+  {% for step in launch_proof_steps %}
+    <article>
+      <span>{{ step.window }}</span>
+      <h3>{{ step.title }}</h3>
+      <p>{{ step.detail }}</p>
+    </article>
+  {% endfor %}
+</section>

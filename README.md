@@ -94,6 +94,7 @@ Hestia is ready for a simple solo-founder hosted launch:
 - Operator trial conversion cockpit for activation and churn-risk signals
 - First-party signup attribution from the public demo and pricing pages
 - Shareable public beta landing page for the $40/month hosted offer
+- 14-day trial proof plan showing concrete setup, booking, gallery, offer, and follow-up outcomes
 - Public beta interest capture with private invite links and interest-to-trial conversion tracking
 - Beta revenue pipeline from interest to paid $40/month account
 - Founder weekly launch digest for pipeline, stalled studios, beta interest, and paid MRR
@@ -184,6 +185,7 @@ Useful URLs:
 - `/demo` public buyer tour for wedding, food & beverage, and real-estate workflows
 - `/pricing` flat $40/month value stack and trial conversion page
 - `/beta` shareable public beta landing page with first-party attribution and embedded access request
+- Public beta and pricing pages include a 14-day trial proof plan for client-to-cash launch outcomes
 - `/interest` compatibility beta access form for existing links
 - `/invite/{token}` private beta invite signup path for approved interest leads
 - `/signup` hosted signup when `HESTIA_SIGNUP_ENABLED=true`
@@ -238,7 +240,7 @@ bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke
 bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
 
-The test suite covers tenant isolation, hosted routing, public demo, beta landing, and pricing
+The test suite covers tenant isolation, hosted routing, public demo, beta landing, trial proof plan, and pricing
 pages, first-party signup attribution, private beta invites, beta launch kit, flat-plan billing, signup,
 onboarding presets, beta revenue pipeline, founder weekly launch digest, trial conversion analytics, custom domains, proposal accept
 flows, offer idempotency, public tokens, payments, client portal flows, and safe

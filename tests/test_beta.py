@@ -22,6 +22,9 @@ def test_beta_page_renders_value_copy_and_preserves_attribution(settings):
     assert "Wedding:" in text
     assert "Food & beverage:" in text
     assert "Real estate:" in text
+    assert "What you can prove in the 14-day trial." in text
+    assert "Publish a client-ready booking path" in text
+    assert "Deliver and monetize a gallery" in text
     assert 'name="signup_source" value="pricing"' in page.text
     assert 'name="signup_landing_path" value="/pricing"' in page.text
 

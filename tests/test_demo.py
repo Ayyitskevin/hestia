@@ -57,6 +57,8 @@ def test_pricing_public_flat_plan_conversion_page(client):
     assert "14-day free trial" in text
     assert "No setup fee. No tiers. Cancel anytime." in text
     assert "One bill instead of 5-7 separate subscriptions." in text
+    assert "What you can prove in the 14-day trial." in text
+    assert "Publish a client-ready booking path" in text
     assert 'href="/beta?source=pricing&amp;path=/pricing"' in page.text
     assert 'href="/demo"' in page.text
 
