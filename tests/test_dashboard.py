@@ -7,7 +7,13 @@ from conftest import login_owner, onboard_studio
 from hestia.booking import create_booking_type
 from hestia.contracts import create_contract, send_contract
 from hestia.crm import create_client, create_project
-from hestia.dashboard import money_snapshot, needs_attention, setup_checklist, trial_cockpit
+from hestia.dashboard import (
+    hot_leads,
+    money_snapshot,
+    needs_attention,
+    setup_checklist,
+    trial_cockpit,
+)
 from hestia.db import connect
 from hestia.delivery import enable_delivery
 from hestia.features import flags_for
@@ -66,6 +72,78 @@ def test_needs_attention_aggregates(conn, settings):
     assert a["total"] == 4
 
 
+def test_hot_leads_rank_sales_signals_and_explain_score(conn, settings):
+    t = create_tenant(conn, name="Lead Intel", shoot_type="wedding")
+    c_hot = create_client(conn, tenant_id=t["id"], name="Mina", email="mina@example.com")
+    hot = create_project(
+        conn,
+        tenant_id=t["id"],
+        name="Holiday mini lead",
+        client_id=c_hot["id"],
+        shoot_type="portrait",
+        status="lead",
+        event_date="2030-12-01",
+        notes="They want a gift-ready gallery, cards, and a quick turnaround before the holidays.",
+        lead_source="mini_session",
+    )
+    inv = create_invoice(conn, settings, tenant_id=t["id"], title="Mini retainer",
+                         amount_cents=17500, client_id=c_hot["id"], project_id=hot["id"])
+    send_invoice(conn, t["id"], inv["id"])
+    conn.execute(
+        "INSERT INTO appointments (tenant_id, client_id, project_id, title, kind, status, "
+        "starts_at, duration_minutes, token) VALUES (?, ?, ?, 'Holiday mini', 'shoot', "
+        "'confirmed', '2030-12-01 10:00', 20, 'hot-lead-appt')",
+        (t["id"], c_hot["id"], hot["id"]),
+    )
+
+    c_cold = create_client(conn, tenant_id=t["id"], name="Cold", email="")
+    cold = create_project(
+        conn,
+        tenant_id=t["id"],
+        name="Old Instagram lead",
+        client_id=c_cold["id"],
+        shoot_type="portrait",
+        status="lead",
+        lead_source="Instagram",
+    )
+    conn.execute("UPDATE projects SET created_at = datetime('now', '-20 days') WHERE id = ?",
+                 (cold["id"],))
+    other = create_tenant(conn, name="Other Lead Intel", shoot_type="wedding")
+    other_client = create_client(conn, tenant_id=other["id"], name="Other", email="other@example.com")
+    create_project(conn, tenant_id=other["id"], name="Foreign hot lead",
+                   client_id=other_client["id"], status="lead", lead_source="Referral")
+    conn.commit()
+
+    leads = hot_leads(conn, t["id"])
+
+    assert [lead["name"] for lead in leads] == ["Holiday mini lead", "Old Instagram lead"]
+    top = leads[0]
+    assert top["priority"] == "Hot lead"
+    assert top["next_action"] == "Collect retainer"
+    assert top["intent_value"] == "$175.00"
+    assert "Mini-session claim" in top["reasons"]
+    assert "Confirmed session" in top["reasons"]
+    assert "Retainer open" in top["reasons"]
+    assert leads[1]["next_action"] == "Add an email before follow-up"
+    assert leads[1]["score"] < top["score"]
+
+
+def test_hot_leads_excludes_non_leads_and_is_tenant_scoped(conn):
+    a = create_tenant(conn, name="A Lead", shoot_type="wedding")
+    b = create_tenant(conn, name="B Lead", shoot_type="wedding")
+    ac = create_client(conn, tenant_id=a["id"], name="A Client", email="a@example.com")
+    bc = create_client(conn, tenant_id=b["id"], name="B Client", email="b@example.com")
+    create_project(conn, tenant_id=a["id"], name="A open lead", client_id=ac["id"],
+                   status="lead", lead_source="Referral")
+    create_project(conn, tenant_id=a["id"], name="A booked lead", client_id=ac["id"],
+                   status="booked", lead_source="Referral")
+    create_project(conn, tenant_id=b["id"], name="B open lead", client_id=bc["id"],
+                   status="lead", lead_source="Referral")
+    conn.commit()
+
+    assert [lead["name"] for lead in hot_leads(conn, a["id"])] == ["A open lead"]
+
+
 def test_upcoming_excludes_unparseable_freetext_times(conn):
     t = create_tenant(conn, name="Freetext Studio", shoot_type="wedding")
     conn.execute("INSERT INTO appointments (tenant_id, title, status, token, starts_at) "
@@ -95,6 +173,30 @@ def test_dashboard_page_shows_attention(client, app):
     page = client.get("/dashboard")
     assert page.status_code == 200
     assert "Needs attention" in page.text and "New inquiry" in page.text
+
+
+def test_dashboard_page_shows_lead_intelligence(client, app):
+    creds = onboard_studio(client, name="Intel Studio", email="intel@example.com")
+    login_owner(client, creds)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        c = create_client(conn, tenant_id=tid, name="Mina", email="mina@example.com")
+        lead = create_project(conn, tenant_id=tid, name="Mini-session buyer",
+                              client_id=c["id"], shoot_type="portrait", status="lead",
+                              lead_source="mini_session")
+        inv = create_invoice(conn, app.state.settings, tenant_id=tid, title="Retainer",
+                             amount_cents=20000, client_id=c["id"], project_id=lead["id"])
+        send_invoice(conn, tid, inv["id"])
+        conn.commit()
+    finally:
+        conn.close()
+    page = client.get("/dashboard")
+    assert page.status_code == 200
+    assert "Lead intelligence" in page.text
+    assert "Mini-session buyer" in page.text
+    assert "Hot lead" in page.text
+    assert "Collect retainer" in page.text
 
 
 def test_dashboard_all_clear_for_fresh_studio(client):

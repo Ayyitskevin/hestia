@@ -99,6 +99,35 @@
 </div>
 {% endif %}
 
+{% if lead_intelligence %}
+<div class="card stack" style="margin-bottom:18px">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap">
+    <h3 style="margin:0">Lead intelligence <span class="muted" style="font-weight:normal; font-size:.85rem">· fastest follow-up first</span></h3>
+    <a class="muted" href="/projects" style="font-size:.85rem">Projects -></a>
+  </div>
+  <div class="stack" style="gap:10px">
+    {% for lead in lead_intelligence %}
+    <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-start; flex-wrap:wrap; padding-bottom:10px; border-bottom:1px solid var(--line)">
+      <div style="flex:1 1 280px">
+        <div>
+          <a href="{{ lead.href }}"><strong>{{ lead.name }}</strong></a>
+          <span class="pill {{ lead.priority_class }}">{{ lead.priority }} · {{ lead.score }}</span>
+        </div>
+        <div class="muted" style="font-size:.9rem">
+          {% if lead.client_name %}{% if lead.client_href %}<a href="{{ lead.client_href }}">{{ lead.client_name }}</a>{% else %}{{ lead.client_name }}{% endif %} · {% endif %}
+          {{ lead.next_action }} · {{ lead.reason_line }}
+        </div>
+      </div>
+      <div style="text-align:right; min-width:130px">
+        {% if lead.intent_cents %}<div><strong>{{ lead.intent_value }}</strong></div><div class="muted" style="font-size:.8rem">open intent</div>{% endif %}
+        <a class="btn ghost" href="{{ lead.href }}">Open</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div class="card stack" style="margin-bottom:18px">
   <h3>Needs attention{% if attention.total %} · {{ attention.total }}{% endif %}</h3>
   {% if attention.total == 0 %}

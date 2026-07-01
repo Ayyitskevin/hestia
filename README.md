@@ -26,6 +26,7 @@ full hosted operating system:
 |----------|-----------------|
 | Booking scheduler | Public booking pages, availability rules, confirmations, reminders |
 | Mini-session launch tools | Limited booking drops, fixed spots, deposits, CRM leads, confirmations |
+| Sales assistant | Lead intelligence cockpit that ranks hot leads by source, urgency, money, and booking signals |
 | CRM spreadsheet | Clients, projects, timelines, tags, notes, files, statements |
 | Proposal app | Package-backed proposals with view tracking, automated follow-up nudges, agreement, and deposit |
 | Contract tool | Templates, sent agreements, typed e-signature, audit trail |
@@ -158,7 +159,7 @@ Hestia is a modular monolith, not a bundle of disconnected services.
 | `scheduler` | Availability, booking, confirmations, reminders |
 | `mini_sessions` | Limited booking drops with fixed slots, deposits, and CRM handoff |
 | `proposals` | Package-backed proposals, accept flow, automated nudges, linked agreement + deposit invoice |
-| `dashboard` | Trial cockpit, launch path, proposal conversion analytics, digest-ready attention queue |
+| `dashboard` | Trial cockpit, launch path, lead intelligence cockpit, proposal conversion analytics, digest-ready attention queue |
 | `contracts` | Contract templates, sent agreements, e-signature |
 | `questionnaires` | Intake forms, answers, reusable templates |
 | `galleries` / `storage` | Gallery hosting, uploads, delivery |

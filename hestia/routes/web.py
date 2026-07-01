@@ -18,6 +18,7 @@ from ..billing import plan_status
 from ..booking import list_booking_types
 from ..crm import list_clients, list_projects
 from ..dashboard import (
+    hot_leads,
     money_snapshot,
     needs_attention,
     reconnect_due,
@@ -514,6 +515,7 @@ def dashboard(request: Request):
         attention = needs_attention(conn, tenant["id"])
         snapshot = money_snapshot(conn, tenant["id"])
         proposal_stats = proposal_metrics(conn, tenant["id"])
+        lead_intelligence = hot_leads(conn, tenant["id"])
         setup = setup_checklist(conn, tenant["id"], published=profile["published"])
         subscription = get_subscription(conn, tenant["id"])
         trial = trial_cockpit(tenant, subscription, settings_of(request), setup)
@@ -521,7 +523,8 @@ def dashboard(request: Request):
     return render(request, "dashboard.html", auth=auth, tenant=tenant, flags=flags,
                   galleries=galleries, runs=runs, plan=plan, counts=counts, profile=profile,
                   attention=attention, snapshot=snapshot, setup=setup, trial=trial,
-                  reconnect=reconnect, proposal_stats=proposal_stats)
+                  reconnect=reconnect, proposal_stats=proposal_stats,
+                  lead_intelligence=lead_intelligence)
 
 
 @router.post("/dashboard/digest")

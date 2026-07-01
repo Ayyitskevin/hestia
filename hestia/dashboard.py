@@ -6,7 +6,7 @@ aggregation over the modules that already own each thing."""
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from .config import Settings
 from .email import notify
@@ -14,6 +14,30 @@ from .invoices import accounts_receivable, money
 from .presets import preset_applied
 from .proposals import proposal_followups
 from .reports import monthly_pnl
+
+_SOURCE_WEIGHTS = {
+    "mini_session": 45,
+    "booking": 35,
+    "referral": 40,
+    "friend or family": 35,
+    "venue or vendor": 30,
+    "google search": 25,
+    "wedding directory": 20,
+    "instagram": 15,
+    "other": 8,
+}
+
+_SOURCE_LABELS = {
+    "mini_session": "Mini-session claim",
+    "booking": "Booking page",
+    "referral": "Referral source",
+    "friend or family": "Friend/family source",
+    "venue or vendor": "Venue/vendor source",
+    "google search": "Google search lead",
+    "wedding directory": "Directory lead",
+    "instagram": "Instagram lead",
+    "other": "Other source",
+}
 
 
 def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8) -> dict:
@@ -96,6 +120,172 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
                   + len(awaiting_contract) + len(awaiting_questionnaire)
                   + proposal_followup["total"]),
     }
+
+
+def hot_leads(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 5) -> list[dict]:
+    """Rank open leads by clear sales signals.
+
+    This is deliberately deterministic and explainable: no model call, no hidden state.
+    It uses the data Hestia already owns (source, freshness, event date, client email,
+    linked sessions, proposals, and retainer invoices) so the owner can decide who gets
+    the next reply without scanning every project.
+    """
+    rows = conn.execute(
+        """
+        SELECT
+            p.id, p.name, p.shoot_type, p.event_date, p.created_at, p.lead_source, p.notes,
+            c.id AS client_id, c.name AS client_name, c.email AS client_email,
+            COALESCE((SELECT COUNT(*) FROM appointments a
+                       WHERE a.tenant_id = p.tenant_id AND a.project_id = p.id
+                         AND a.status = 'confirmed'), 0) AS confirmed_sessions,
+            COALESCE((SELECT COUNT(*) FROM appointments a
+                       WHERE a.tenant_id = p.tenant_id AND a.project_id = p.id
+                         AND a.status = 'proposed'), 0) AS proposed_sessions,
+            COALESCE((SELECT COUNT(*) FROM proposals pr
+                       WHERE pr.tenant_id = p.tenant_id AND pr.project_id = p.id
+                         AND pr.status IN ('sent', 'accepted')), 0) AS active_proposals,
+            COALESCE((SELECT COUNT(*) FROM invoices i
+                       WHERE i.tenant_id = p.tenant_id AND i.project_id = p.id
+                         AND i.status = 'sent'), 0) AS sent_invoices,
+            COALESCE((SELECT SUM(i.amount_cents) FROM invoices i
+                       WHERE i.tenant_id = p.tenant_id AND i.project_id = p.id
+                         AND i.status IN ('sent', 'paid')), 0) AS intent_cents
+          FROM projects p
+          LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = p.tenant_id
+         WHERE p.tenant_id = ?
+           AND p.status = 'lead'
+         ORDER BY p.created_at DESC, p.id DESC
+        """,
+        (tenant_id,),
+    ).fetchall()
+    scored = [_score_lead(dict(row)) for row in rows]
+    scored.sort(key=lambda row: (row["score"], row.get("created_sort") or datetime.min.replace(tzinfo=UTC)),
+                reverse=True)
+    for row in scored:
+        row.pop("created_sort", None)
+    return scored[: max(0, int(limit))]
+
+
+def _score_lead(row: dict) -> dict:
+    score = 10
+    reasons: list[str] = []
+
+    source_key = _source_key(row.get("lead_source"))
+    source_score = _SOURCE_WEIGHTS.get(source_key, 5)
+    score += source_score
+    reasons.append(_SOURCE_LABELS.get(source_key, "Source captured" if source_key else "Unknown source"))
+
+    created = _parse_created_at(row.get("created_at"))
+    row["created_sort"] = created
+    age_days = _age_days(created)
+    if age_days is not None:
+        if age_days <= 1:
+            score += 25
+            reasons.append("Fresh inquiry")
+        elif age_days <= 3:
+            score += 18
+            reasons.append("New this week")
+        elif age_days <= 7:
+            score += 10
+            reasons.append("Still warm")
+        elif age_days <= 14:
+            score += 4
+            reasons.append("Needs follow-up")
+
+    days_until_event = _days_until_event(row.get("event_date"))
+    if days_until_event is not None:
+        if 0 <= days_until_event <= 30:
+            score += 20
+            reasons.append("Event soon")
+        elif days_until_event <= 90:
+            score += 12
+            reasons.append("Date in next 90 days")
+        elif days_until_event <= 180:
+            score += 6
+            reasons.append("Date on calendar")
+
+    if (row.get("client_email") or "").strip():
+        score += 10
+        reasons.append("Email on file")
+
+    if int(row.get("confirmed_sessions") or 0):
+        score += 25
+        reasons.append("Confirmed session")
+    elif int(row.get("proposed_sessions") or 0):
+        score += 15
+        reasons.append("Proposed session")
+
+    if int(row.get("active_proposals") or 0):
+        score += 20
+        reasons.append("Proposal in motion")
+
+    if int(row.get("sent_invoices") or 0):
+        score += 25
+        reasons.append("Retainer open")
+    elif int(row.get("intent_cents") or 0):
+        score += 10
+        reasons.append("Money intent")
+
+    if len((row.get("notes") or "").strip()) >= 80:
+        score += 5
+        reasons.append("Detailed message")
+
+    row["score"] = min(100, score)
+    row["priority"] = "Hot lead" if row["score"] >= 75 else "Warm lead" if row["score"] >= 50 else "Watch"
+    row["priority_class"] = "on" if row["score"] >= 75 else "off"
+    row["reasons"] = _unique(reasons)[:5]
+    row["reason_line"] = " · ".join(row["reasons"])
+    row["source_label"] = _SOURCE_LABELS.get(source_key, row.get("lead_source") or "Unknown source")
+    row["next_action"] = _lead_next_action(row)
+    row["intent_value"] = money(int(row.get("intent_cents") or 0))
+    row["href"] = f"/projects/{row['id']}"
+    row["client_href"] = f"/clients/{row['client_id']}" if row.get("client_id") else ""
+    return row
+
+
+def _source_key(source: str | None) -> str:
+    return (source or "").strip().lower().replace("-", "_")
+
+
+def _age_days(created: datetime | None) -> int | None:
+    if created is None:
+        return None
+    return max(0, (datetime.now(UTC) - created).days)
+
+
+def _days_until_event(value: str | None) -> int | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        event = date.fromisoformat(raw[:10])
+    except ValueError:
+        return None
+    return (event - datetime.now(UTC).date()).days
+
+
+def _lead_next_action(row: dict) -> str:
+    if not (row.get("client_email") or "").strip():
+        return "Add an email before follow-up"
+    if int(row.get("sent_invoices") or 0):
+        return "Collect retainer"
+    if int(row.get("active_proposals") or 0):
+        return "Follow proposal"
+    if int(row.get("proposed_sessions") or 0):
+        return "Confirm session"
+    if int(row.get("confirmed_sessions") or 0):
+        return "Send prep and next steps"
+    return "Reply within 24 hours"
+
+
+def _unique(items: list[str]) -> list[str]:
+    out = []
+    seen = set()
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
 
 
 def money_snapshot(conn: sqlite3.Connection, tenant_id: str) -> dict:
