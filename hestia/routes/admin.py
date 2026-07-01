@@ -26,6 +26,7 @@ from ..db import applied_migrations, audit
 from ..domains import custom_domain_summary, set_custom_domain_status
 from ..integrity import tenant_integrity_overview
 from ..jobs import failed_jobs, queue_stats, requeue_job, stale_jobs
+from ..launch import beta_launch_kit
 from ..ratelimit import enforce
 from ..tenants import (
     create_tenant,
@@ -110,6 +111,17 @@ def trials(request: Request):
             return _redirect_login()
         cockpit = trial_conversion_cockpit(conn, settings)
     return render(request, "admin/trials.html", auth=auth, cockpit=cockpit)
+
+
+@router.get("/launch")
+def launch(request: Request):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _admin_ctx(request, conn)
+        if not auth:
+            return _redirect_login()
+        kit = beta_launch_kit(conn, settings)
+    return render(request, "admin/launch.html", auth=auth, kit=kit)
 
 
 @router.get("/system")

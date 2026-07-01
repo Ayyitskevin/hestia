@@ -394,6 +394,23 @@ th { color: var(--muted); font-weight: 600; font-size: .82rem; text-transform: u
 .faq-list summary { cursor: pointer; font-weight: 700; color: var(--ink); }
 .faq-list p { color: var(--ink-soft); margin: 10px 0 0; }
 
+/* Admin launch kit */
+.launch-meter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.launch-meter:last-child { border-bottom: none; }
+.launch-link {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.launch-link:last-child { border-bottom: none; }
+.launch-link .mono { margin-top: 4px; word-break: break-all; }
+
 /* Alerts */
 .alert { padding: 12px 16px; border-radius: 10px; margin-bottom: 18px; font-size: .94rem; border: 1px solid; }
 .alert.error { background: #fbeaea; border-color: #f0c9c9; color: #8c2f2f; }

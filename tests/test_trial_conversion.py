@@ -97,6 +97,7 @@ def test_admin_trial_conversion_pages_render(app, conn):
 
     tenants = admin.get("/admin/tenants")
     assert 'href="/admin/trials"' in tenants.text
+    assert 'href="/admin/launch"' in tenants.text
 
     detail = admin.get(f"/admin/tenants/{tenant['id']}")
     assert detail.status_code == 200

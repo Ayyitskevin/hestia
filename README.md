@@ -185,6 +185,7 @@ Useful URLs:
 - `/settings/account` hosted account, URLs, custom domain, billing actions
 - `/settings/billing` flat plan billing page
 - `/admin` operator admin with `HESTIA_API_TOKEN`
+- `/admin/launch` beta launch kit with tagged invite links and owner follow-up queue
 - `/admin/trials` trial conversion cockpit for stalled and activated studios
 - `/healthz` liveness
 - `/readyz` readiness
@@ -231,10 +232,10 @@ bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
 
 The test suite covers tenant isolation, hosted routing, public demo and pricing
-pages, first-party signup attribution, flat-plan billing, signup, onboarding
-presets, trial conversion analytics, custom domains, proposal accept flows, offer
-idempotency, public tokens, payments, client portal flows, and safe mock-provider
-operation.
+pages, first-party signup attribution, beta launch kit, flat-plan billing, signup,
+onboarding presets, trial conversion analytics, custom domains, proposal accept
+flows, offer idempotency, public tokens, payments, client portal flows, and safe
+mock-provider operation.
 
 `scripts/hosted-preflight.sh` reads the same `.env`/environment values as the app
 and fails on hosted blockers: default secrets, non-HTTPS public URL, missing hosted

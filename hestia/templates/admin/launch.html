@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Beta launch kit - Hestia admin{% endblock %}
+{% block content %}
+<div class="page-title">
+  <div>
+    <h1>Beta launch kit</h1>
+    <p class="muted">Source-tagged invite links and today's owner follow-up queue for the hosted $40/month studio plan.</p>
+  </div>
+  <a class="btn ghost" href="/admin/trials">Trial cockpit</a>
+</div>
+
+<div class="grid cols-4" style="margin-top:18px">
+  <div class="card"><div class="label">Studios</div><div style="font-size:1.8rem;font-weight:800">{{ kit.summary.studios }}/{{ kit.target }}</div></div>
+  <div class="card"><div class="label">Verified owners</div><div style="font-size:1.8rem;font-weight:800">{{ kit.summary.verified }}</div></div>
+  <div class="card"><div class="label">Pricing/demo sourced</div><div style="font-size:1.8rem;font-weight:800">{{ kit.summary.sourced }}</div></div>
+  <div class="card"><div class="label">Trialing or active</div><div style="font-size:1.8rem;font-weight:800">{{ kit.summary.trialing_or_active }}</div></div>
+</div>
+
+<section class="grid cols-2" style="margin-top:18px">
+  <div class="card stack">
+    <h3>5-studio beta checklist</h3>
+    {% for item in kit.milestones %}
+      <div class="launch-meter">
+        <div>
+          <strong>{{ item.label }}</strong><br>
+          <span class="muted">{{ item.done }}/{{ item.target }}</span>
+        </div>
+        <span class="pill {{ 'on' if item.complete else 'off' }}">{{ item.percent }}%</span>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="card stack">
+    <h3>Tagged invite links</h3>
+    {% for link in kit.invite_links %}
+      <div class="launch-link">
+        <strong>{{ link.label }}</strong>
+        <span class="pill">{{ link.source }}</span>
+        <div class="mono">{{ link.url }}</div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card stack" style="margin-top:18px">
+  <h3>Follow up today</h3>
+  {% if kit.followups %}
+    <table>
+      <thead>
+        <tr>
+          <th>Studio</th>
+          <th>Why now</th>
+          <th>Next step</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in kit.followups %}
+        <tr>
+          <td>
+            <a href="/admin/tenants/{{ f.tenant_id }}">{{ f.name }}</a><br>
+            <span class="muted">{{ f.owner_email or 'no owner email' }} · {{ f.source }}</span>
+          </td>
+          <td>
+            <span class="pill {{ 'off' if f.risk in ('high', 'medium') else '' }}">{{ f.risk }}</span><br>
+            <span class="muted">{{ f.risk_reason }}</span>
+          </td>
+          <td>
+            <strong>{{ f.prompt }}</strong><br>
+            <span class="muted">Owner path: <span class="mono">{{ f.owner_path }}</span></span>
+          </td>
+          <td>
+            {% if f.mailto %}
+              <a class="btn secondary" href="{{ f.mailto }}">Email owner</a>
+            {% else %}
+              <span class="muted">Find contact first</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No urgent follow-ups. Keep inviting studios and watching activation signals.</p>
+  {% endif %}
+</section>
+{% endblock %}
