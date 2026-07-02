@@ -19,6 +19,27 @@ access_log = logging.getLogger("hestia.access")
 # Structured fields lifted from a record's ``extra=`` into the JSON line.
 _EXTRA_FIELDS = ("request_id", "method", "path", "status", "duration_ms", "tenant_id", "action")
 
+# URL prefixes whose next path segment IS a bearer credential (client-token routes)
+# or a tenant identifier (media keys). Logging the raw path would persist a working
+# credential in the access log; we keep the route prefix for observability and drop
+# everything after it. Mirrors the private list in the /robots.txt route.
+_REDACT_PREFIXES = frozenset({
+    "portal", "d", "pay", "a", "sign", "g", "s", "book", "q", "t",
+    "invite", "verify", "reset", "calendar", "media",
+})
+
+
+def redact_path(path: str) -> str:
+    """Strip the credential-bearing tail from a token/media URL path for logging.
+
+    ``/portal/<token>`` → ``/portal/[redacted]``; ``/s/<slug>/<token>`` →
+    ``/s/[redacted]``. Non-token paths (``/dashboard``, ``/admin/launch``) are
+    returned unchanged so ordinary access logging keeps its detail."""
+    segments = path.split("/")           # "/d/tok" → ["", "d", "tok"]
+    if len(segments) >= 3 and segments[1] in _REDACT_PREFIXES:
+        return f"/{segments[1]}/[redacted]"
+    return path
+
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:

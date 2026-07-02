@@ -76,6 +76,18 @@ GOOD_ROBOTS = "User-agent: *\n" + "\n".join(
 ) + "\nAllow: /\n"
 
 
+def test_mock_invoice_payments_is_a_launch_blocker(settings, tmp_path):
+    """Mock invoice payments mark invoices paid without charging — on a live box
+    that is silent revenue loss, so preflight must FAIL (not warn) like it does for
+    the subscription backend."""
+    bad = _hosted_settings(settings, tmp_path, payments_backend="mock")
+    checks = _by_name(run_preflight(bad, root=Path(".")))
+    assert checks["invoice payments"].level == "fail"
+
+    good = _hosted_settings(settings, tmp_path, payments_backend="stripe")
+    assert _by_name(run_preflight(good, root=Path(".")))["invoice payments"].level == "pass"
+
+
 def test_hosted_preflight_probes_health_and_readiness(settings, tmp_path):
     seen = []
 

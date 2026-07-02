@@ -331,11 +331,15 @@ def run_preflight(
         )
     )
 
+    # FAIL, not warn: with mock invoice payments a client who clicks "pay" flips the
+    # invoice to paid (and fulfills any backing order) with $0 actually charged. On a
+    # live box that is silent revenue loss — gate it as hard as the subscription backend.
     if settings.payments_backend == "stripe":
         checks.append(_check("pass", "invoice payments", "Stripe invoice checkout is active"))
     else:
         checks.append(
-            _check("warn", "invoice payments", "HESTIA_PAYMENTS_BACKEND is not stripe; invoices stay simulated")
+            _check("fail", "invoice payments",
+                   "set HESTIA_PAYMENTS_BACKEND=stripe; mock payments mark invoices paid without charging")
         )
 
     data_ok, data_detail = _can_write_dir(settings.data_dir)
