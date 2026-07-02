@@ -76,3 +76,7 @@ day at a time. Every gate is a command you can run — no vibes, no "should be f
 - [ ] Send the first beta invite batch from the admin beta cockpit.
 - [ ] Watch the launch digest: first signups, trial starts, and nudges are now on
       the worker's clock, not yours.
+
+Doors open. From here the ongoing cadence — daily glance, weekly backup check,
+quarterly restore drill, incident quick-reference — lives in
+[`operations.md`](operations.md).
