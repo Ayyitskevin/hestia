@@ -107,3 +107,17 @@ def test_old_sessions_killed_after_reset(client, conn):
                       data={"password": "newpassword1", "confirm": "newpassword1"})
     # the pre-existing session was invalidated → dashboard now bounces to login
     assert token_client.get("/dashboard", follow_redirects=False).status_code == 303
+
+
+def test_reset_is_audited(client, conn):
+    """A password reset is a credential change — it must land in the audit trail."""
+    creds = onboard_studio(client, email="audit@me.com", password="oldpassword")
+    login_owner(client, creds)
+    client.post("/forgot", data={"email": "audit@me.com"})
+    token = _token_from_outbox(conn, "audit@me.com")
+    client.post(f"/reset/{token}",
+                data={"password": "newpassword1", "confirm": "newpassword1"})
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'password.reset'"
+    ).fetchone()
+    assert row["n"] == 1                                  # attributable credential change

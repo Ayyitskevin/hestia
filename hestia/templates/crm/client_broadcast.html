@@ -15,7 +15,7 @@
 
 <div class="card stack">
   <form method="post" action="/clients/broadcast"
-        onsubmit="return confirm('Send this to {{ recipients|length }} client{{ '' if recipients|length == 1 else 's' }}?')">
+        data-confirm="Send this to {{ recipients|length }} client{{ '' if recipients|length == 1 else 's' }}?">
     {% include "_csrf.html" %}
     <input type="hidden" name="tag" value="{{ tag }}">
     <label for="subject">Subject</label>

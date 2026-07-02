@@ -18,7 +18,7 @@
     <div style="display:flex; gap:8px; flex-wrap:wrap">
       <a class="btn secondary" href="/schedule/calendar.ics">Download .ics</a>
       <form method="post" action="/schedule/calendar/regenerate" style="margin:0"
-            onsubmit="return confirm('Regenerate the link? Any calendar already subscribed will stop updating.')">
+            data-confirm="Regenerate the link? Any calendar already subscribed will stop updating.">
         {% include "_csrf.html" %}
         <button class="btn ghost" type="submit">Regenerate link</button>
       </form>

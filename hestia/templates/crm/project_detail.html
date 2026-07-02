@@ -75,7 +75,7 @@
       <a href="/projects/{{ project.id }}/files/{{ f.id }}" style="flex:1">{{ f.filename }}</a>
       {% if f.bytes %}<span class="muted" style="font-size:.85rem">{{ f.bytes | filesizeformat }}</span>{% endif %}
       <form method="post" action="/projects/{{ project.id }}/files/{{ f.id }}/delete" style="margin:0"
-            onsubmit="return confirm('Delete this file?')">
+            data-confirm="Delete this file?">
         {% include "_csrf.html" %}
         <button class="btn ghost" type="submit" title="Delete" style="padding:2px 9px">✕</button>
       </form>

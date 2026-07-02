@@ -34,7 +34,7 @@
         <p class="muted">Page through the spreads below. Approve it when everything looks right,
           or ask for changes.</p>
         <form method="post" action="/a/{{ token }}/approve"
-              onsubmit="return confirm('Approve this album layout? Your photographer will finalize it.')">
+              data-confirm="Approve this album layout? Your photographer will finalize it.">
           <button class="btn" type="submit">✓ Approve this album</button>
         </form>
         <details class="proof-note" style="margin-top:6px">
@@ -64,5 +64,6 @@
       {% endfor %}
     </div>
   </main>
+  {% include "_confirm.html" %}
 </body>
 </html>

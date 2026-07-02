@@ -31,7 +31,7 @@
     <div style="display:flex; gap:8px">
       <a class="btn secondary" href="/contracts/new?template_id={{ t.id }}">Use</a>
       <form method="post" action="/contracts/templates/{{ t.id }}/delete"
-            onsubmit="return confirm('Delete this template? Contracts already created from it are unaffected.')">
+            data-confirm="Delete this template? Contracts already created from it are unaffected.">
         {% include "_csrf.html" %}<button class="btn ghost" type="submit">Delete</button>
       </form>
     </div>

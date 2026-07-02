@@ -54,7 +54,7 @@
           </div>
         {% else %}
           <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/submit" style="margin-bottom:14px"
-                onsubmit="return confirm('Send your {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }} to {{ tenant.name }}?')">
+                data-confirm="Send your {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }} to {{ tenant.name }}?">
             <button class="btn" type="submit">✓ I'm done — send my {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }} to {{ tenant.name }}</button>
           </form>
         {% endif %}
@@ -86,5 +86,6 @@
     </div>
   </main>
   <footer class="site-footer"><div class="wrap">Delivered with 🔥 by {{ tenant.name }} on Hestia</div></footer>
+  {% include "_confirm.html" %}
 </body>
 </html>

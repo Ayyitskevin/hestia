@@ -104,7 +104,7 @@
       {% if gallery.delivery_expires_at %}<p class="muted" style="font-size:.8rem; margin-top:4px">Expires {{ gallery.delivery_expires_at[:10] }} — clear the date to keep the link open.</p>{% endif %}
     </form>
     <form method="post" action="/galleries/{{ gallery.id }}/delivery/regenerate" style="margin-top:6px"
-          onsubmit="return confirm('Regenerate the download link? The current link will stop working.')">
+          data-confirm="Regenerate the download link? The current link will stop working.">
       {% include "_csrf.html" %}
       <button class="btn ghost" type="submit">Regenerate link</button>
     </form>
@@ -216,18 +216,20 @@
     · {{ cull.blink_ids|length }} likely blink{{ '' if cull.blink_ids|length == 1 else 's' }} —
     excluded from hero &amp; offer picks (your originals are kept).</p>
   {% if cull_pending %}
-  <form method="post" action="/galleries/{{ gallery.id }}/cull/apply" style="margin:8px 0">
+  <form method="post" action="/galleries/{{ gallery.id }}/cull/apply" style="margin:8px 0"
+        data-confirm="Hide {{ cull_pending }} flagged frame(s) from the client gallery and delivery? You can restore any frame later.">
     {% include "_csrf.html" %}
-    <button type="submit" onclick="return confirm('Hide {{ cull_pending }} flagged frame(s) from the client gallery and delivery? You can restore any frame later.')">
+    <button type="submit">
       Hide {{ cull_pending }} flagged frame{{ '' if cull_pending == 1 else 's' }}
     </button>
   </form>
   {% endif %}
   {% endif %}
   {% if flagged_pending %}
-  <form method="post" action="/galleries/{{ gallery.id }}/quality-cull/apply" style="margin:8px 0">
+  <form method="post" action="/galleries/{{ gallery.id }}/quality-cull/apply" style="margin:8px 0"
+        data-confirm="Hide {{ flagged_pending }} frame(s) the AI flagged as soft or poorly exposed? You can restore any frame later.">
     {% include "_csrf.html" %}
-    <button type="submit" class="btn secondary" onclick="return confirm('Hide {{ flagged_pending }} frame(s) the AI flagged as soft or poorly exposed? You can restore any frame later.')">
+    <button type="submit" class="btn secondary">
       ⚠ Hide {{ flagged_pending }} flagged reject{{ '' if flagged_pending == 1 else 's' }}
     </button>
   </form>

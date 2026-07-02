@@ -13,7 +13,7 @@
   {% include "_stepper.html" %}
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   var url = "/pipeline/{{ run.id }}/partial";
   function terminal(s) { return s === "done" || s === "error"; }

@@ -38,6 +38,7 @@ def render(request: Request, template: str, *, status_code: int = 200, **context
         "settings": settings_of(request),
         "auth": context.pop("auth", None),
         "csrf_token": csrf_token_for(request),
+        "csp_nonce": getattr(request.state, "csp_nonce", ""),
     }
     base.update(context)
     return templates_of(request).TemplateResponse(

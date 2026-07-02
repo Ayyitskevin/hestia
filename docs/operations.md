@@ -35,9 +35,10 @@ page.
 
 ## Monthly
 
-- [ ] Dependency + base-image refresh: rebuild (`docker compose build --pull`) to pick
-      up `python:3.12-slim` security patches; review `pip` updates. Run
-      `bash scripts/ci-smoke.sh` before deploying the rebuilt image.
+- [ ] Dependency + base-image refresh: `pip install pip-audit && pip-audit` for known
+      CVEs, then rebuild (`docker compose build --pull`) to pick up `python:3.12-slim`
+      security patches. Run `bash scripts/ci-smoke.sh` before deploying the rebuilt image.
+      Security posture reference: `docs/security.md`.
 - [ ] Rotate nothing on a schedule you don't have to — but confirm secrets are still
       the strong values from launch, and `.env` is still `chmod 600`.
 - [ ] Review Stripe + SMTP dashboards for silent failures (webhook delivery errors,

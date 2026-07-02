@@ -33,7 +33,7 @@
           </form>
           {% endif %}
           <form method="post" action="/recurring/{{ p.id }}/delete" style="display:inline"
-                onsubmit="return confirm('Delete this recurring invoice? Already-sent invoices are kept.')">
+                data-confirm="Delete this recurring invoice? Already-sent invoices are kept.">
             {% include "_csrf.html" %}
             <button class="btn ghost" type="submit">Delete</button>
           </form>

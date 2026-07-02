@@ -26,7 +26,7 @@
             {% if can_reschedule %}<a class="btn ghost" href="/book/{{ appt.token }}/reschedule">Reschedule</a>{% endif %}
           </div>
           <form method="post" action="/book/{{ appt.token }}/cancel" style="margin-top:2px"
-                onsubmit="return confirm('Cancel this session? This frees the time for someone else.')">
+                data-confirm="Cancel this session? This frees the time for someone else.">
             <button class="btn ghost" type="submit">Need to cancel?</button>
           </form>
         </div>
@@ -52,5 +52,6 @@
     </div>
   </main>
   <footer class="site-footer"><div class="wrap">Scheduled with 🔥 by {{ tenant.name }} on Hestia</div></footer>
+  {% include "_confirm.html" %}
 </body>
 </html>

@@ -15,7 +15,7 @@
     {% else %}
       <form method="post" action="/mini-sessions/{{ drop.id }}/publish">{% include "_csrf.html" %}<button class="btn" type="submit">Publish</button></form>
     {% endif %}
-    <form method="post" action="/mini-sessions/{{ drop.id }}/archive" onsubmit="return confirm('Archive this mini-session drop?')">
+    <form method="post" action="/mini-sessions/{{ drop.id }}/archive" data-confirm="Archive this mini-session drop?">
       {% include "_csrf.html" %}<button class="btn ghost" type="submit">Archive</button>
     </form>
   </div>

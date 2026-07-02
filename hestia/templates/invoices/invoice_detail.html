@@ -19,7 +19,7 @@
     {% if invoice.status != 'paid' and invoice.status != 'void' %}
       <form method="post" action="/invoices/{{ invoice.id }}/record-payment"
             style="display:flex; gap:6px; align-items:center; margin:0"
-            onsubmit="return confirm('Mark this invoice paid? Records an offline payment.')">
+            data-confirm="Mark this invoice paid? Records an offline payment.">
         {% include "_csrf.html" %}
         <select name="method" aria-label="Payment method" style="width:auto">
           <option value="cash">Cash</option>

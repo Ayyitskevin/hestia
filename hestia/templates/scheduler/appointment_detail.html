@@ -15,11 +15,11 @@
     {% if appt.status == 'confirmed' %}
       <form method="post" action="/schedule/{{ appt.id }}/complete">{% include "_csrf.html" %}<button class="btn secondary" type="submit">Mark complete</button></form>
       <form method="post" action="/schedule/{{ appt.id }}/no-show"
-            onsubmit="return confirm('Mark this session as a no-show?')">{% include "_csrf.html" %}<button class="btn ghost" type="submit">No-show</button></form>
+            data-confirm="Mark this session as a no-show?">{% include "_csrf.html" %}<button class="btn ghost" type="submit">No-show</button></form>
     {% endif %}
     {% if appt.status in ('proposed', 'confirmed') %}
       <form method="post" action="/schedule/{{ appt.id }}/cancel"
-            onsubmit="return confirm('Cancel this session?')">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Cancel</button></form>
+            data-confirm="Cancel this session?">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Cancel</button></form>
     {% endif %}
   </div>
 </div>
