@@ -50,6 +50,9 @@ The first hosted presets target:
 
 - **Wedding photographers** who need inquiries, consultations, contracts, deposits,
   mini-session drops, galleries, albums, sales, and anniversary retention.
+- **Portrait & family photographers** who need mini-session drops, full sessions,
+  deposit-backed booking, AI-culled proof galleries, artwork sales, and annual
+  rebooking.
 - **Food & beverage photographers** who need menu launches, campaign days,
   recurring content retainers, licensing-friendly intake, and repeat client loops.
 - **Real-estate photographers** who need fast booking, property intake, delivery,
@@ -103,8 +106,14 @@ Hestia is ready for a simple solo-founder hosted launch:
 - Public beta interest capture with private invite links and interest-to-trial conversion tracking
 - Beta revenue pipeline from interest to paid $40/month account
 - Founder weekly launch digest for pipeline, stalled studios, beta interest, and paid MRR
+- Full Stripe subscription lifecycle sync: trial start, trial→paid conversion,
+  failed-card grace (past_due) with polite dunning emails, and cancel downgrade
+- Automatic outreach sweeps on shared audit cooldowns: trial-ending nudges,
+  failed-card dunning, and one-click batch beta invites (oldest leads first)
+- Daily WAL-safe SQLite backups from a dedicated compose service, with a drilled
+  restore script and runbook ([`docs/backup-restore.md`](docs/backup-restore.md))
 - In-app launch operations runbook with preflight, smoke, dogfood, and share-link commands
-- Founder demo mode that seeds polished wedding, food & beverage, and real-estate sample studios
+- Founder demo mode that seeds polished wedding, portrait, food & beverage, and real-estate sample studios — each with a processed showcase gallery (vision analyses, applied AI cull, delivery, and an album in client review), and every public demo tour links to its live seeded studio
 - Client action room that ranks every client next step across sign, pay, book, answer, review, download, and testimonial flows
 - Growth flywheel that finds happy clients from paid/delivered work and sends a review + referral ask
 - Gallery sales automation that spots delivered galleries with offer links and emails limited-time print campaigns without duplicate sends
@@ -134,7 +143,7 @@ Hosted customers move through the product with minimal setup:
 
 1. `/signup` creates the studio and owner account.
 2. Email verification signs the owner in and opens `/onboarding`.
-3. `/onboarding` installs the wedding, food & beverage, or real-estate preset.
+3. `/onboarding` installs the wedding, portrait, food & beverage, or real-estate preset.
 4. `/dashboard` shows the hosted studio cockpit and next launch action.
 5. `/settings/billing` starts the 14-day trial.
 6. `/settings/account` shows studio URLs, custom-domain readiness, and billing actions.
@@ -193,7 +202,7 @@ bash scripts/start-hestia.sh
 Useful URLs:
 
 - `/` landing
-- `/demo` public buyer tour for wedding, food & beverage, and real-estate workflows
+- `/demo` public buyer tours for the wedding, portrait & family, food & beverage, and real-estate workflows
 - `/pricing` flat $40/month value stack and trial conversion page
 - `/beta` shareable public beta landing page with first-party attribution and embedded access request
 - Public beta and pricing pages include a 14-day trial proof plan for client-to-cash launch outcomes
@@ -246,7 +255,7 @@ Details: [`docs/architecture.md`](docs/architecture.md)
 ## Verification
 
 ```bash
-bash scripts/ci-smoke.sh        # ruff + pytest + healthz boot
+bash scripts/ci-smoke.sh        # ruff + pytest + healthz boot + privacy invariants
 bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke
 bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
@@ -261,10 +270,19 @@ mock-provider operation.
 and fails on hosted blockers: default secrets, non-HTTPS public URL, missing hosted
 domain, wrong $40/month or 14-day trial contract, missing Stripe subscription
 secrets, mock email for signup verification, unwritable volumes, missing Docker/Caddy
-assets, or failing `/healthz`/`/readyz` probes. Set `HESTIA_PREFLIGHT_URL` or pass
-`--url` after the app is running.
+assets, failing `/healthz`/`/readyz` probes, a stale backup artifact (a dead backup loop
+is a launch blocker), or a live `robots.txt` missing the client-token disallows.
+Set `HESTIA_PREFLIGHT_URL` or pass `--url` after the app is running.
+
+CI smoke also enforces the privacy invariants on every run: every standalone
+client-token template must carry the `noindex` meta (new token pages fail CI the
+day they land without it), `robots.txt` must disallow every client-token prefix,
+and the marketing landing page must stay indexable.
 
 ## Hosted Launch Checklist
+
+The day-by-day founder runbook with exact commands lives in
+[`docs/launch-checklist.md`](docs/launch-checklist.md). The condensed gate list:
 
 1. Buy or choose the hosted domain.
 2. Point apex and wildcard DNS at the host.
@@ -273,12 +291,14 @@ assets, or failing `/healthz`/`/readyz` probes. Set `HESTIA_PREFLIGHT_URL` or pa
 5. Configure SMTP for verification and owner emails.
 6. Configure Stripe live keys and webhook secret.
 7. Confirm Stripe checkout creates the single $40/month subscription with a 14-day trial.
-8. Choose local volume or S3/R2 storage and verify backups.
+8. Choose local volume or S3/R2 storage; the compose `backup` service takes a
+   daily WAL-safe snapshot (preflight fails if backups go stale), and
+   `scripts/restore.sh` is the drilled recovery path.
 9. Run `docker compose up --build -d`.
 10. Run `/healthz`, `/readyz`, `scripts/ci-smoke.sh`, `scripts/dogfood-hestia.sh`,
     and `scripts/hosted-preflight.sh --url https://yourdomain.com`.
 11. Create one test studio through `/signup`.
-12. Install each onboarding preset once: wedding, food & beverage, real estate.
+12. Install each onboarding preset once: wedding, portrait, food & beverage, real estate.
 13. Start and cancel a test subscription.
 14. Verify custom-domain pending and admin verification flow.
 15. Review `/admin/launch` beta interest leads and send private invite links.
@@ -315,8 +335,8 @@ No duplicate links on re-run. No extra sales tool. No manual bundle building.
 
 **Post 4**
 
-The first presets are built for wedding, food & beverage, and real-estate
-photographers.
+The first presets are built for wedding, portrait & family, food & beverage,
+and real-estate photographers.
 
 Pick your niche, and Hestia seeds booking types, packages, intake forms, draft site
 copy, and sample workflow data.
@@ -345,7 +365,6 @@ Near-term product work:
 - Add production-grade custom-domain TLS automation.
 - Deepen the live vision backend for culling, duplicate detection, blink detection,
   and studio style profiles.
-- Add operator backup/restore runbooks for SQLite volumes and media storage.
 - Deepen the public beta and demo pages into short hosted walkthrough videos once the first
   studios have shipped real workflows.
 
