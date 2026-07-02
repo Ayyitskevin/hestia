@@ -19,7 +19,10 @@ from cryptography.fernet import Fernet, InvalidToken
 
 # ── Password hashing (PBKDF2-SHA256) ────────────────────────────────────────
 
-_PBKDF2_ITERATIONS = 240_000
+# OWASP-current work factor for PBKDF2-HMAC-SHA256 (≥600k). Raising this only affects
+# NEW hashes; the count is stored in each hash so existing passwords still verify, and
+# authenticate_user re-hashes them at this cost on the next successful login.
+_PBKDF2_ITERATIONS = 600_000
 
 
 def hash_password(password: str, *, iterations: int = _PBKDF2_ITERATIONS) -> str:
@@ -40,6 +43,16 @@ def verify_password(password: str, encoded: str) -> bool:
         return False
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations)
     return hmac.compare_digest(digest, expected)
+
+
+def needs_rehash(encoded: str) -> bool:
+    """True if a stored hash is weaker than current policy (different algorithm or a
+    lower iteration count) and should be transparently upgraded on next login."""
+    try:
+        algo, iter_s, _salt, _hash = encoded.split("$")
+        return algo != "pbkdf2_sha256" or int(iter_s) < _PBKDF2_ITERATIONS
+    except (ValueError, AttributeError):
+        return True
 
 
 # ── Tenant API keys (hestia_tk_<slug>_<secret>) ─────────────────────────────
