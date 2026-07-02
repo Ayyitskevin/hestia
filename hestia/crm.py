@@ -31,9 +31,14 @@ def create_client(
     phone: str = "",
     notes: str = "",
 ) -> dict:
+    # Field caps: create_client is reachable from PUBLIC entry points (studio inquiry,
+    # self-serve booking), so bound every free-text field server-side — an oversized
+    # payload must not bloat the row or the studio-alert email it renders into. Legit
+    # values are far under these limits; this is a defense-in-depth ceiling, not UX.
     cur = conn.execute(
         "INSERT INTO clients (tenant_id, name, email, phone, notes) VALUES (?, ?, ?, ?, ?)",
-        (tenant_id, name.strip(), email.strip(), phone.strip(), notes.strip()),
+        (tenant_id, name.strip()[:200], email.strip()[:254], phone.strip()[:40],
+         notes.strip()[:20000]),
     )
     return get_client(conn, tenant_id, cur.lastrowid)
 
@@ -194,8 +199,9 @@ def create_project(
                               notes, lead_source)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (tenant_id, client_id, name.strip(), normalize_shoot_type(shoot_type), status,
-         event_date.strip() or None, notes.strip(), (lead_source or "").strip()[:50]),
+        (tenant_id, client_id, name.strip()[:300], normalize_shoot_type(shoot_type), status,
+         (event_date.strip()[:40] or None), notes.strip()[:20000],
+         (lead_source or "").strip()[:50]),  # public-reachable → bound free text (see create_client)
     )
     return get_project(conn, tenant_id, cur.lastrowid)
 
