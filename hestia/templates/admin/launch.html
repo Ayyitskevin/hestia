@@ -23,6 +23,12 @@
 {% elif nudge_notice == 'missing' %}
   <div class="alert">Nudge skipped: no owner email is available for that studio.</div>
 {% endif %}
+{% if batch_sent != '' %}
+  <div class="alert ok">
+    Batch: {{ batch_sent }} beta invite{{ '' if batch_sent == '1' else 's' }} sent
+    ({{ batch_eligible }} lead{{ '' if batch_eligible == '1' else 's' }} were waiting).
+  </div>
+{% endif %}
 {% if interest_notice == 'sent' %}
   <div class="alert ok">Beta invite sent through the Hestia email seam.</div>
 {% elif interest_notice == 'converted' %}
@@ -233,7 +239,16 @@
         {{ kit.interest.converted_total }} converted.
       </p>
     </div>
-    <a class="btn ghost" href="/beta">Open beta page</a>
+    <div class="form-actions" style="margin-top:0">
+      {% if kit.interest.open_total %}
+        <form method="post" action="/admin/launch/interest/invite-batch" style="display:inline">
+          {% include "_csrf.html" %}
+          <input type="number" name="count" value="5" min="1" max="20" style="width:4.5em" aria-label="How many invites to send">
+          <button class="btn" type="submit">Invite next batch</button>
+        </form>
+      {% endif %}
+      <a class="btn ghost" href="/beta">Open beta page</a>
+    </div>
   </div>
   {% if kit.interest.recent %}
     <table>

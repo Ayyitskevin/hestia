@@ -110,6 +110,35 @@ def send_beta_interest_invite(
     return {**_hydrate(dict(row)), "email_status": status, "invite_url": invite_url}
 
 
+def send_beta_invite_batch(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    *,
+    limit: int = 5,
+) -> dict:
+    """Invite the next `limit` waiting photographers, oldest interest first.
+    Launch-day cohorts go out in one action instead of one click per lead;
+    already-invited and already-converted rows are never re-sent."""
+    limit = max(1, min(int(limit), 20))
+    rows = conn.execute(
+        """
+        SELECT id FROM beta_interests
+         WHERE COALESCE(invited_at, '') = ''
+           AND COALESCE(tenant_id, '') = ''
+         ORDER BY created_at, id
+         LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    sent = [
+        result
+        for row in rows
+        if (result := send_beta_interest_invite(conn, settings, row["id"]))
+        and not result.get("skipped")
+    ]
+    return {"requested": limit, "eligible": len(rows), "sent": len(sent), "results": sent}
+
+
 def find_beta_interest_invite(
     conn: sqlite3.Connection,
     settings: Settings,

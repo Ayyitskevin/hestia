@@ -191,3 +191,77 @@ def test_private_invite_signup_works_when_public_signup_is_disabled(settings, co
     ).fetchone()
     assert "/verify/" in verify["body"]
     assert "invalid, expired, or already used" in client.get(f"/invite/{token}").text
+
+
+def _lead(conn, settings, email, *, days_ago=0):
+    interest = record_beta_interest(conn, settings, name=email.split("@")[0],
+                                    studio_name=f"{email} studio", email=email,
+                                    shoot_type="wedding")
+    if days_ago:
+        conn.execute("UPDATE beta_interests SET created_at = datetime('now', ?) WHERE id = ?",
+                     (f"-{int(days_ago)} days", interest["id"]))
+    conn.commit()
+    return interest
+
+
+def test_invite_batch_sends_oldest_first_and_skips_handled(settings, conn):
+    from hestia.interest import mark_beta_interest_converted, send_beta_invite_batch
+
+    oldest = _lead(conn, settings, "oldest@x.test", days_ago=9)
+    middle = _lead(conn, settings, "middle@x.test", days_ago=5)
+    newest = _lead(conn, settings, "newest@x.test", days_ago=1)
+    handled = _lead(conn, settings, "handled@x.test", days_ago=7)
+    send_beta_interest_invite(conn, settings, handled["id"])       # already invited
+    converted = _lead(conn, settings, "converted@x.test", days_ago=8)
+    tenant_id = "t-converted"
+    mark_beta_interest_converted(conn, converted["id"], tenant_id)
+    conn.commit()
+
+    batch = send_beta_invite_batch(conn, settings, limit=2)
+    conn.commit()
+    assert batch["sent"] == 2 and batch["eligible"] == 2
+    assert [r["email"] for r in batch["results"]] == ["oldest@x.test", "middle@x.test"]
+
+    rows = {r["email"]: r for r in conn.execute("SELECT * FROM beta_interests").fetchall()}
+    assert rows["oldest@x.test"]["status"] == "invited"
+    assert rows["middle@x.test"]["status"] == "invited"
+    assert rows["newest@x.test"]["status"] == "new"                # beyond the limit
+    assert oldest and middle and newest                            # fixture rows exist
+
+    rest = send_beta_invite_batch(conn, settings, limit=10)        # sweep the remainder
+    conn.commit()
+    assert rest["sent"] == 1
+    assert rest["results"][0]["email"] == "newest@x.test"
+    assert send_beta_invite_batch(conn, settings, limit=10)["sent"] == 0   # nothing left
+
+
+def test_admin_batch_route_sends_reports_and_audits(settings, conn):
+    from conftest import ADMIN_TOKEN
+
+    _lead(conn, settings, "one@x.test", days_ago=2)
+    _lead(conn, settings, "two@x.test", days_ago=1)
+    admin = CSRFClient(create_app(settings))
+    admin.post("/admin/login", data={"token": ADMIN_TOKEN})
+
+    response = admin.post("/admin/launch/interest/invite-batch",
+                          data={"count": "5"}, follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/admin/launch?invited=2&eligible=2"
+
+    page = admin.get("/admin/launch?invited=2&eligible=2")
+    assert "Batch: 2 beta invites sent" in page.text
+
+    sent_audits = conn.execute(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'interest.invite_sent'",
+    ).fetchone()["n"]
+    summary = conn.execute(
+        "SELECT detail FROM audit_log WHERE action = 'interest.invite_batch'",
+    ).fetchone()
+    assert sent_audits == 2
+    assert summary["detail"] == "sent:2 eligible:2"
+    for email in ("one@x.test", "two@x.test"):
+        invite = conn.execute(
+            "SELECT body FROM emails WHERE to_addr = ? AND subject LIKE '%invited%'",
+            (email,),
+        ).fetchone()
+        assert invite and "/invite/" in invite["body"]
