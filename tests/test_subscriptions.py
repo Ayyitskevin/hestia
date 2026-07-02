@@ -258,3 +258,48 @@ def test_stripe_webhook_activates_subscription(settings, db_path):
         assert conn.execute("SELECT plan FROM tenants WHERE id=?", (t["id"],)).fetchone()["plan"] == "studio"
         assert get_subscription(conn, t["id"])["status"] == "trialing"
         assert get_subscription(conn, t["id"])["provider_ref"] == "cus_abc"
+
+
+def test_subscription_status_from_event_parses_updated():
+    from hestia.subscriptions import subscription_status_from_event
+
+    def event(status, tenant="t-1"):
+        return json.dumps({
+            "type": "customer.subscription.updated",
+            "data": {"object": {"status": status, "metadata": {"tenant_id": tenant}}},
+        }).encode()
+
+    assert subscription_status_from_event(event("active")) == ("t-1", "active")
+    assert subscription_status_from_event(event("trialing")) == ("t-1", "trialing")
+    assert subscription_status_from_event(event("past_due")) == ("t-1", "past_due")
+    assert subscription_status_from_event(event("unpaid")) == ("t-1", "past_due")
+    # canceled is owned by the deleted event; unknown states and junk are ignored
+    assert subscription_status_from_event(event("canceled")) is None
+    assert subscription_status_from_event(event("incomplete_expired")) is None
+    assert subscription_status_from_event(event("active", tenant="")) is None
+    assert subscription_status_from_event(b"not json") is None
+    assert subscription_status_from_event(
+        json.dumps({"type": "customer.subscription.deleted"}).encode()) is None
+
+
+def test_set_subscription_status_syncs_without_touching_plan(conn, settings):
+    from hestia.subscriptions import get_subscription, set_subscription_status
+    from hestia.tenants import create_tenant, get_tenant
+
+    t = create_tenant(conn, name="Sync Studio", shoot_type="wedding")
+    apply_plan(conn, t["id"], plan="studio", status="trialing", provider="stripe")
+    conn.commit()
+
+    assert set_subscription_status(conn, t["id"], status="active") is True
+    conn.commit()
+    assert get_subscription(conn, t["id"])["status"] == "active"    # trial converted
+    assert get_tenant(conn, t["id"])["plan"] == "studio"            # plan untouched
+
+    assert set_subscription_status(conn, t["id"], status="past_due") is True
+    conn.commit()
+    assert get_subscription(conn, t["id"])["status"] == "past_due"  # dunning visible
+    assert get_tenant(conn, t["id"])["plan"] == "studio"            # grace, no downgrade
+
+    # unknown tenant: acknowledged, nothing written, no orphan row
+    assert set_subscription_status(conn, "no-such-tenant", status="active") is False
+    assert get_subscription(conn, "no-such-tenant") is None

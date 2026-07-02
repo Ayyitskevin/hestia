@@ -107,3 +107,85 @@ def test_webhook_503_when_unconfigured(client):
     # default settings have no webhook secret
     r = client.post("/webhooks/stripe", content=b"{}", headers={"stripe-signature": "x"})
     assert r.status_code == 503
+
+
+# ── Subscription lifecycle sync ─────────────────────────────────────────────
+
+
+def _signed(event: dict) -> tuple[bytes, dict]:
+    payload = json.dumps(event).encode()
+    header = stripe_signature_header(payload, SECRET, timestamp=int(time.time()))
+    return payload, {"stripe-signature": header}
+
+
+def _sub_event(event_type: str, *, tenant_id: str, status: str = "") -> dict:
+    obj = {"metadata": {"tenant_id": tenant_id, "plan": "studio"}}
+    if status:
+        obj["status"] = status
+    return {"type": event_type, "data": {"object": obj}}
+
+
+def test_webhook_syncs_trial_conversion_and_dunning(settings, conn):
+    """The full lifecycle Stripe owns after checkout: trialing → active on real
+    payment, active → past_due on a failed card — plan untouched throughout."""
+    from hestia.subscriptions import apply_plan, get_subscription
+    from hestia.tenants import create_tenant, get_tenant
+
+    app = _app_with_webhook(settings)
+    t = create_tenant(conn, name="Lifecycle Studio", shoot_type="wedding")
+    apply_plan(conn, t["id"], plan="studio", status="trialing", provider="stripe")
+    conn.commit()
+    hook = TestClient(app)
+
+    payload, headers = _signed(_sub_event("customer.subscription.updated",
+                                          tenant_id=t["id"], status="active"))
+    r = hook.post("/webhooks/stripe", content=payload, headers=headers)
+    assert r.status_code == 200 and r.json()["subscription"] == "studio:active"
+    assert get_subscription(conn, t["id"])["status"] == "active"
+    assert get_tenant(conn, t["id"])["plan"] == "studio"
+
+    # replayed delivery: still 200, still synced, no error
+    r2 = hook.post("/webhooks/stripe", content=payload, headers=headers)
+    assert r2.status_code == 200 and r2.json()["subscription"] == "studio:active"
+
+    payload, headers = _signed(_sub_event("customer.subscription.updated",
+                                          tenant_id=t["id"], status="past_due"))
+    r3 = hook.post("/webhooks/stripe", content=payload, headers=headers)
+    assert r3.status_code == 200 and r3.json()["subscription"] == "studio:past_due"
+    assert get_subscription(conn, t["id"])["status"] == "past_due"
+    assert get_tenant(conn, t["id"])["plan"] == "studio"     # grace period, no downgrade
+
+
+def test_webhook_ignores_unknown_tenants_instead_of_500ing(settings):
+    """Bogus or foreign metadata must be acknowledged (200), not retried for days:
+    with foreign keys ON, an unguarded apply_plan would raise and 500."""
+    app = _app_with_webhook(settings)
+    hook = TestClient(app)
+
+    for event in (
+        _sub_event("customer.subscription.updated", tenant_id="ghost", status="active"),
+        _sub_event("customer.subscription.deleted", tenant_id="ghost"),
+        {"type": "checkout.session.completed",
+         "data": {"object": {"mode": "subscription",
+                             "metadata": {"tenant_id": "ghost", "plan": "studio"}}}},
+    ):
+        payload, headers = _signed(event)
+        r = hook.post("/webhooks/stripe", content=payload, headers=headers)
+        assert r.status_code == 200
+        assert r.json()["subscription"] is None
+
+
+def test_webhook_cancel_downgrades_known_tenant(settings, conn):
+    from hestia.subscriptions import apply_plan, get_subscription
+    from hestia.tenants import create_tenant, get_tenant
+
+    app = _app_with_webhook(settings)
+    t = create_tenant(conn, name="Cancel Studio", shoot_type="wedding")
+    apply_plan(conn, t["id"], plan="studio", status="active", provider="stripe")
+    conn.commit()
+
+    payload, headers = _signed(_sub_event("customer.subscription.deleted", tenant_id=t["id"]))
+    r = TestClient(app).post("/webhooks/stripe", content=payload, headers=headers)
+    assert r.status_code == 200 and r.json()["subscription"] == "beta:canceled"
+    assert get_tenant(conn, t["id"])["plan"] == "beta"
+    assert get_subscription(conn, t["id"])["status"] == "canceled"
