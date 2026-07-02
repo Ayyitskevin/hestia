@@ -9,6 +9,19 @@ services:
       - hestia-data:/data
     restart: unless-stopped
 
+  # Daily online backup of the SQLite database onto the same volume, no host
+  # cron needed. A failed backup exits the loop and crash-loops the container,
+  # so `docker compose ps` shows red instead of backups silently rotting.
+  backup:
+    build: .
+    environment:
+      HESTIA_DATA_DIR: /data
+      HESTIA_BACKUP_KEEP: ${HESTIA_BACKUP_KEEP:-14}
+    volumes:
+      - hestia-data:/data
+    entrypoint: ["bash", "-c", "while true; do bash /app/scripts/backup.sh || exit 1; sleep 86400; done"]
+    restart: unless-stopped
+
   caddy:
     image: caddy:2
     depends_on:
