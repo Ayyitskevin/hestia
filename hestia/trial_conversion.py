@@ -37,6 +37,7 @@ def trial_conversion_cockpit(
             "trial_ready": sum(1 for s in studios if s["trial_state"] == "ready"),
             "trialing": sum(1 for s in studios if s["trial_state"] == "trialing"),
             "active": sum(1 for s in studios if s["trial_state"] == "active"),
+            "past_due": sum(1 for s in studios if s["trial_state"] == "past_due"),
             "stalled": sum(1 for s in studios if s["risk"] in ("high", "medium")),
             "pricing_signups": sum(1 for s in studios if s["signup_source"] == "pricing"),
             "demo_signups": sum(1 for s in studios if s["signup_source"] == "demo"),
