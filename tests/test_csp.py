@@ -10,6 +10,14 @@ import re
 from pathlib import Path
 
 
+def test_hardened_response_headers_present(client):
+    h = client.get("/").headers
+    assert h["x-content-type-options"] == "nosniff"
+    assert h["x-frame-options"] == "SAMEORIGIN"
+    assert h["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert "max-age=31536000" in h["strict-transport-security"]   # HSTS, pin to HTTPS
+
+
 def test_csp_header_is_present_and_locked_down(client):
     csp = client.get("/").headers["content-security-policy"]
     for directive in ("default-src 'self'", "object-src 'none'", "frame-ancestors 'none'",
