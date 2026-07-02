@@ -218,14 +218,22 @@ def _key(conn, image_id):
     return conn.execute("SELECT storage_key FROM images WHERE id = ?", (image_id,)).fetchone()["storage_key"]
 
 
+def _token(conn, image_id):
+    return conn.execute("SELECT access_token FROM images WHERE id = ?", (image_id,)).fetchone()["access_token"]
+
+
 def test_media_route_blocks_hidden_frame_for_public(client, conn, storage):
     t, g, ids = _seed(conn, storage)
     publish_gallery(conn, t["id"], g["id"])
     apply_cull(conn, t["id"], g["id"])                         # hides b + c
     conn.commit()
-    assert client.get(f"/media/{_key(conn, ids['a'])}").status_code == 200   # kept frame public
-    assert client.get(f"/media/{_key(conn, ids['b'])}").status_code == 403   # culled frame forbidden
-    assert client.get(f"/media/{_key(conn, ids['c'])}").status_code == 403
+    # Public images are served by unguessable capability token, never the storage key.
+    assert client.get(f"/media/{_token(conn, ids['a'])}").status_code == 200   # kept frame public
+    assert client.get(f"/media/{_token(conn, ids['b'])}").status_code == 403   # culled frame forbidden
+    assert client.get(f"/media/{_token(conn, ids['c'])}").status_code == 403
+    # The enumerable storage-key path is owner-only — it closes the /media enumeration
+    # hole, so even a *kept, published* frame is 403 to the public via its key.
+    assert client.get(f"/media/{_key(conn, ids['a'])}").status_code == 403
 
 
 def test_owner_still_sees_hidden_frame_via_media(client, conn, storage):
@@ -261,5 +269,6 @@ def test_offer_page_drops_hidden_hero_and_favorite(client, conn, storage):
     conn.commit()
     page = client.get(f"/s/{t['slug']}/{offer['token']}")
     assert page.status_code == 200
-    assert _key(conn, a["id"]) not in page.text               # culled frame gone from heroes + favorites
-    assert _key(conn, b["id"]) in page.text                   # the kept frame still shows
+    # The offer page emits capability-token image URLs, not storage keys.
+    assert _token(conn, a["id"]) not in page.text             # culled frame gone from heroes + favorites
+    assert _token(conn, b["id"]) in page.text                 # the kept frame still shows
