@@ -26,3 +26,13 @@ jobs:
 
       - name: Dogfood the magic moment (mock vision, no fleet)
         run: bash scripts/dogfood-hestia.sh
+
+      # Advisory supply-chain scan: surfaces known-CVE dependencies in the CI log without
+      # blocking the merge on an unfixable transitive/tooling CVE. A solo operator reviews
+      # the output and bumps constraints (see docs/security.md). --skip-editable ignores
+      # the hestia package itself.
+      - name: Dependency vulnerability scan (advisory)
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit --skip-editable --progress-spinner=off

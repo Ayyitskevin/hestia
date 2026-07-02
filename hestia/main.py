@@ -148,6 +148,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # HSTS: pin clients to HTTPS for a year (browsers only honor it over TLS, so it's
         # inert on the internal http hop). setdefault so an edge proxy can still override.
         resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        # Powerful features Hestia never uses — deny them so a future injection can't reach
+        # the camera/mic/location/Payment-Request APIs (Stripe Checkout is a redirect, not
+        # the Payment Request API, so payment=() is safe).
+        resp.headers.setdefault("Permissions-Policy",
+                                "geolocation=(), microphone=(), camera=(), payment=(), usb=()")
+        # Isolate the browsing context: a cross-origin opener can't reference our window.
+        resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         # Content-Security-Policy. script-src is nonce-only (strict). style-src keeps
         # 'unsafe-inline' for the many low-risk inline style= attributes (nonces don't
         # apply to inline styles); img-src allows data: for the emoji favicon.

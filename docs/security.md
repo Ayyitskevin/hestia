@@ -81,14 +81,18 @@ login, signup, reset, inquiry, booking, and checkout.
 
 ## Dependency & supply-chain hygiene
 
-Run a vulnerability scan before each release and monthly (see `docs/operations.md`):
+CI runs `pip-audit` on every push (advisory — it surfaces known-CVE dependencies in the
+log without blocking on an unfixable transitive/tooling CVE). Review it and raise the
+offending constraint in `pyproject.toml` (as we did for `cryptography>=43.0.1`). Also run
+it before each release and monthly (see `docs/operations.md`):
 
 ```sh
 pip install pip-audit && pip-audit          # known-CVE check on installed deps
 docker compose build --pull                 # pick up base-image (python:3.12-slim) patches
 ```
 
-Consider adding `pip-audit` as a CI step so a vulnerable dependency blocks the merge.
+To make a specific finding blocking once triaged, drop `continue-on-error` from the CI
+step; ignore an unfixable one with `pip-audit --ignore-vuln <ID>`.
 
 ## Verifying the whole posture
 
