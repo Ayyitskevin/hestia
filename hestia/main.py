@@ -26,7 +26,7 @@ from .db import init_db
 from .features import LEAD_SOURCES, SHOOT_TYPE_LABELS, SHOOT_TYPES
 from .jobs import run_worker
 from .marketing import LAUNCH_PROOF_STEPS
-from .obs import access_log, configure_logging, new_request_id
+from .obs import access_log, configure_logging, new_request_id, redact_path
 from .ratelimit import RateLimiter
 from .routes import (
     admin,
@@ -148,7 +148,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         start = time.perf_counter()
         response = await call_next(request)
         access_log.info("request", extra={
-            "request_id": rid, "method": request.method, "path": request.url.path,
+            "request_id": rid, "method": request.method,
+            "path": redact_path(request.url.path),   # never persist client bearer tokens
             "status": response.status_code,
             "duration_ms": round((time.perf_counter() - start) * 1000, 1),
         })
