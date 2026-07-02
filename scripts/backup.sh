@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Nightly SQLite backup with 14-day rotation. Uses sqlite3's online .backup
-# (safe against a live WAL database — never copy the file directly).
+# Daily SQLite backup with 14-day rotation. Uses SQLite's online-backup API via
+# python3 (safe against a live WAL database — never copy the file directly, and
+# no sqlite3 CLI needed, so it runs unchanged inside the app container).
 #
 #   HESTIA_DATA_DIR=/srv/hestia/data bash scripts/backup.sh
 #
-# Hosted (docker compose): run on the host against the mounted volume, e.g.
-#   HESTIA_DATA_DIR=/var/lib/docker/volumes/hestia_data/_data bash scripts/backup.sh
-# and wire it to cron or a systemd timer.
+# Hosted (docker compose): the `backup` service in docker-compose.yml runs this
+# daily against the shared data volume. See docs/backup-restore.md.
 set -euo pipefail
 
 DATA_DIR="${HESTIA_DATA_DIR:-./data}"
 DB="$DATA_DIR/hestia.db"
-OUT_DIR="$DATA_DIR/backups"
+OUT_DIR="${HESTIA_BACKUP_DIR:-$DATA_DIR/backups}"
 KEEP="${HESTIA_BACKUP_KEEP:-14}"
 
 # Fail LOUDLY when the DB isn't where we expect — a silent exit-0 here would let a
@@ -21,7 +21,17 @@ mkdir -p "$OUT_DIR"
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
 TARGET="$OUT_DIR/hestia-$STAMP.db"
-sqlite3 "$DB" ".backup '$TARGET'"
+python3 - "$DB" "$TARGET" <<'PY'
+import sqlite3
+import sys
+
+src = sqlite3.connect(sys.argv[1])
+dst = sqlite3.connect(sys.argv[2])
+with dst:
+    src.backup(dst)
+dst.close()
+src.close()
+PY
 gzip -f "$TARGET"
 
 # Rotate: keep the newest $KEEP backups.
