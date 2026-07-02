@@ -16,27 +16,42 @@ router = APIRouter()
 def serve_media(request: Request, key: str):
     storage = storage_of(request)
     with db_conn(request) as conn:
-        img = conn.execute(
-            "SELECT i.*, g.status AS gallery_status FROM images i "
-            "JOIN galleries g ON g.id = i.gallery_id WHERE i.storage_key = ?",
-            (key,),
-        ).fetchone()
-        if not img:
-            return Response(status_code=404)
-        # Fast public path: a published, non-hidden frame is served to anyone.
-        allowed = img["gallery_status"] == "published" and not img["hidden"]
-        if not allowed:
-            # Otherwise only the owner may view it — an unpublished gallery, or a hidden
-            # (culled) frame the owner is still managing. A hidden frame must NOT be served
-            # to a client even though its /media/ key is predictable, or culling leaks.
+        if "/" in key:
+            # Legacy storage-key path (<tenant>/<gallery>/<image>.<ext>): the ids are
+            # sequential and the tenant id leaks in public <img src>, so this path is
+            # enumerable and is therefore OWNER-ONLY. Client image URLs use the token
+            # branch below (storage.image_url), which is unguessable.
+            img = conn.execute(
+                "SELECT * FROM images WHERE storage_key = ?", (key,)
+            ).fetchone()
+            if not img:
+                return Response(status_code=404)
             auth = context_from_session(conn, request)
-            allowed = bool(auth and auth.tenant and auth.tenant["id"] == img["tenant_id"])
-        if not allowed:
-            return Response(status_code=403)
+            if not (auth and auth.tenant and auth.tenant["id"] == img["tenant_id"]):
+                return Response(status_code=403)
+        else:
+            # Capability token: unguessable per-image. Public iff the gallery is
+            # published and the frame isn't hidden (a culled frame never leaks to a
+            # client); otherwise only the owner may view it.
+            img = conn.execute(
+                "SELECT i.*, g.status AS gallery_status FROM images i "
+                "JOIN galleries g ON g.id = i.gallery_id AND g.tenant_id = i.tenant_id "
+                "WHERE i.access_token = ?",
+                (key,),
+            ).fetchone()
+            if not img:
+                return Response(status_code=404)
+            allowed = img["gallery_status"] == "published" and not img["hidden"]
+            if not allowed:
+                auth = context_from_session(conn, request)
+                allowed = bool(auth and auth.tenant and auth.tenant["id"] == img["tenant_id"])
+            if not allowed:
+                return Response(status_code=403)
+        storage_key, content_type = img["storage_key"], img["content_type"]
     try:
-        data = storage.open(key)
+        data = storage.open(storage_key)
     except FileNotFoundError:
         return Response(status_code=404)
     # Served inline → clamp to a safe image type so a stored text/html "image" can't
     # execute as a page on our origin (the content_type is client-supplied at upload).
-    return Response(content=data, media_type=safe_inline_type(img["content_type"]))
+    return Response(content=data, media_type=safe_inline_type(content_type))
