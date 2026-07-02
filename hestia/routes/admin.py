@@ -28,7 +28,7 @@ from ..db import applied_migrations, audit
 from ..domains import custom_domain_summary, set_custom_domain_status
 from ..founder_demo import seed_founder_demo_studios
 from ..integrity import tenant_integrity_overview
-from ..interest import send_beta_interest_invite
+from ..interest import send_beta_interest_invite, send_beta_invite_batch
 from ..jobs import failed_jobs, queue_stats, requeue_job, stale_jobs
 from ..launch import (
     beta_launch_export_rows,
@@ -168,6 +168,8 @@ def launch(
     nudge: str = "",
     nudged: str = "",
     interest: str = "",
+    invited: str = "",
+    eligible: str = "",
     digest: str = "",
     demo: str = "",
 ):
@@ -185,6 +187,8 @@ def launch(
         kit=kit,
         nudge_notice=nudge_notice,
         interest_notice=interest,
+        batch_sent=invited,
+        batch_eligible=eligible,
         digest_notice=digest,
         demo_notice=demo,
     )
@@ -257,6 +261,33 @@ def launch_interest_invite(request: Request, interest_id: int):
                 detail=result["email"],
             )
     return RedirectResponse(f"/admin/launch?interest={invite_status}", status_code=303)
+
+
+@router.post("/launch/interest/invite-batch")
+def launch_interest_invite_batch(request: Request, count: int = Form(5)):
+    settings = settings_of(request)
+    with db_conn(request) as conn:
+        auth = _admin_ctx(request, conn)
+        if not auth:
+            return _redirect_login()
+        batch = send_beta_invite_batch(conn, settings, limit=count)
+        for result in batch["results"]:
+            audit(
+                conn,
+                actor="admin",
+                action="interest.invite_sent",
+                detail=result["email"],
+            )
+        audit(
+            conn,
+            actor="admin",
+            action="interest.invite_batch",
+            detail=f"sent:{batch['sent']} eligible:{batch['eligible']}",
+        )
+    return RedirectResponse(
+        f"/admin/launch?invited={batch['sent']}&eligible={batch['eligible']}",
+        status_code=303,
+    )
 
 
 @router.post("/launch/digest")
