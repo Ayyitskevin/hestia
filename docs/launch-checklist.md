@@ -18,9 +18,11 @@ day at a time. Every gate is a command you can run — no vibes, no "should be f
 
 ## Day 2 — configure + boot
 
-- [ ] `cp .env.example .env`, then set: `HESTIA_DOMAIN`, `HESTIA_PUBLIC_URL`,
-      real secrets (`openssl rand -hex 32` for each `CHANGE_ME`),
-      `HESTIA_SIGNUP_ENABLED=true`.
+- [ ] `cp .env.production.example .env` — it's pre-tuned for a live launch (Stripe,
+      SMTP, HTTPS, indexable marketing). Fill the four `<SET_ME>` groups: domain,
+      secrets (`openssl rand -hex 32` for each `CHANGE_ME`), Stripe live keys, SMTP.
+      The full external-service wiring (exact Stripe webhook events, SMTP, storage)
+      is in [`deploy-wiring.md`](deploy-wiring.md).
 - [ ] `chmod 600 .env`
 - [ ] Config gate (no URL yet — runtime probe will warn, everything else must pass):
       ```sh
