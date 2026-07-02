@@ -231,6 +231,21 @@ def _remind_pending_documents(db_path: str | Path, settings: Settings) -> int:
         conn.close()
 
 
+def _nudge_ending_trials(db_path: str | Path, settings: Settings) -> int:
+    """Worker-cadence wrapper: nudge studios whose trials are about to end, on the
+    launch-nudge cooldown shared with the admin's manual button. Deferred import
+    keeps the jobs↔launch edge one-way."""
+    from .db import connect
+    from .launch import send_trial_ending_nudges
+    conn = connect(db_path)
+    try:
+        n = send_trial_ending_nudges(conn, settings)
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
 def _remind_stalled_proposals(db_path: str | Path, settings: Settings) -> int:
     """Worker-cadence wrapper: nudge sent proposal links that have gone quiet.
 
@@ -359,6 +374,11 @@ def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_slee
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
                 log.warning("worker launch-digest sweep failed",
                             extra={"action": "jobs.launch_digest"}, exc_info=True)
+            try:
+                _nudge_ending_trials(db_path, settings)
+            except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
+                log.warning("worker trial-nudge sweep failed",
+                            extra={"action": "jobs.trial_nudges"}, exc_info=True)
             try:
                 _send_gallery_sales_campaigns(db_path, settings)
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker

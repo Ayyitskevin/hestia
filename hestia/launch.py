@@ -125,6 +125,36 @@ def send_beta_launch_nudge(
     return {**followup, "email_status": status}
 
 
+def send_trial_ending_nudges(
+    conn: sqlite3.Connection,
+    settings: Settings,
+    *,
+    days_threshold: int = 3,
+    limit: int = 200,
+) -> int:
+    """Automatic trial-conversion sweep: every studio still trialing with
+    ``days_threshold`` or fewer days left gets the same personalized follow-up the
+    admin's manual nudge button sends — through the same audit-backed cooldown, so
+    the sweep and a manual nudge can never double-send. The founder stops having to
+    remember to click before each trial closes. Returns the number sent."""
+    cockpit = trial_conversion_cockpit(conn, settings, limit=limit)
+    sent = 0
+    for studio in cockpit["studios"]:
+        if studio["trial_state"] != "trialing":
+            continue
+        days_left = studio.get("trial_days_left")
+        if days_left is None or days_left > max(0, int(days_threshold)):
+            continue
+        result = send_beta_launch_nudge(conn, settings, studio["tenant_id"])
+        if not result or result.get("skipped") or not result.get("email_status"):
+            continue
+        # Same ledger row the admin route writes — it IS the cooldown.
+        audit(conn, actor="worker", action="launch.nudge_sent",
+              tenant_id=studio["tenant_id"], detail=result["owner_email"])
+        sent += 1
+    return sent
+
+
 def build_beta_launch_digest(conn: sqlite3.Connection, settings: Settings) -> dict:
     kit = beta_launch_kit(conn, settings)
     pipeline = kit["revenue_pipeline"]
