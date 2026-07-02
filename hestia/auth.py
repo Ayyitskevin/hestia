@@ -17,8 +17,8 @@ from datetime import UTC, datetime, timedelta
 from fastapi import Request
 
 from .config import Settings
-from .crypto import new_session_token, verify_password
-from .tenants import find_tenant_by_api_key, get_tenant, get_user_by_email
+from .crypto import needs_rehash, new_session_token, verify_password
+from .tenants import find_tenant_by_api_key, get_tenant, get_user_by_email, set_user_password
 
 SESSION_COOKIE = "hestia_session"
 SESSION_TTL = timedelta(hours=12)
@@ -93,6 +93,11 @@ def authenticate_user(conn: sqlite3.Connection, email: str, password: str) -> di
         return None
     if not verify_password(password, user["password_hash"]):
         return None
+    # Upgrade-on-login: now that we hold the plaintext, transparently re-hash any
+    # password stored under a weaker KDF cost at the current work factor. Zero user
+    # impact; the fleet migrates to the stronger hash as people sign in.
+    if needs_rehash(user["password_hash"]):
+        set_user_password(conn, user["id"], password)
     return user
 
 
