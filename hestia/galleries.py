@@ -29,6 +29,11 @@ _INLINE_IMAGE_TYPES = frozenset({
     "image/heic", "image/heif", "image/tiff", "image/bmp",
 })
 
+# Per-image upload ceiling. Generous for high-res JPEG/TIFF/RAW-class originals, but
+# bounded so one upload can't read an unbounded blob into memory and OOM the shared
+# container (a multi-tenant availability risk — one studio must not sink the others).
+_MAX_IMAGE_BYTES = 75_000_000   # 75 MB/image
+
 
 def safe_inline_type(content_type: str | None) -> str:
     """The media type to serve INLINE for a stored image. Real raster types pass
@@ -202,8 +207,12 @@ def add_image(
     filename: str,
     fileobj: BinaryIO,
     content_type: str = "application/octet-stream",
-) -> dict:
-    data = fileobj.read()
+) -> dict | None:
+    # Bounded read: never pull more than the ceiling + 1 into memory, so an oversized
+    # (or malicious) upload is rejected instead of exhausting RAM. Empty/oversize → skip.
+    data = fileobj.read(_MAX_IMAGE_BYTES + 1)
+    if not data or len(data) > _MAX_IMAGE_BYTES:
+        return None
     width, height = _dimensions(data)
     position = image_count(conn, gallery_id)
     ext = filename.rsplit(".", 1)[-1] if "." in filename else "bin"

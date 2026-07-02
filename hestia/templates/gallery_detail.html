@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ gallery.title }} — Hestia{% endblock %}
 {% block content %}
+{% if too_large %}
+  <div class="alert">{{ too_large }} file{{ '' if too_large == 1 else 's' }} weren't uploaded — each image must be under 75&nbsp;MB. Export a smaller version and try again.</div>
+{% endif %}
 <div class="page-title">
   <div>
     <h1>{{ gallery.title }}</h1>

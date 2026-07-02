@@ -105,7 +105,7 @@ def gallery_create(
 
 
 @router.get("/{gallery_id}")
-def gallery_detail(request: Request, gallery_id: int):
+def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
     with db_conn(request) as conn:
         auth = _require_user(request, conn)
         if not auth:
@@ -152,7 +152,7 @@ def gallery_detail(request: Request, gallery_id: int):
                   selection_packet=packet, campaign=campaign,
                   sales_opportunity=sales_opportunity, orders=orders, fulfillments=fulfillments,
                   cull=cull, cull_pending=cull_pending, hidden_count=hidden_count, analysis=analysis, hero_ids=hero_ids,
-                  flagged_pending=flagged_pending,
+                  flagged_pending=flagged_pending, too_large=too_large,
                   cover_id=gallery.get("cover_image_id"), delivery_link=delivery_link)
 
 
@@ -299,13 +299,19 @@ async def gallery_upload(request: Request, gallery_id: int, files: list[UploadFi
         gallery = get_gallery(conn, auth.tenant["id"], gallery_id)
         if not gallery:
             return RedirectResponse("/galleries", status_code=303)
+        skipped = 0
         for up in files:
             if not up.filename:
                 continue
-            add_image(conn, storage, tenant_id=auth.tenant["id"], gallery_id=gallery_id,
-                      filename=up.filename, fileobj=up.file,
-                      content_type=up.content_type or "application/octet-stream")
-    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
+            added = add_image(conn, storage, tenant_id=auth.tenant["id"], gallery_id=gallery_id,
+                              filename=up.filename, fileobj=up.file,
+                              content_type=up.content_type or "application/octet-stream")
+            if added is None:          # empty or over the 75 MB/image ceiling — not stored
+                skipped += 1
+    target = f"/galleries/{gallery_id}"
+    if skipped:                        # tell the owner instead of silently dropping files
+        target += f"?too_large={skipped}"
+    return RedirectResponse(target, status_code=303)
 
 
 @router.post("/{gallery_id}/publish")
