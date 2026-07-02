@@ -51,7 +51,7 @@ from ..trial_conversion import (
     trial_conversion_cockpit,
     trial_conversion_for_tenant,
 )
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, storage_of
 
 router = APIRouter(prefix="/admin")
 
@@ -282,7 +282,7 @@ def launch_founder_demo(request: Request):
         auth = _admin_ctx(request, conn)
         if not auth:
             return _redirect_login()
-        seed_founder_demo_studios(conn, settings, actor="admin")
+        seed_founder_demo_studios(conn, settings, storage_of(request), actor="admin")
     return RedirectResponse("/admin/launch?demo=seeded", status_code=303)
 
 
