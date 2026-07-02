@@ -56,7 +56,7 @@ def test_beta_page_has_share_metadata(client):
         title="Hestia beta - $40/month photography studio OS",
         description=(
             "Join the Hestia hosted beta for growing photography studios: a 14-day "
-            "trial, wedding, food and real-estate presets, and one flat $40/month plan."
+            "trial, wedding, portrait, food and real-estate presets, and one flat $40/month plan."
         ),
         canonical="http://testserver/beta",
     )
