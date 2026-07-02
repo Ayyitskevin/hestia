@@ -6,4 +6,4 @@ album/marketing → invoice → paid. One app, one database, one tenant model. T
 older photography repos are design DNA, not dependencies — see docs/HESTIA-DOCTRINE.md.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"

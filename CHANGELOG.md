@@ -2,6 +2,80 @@
 
 All notable changes to Hestia are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/) and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - 2026-07-02
+
+The go-live release. 0.1.0 froze the feature set; 1.0.0 is that product made
+launchable — security-hardened end to end, wired for a real box (TLS, deploys,
+backups, monitoring), documented for the founder who has to run it, and polished
+for the photographer's first hour. Validated by a full first-owner smoke against a
+live boot: signup → verify → preset → publish → gallery → AI offer → invoice →
+client payment → launch checklist complete, with zero paper cuts.
+
+### Added
+
+- **Day-0 welcome email** the moment a studio verifies, naming the three moves from
+  empty to client-ready (preset → publish site → first gallery) with direct links;
+  sent inside the single-use verify transaction so it can never double-send, covering
+  both self-serve signup and private-invite paths.
+- **Branded error pages.** A mistyped or expired link gets a warm 404 in the Hestia
+  voice; a rare crash gets a friendly 500 while the stack trace goes only to server
+  logs. Both `noindex`; API and webhook routes keep their machine-readable JSON.
+- **Marketing share image** (Open Graph / Twitter card) so links to the landing and
+  beta pages unfurl properly in DMs, group chats, and social.
+- **Founder documentation set:** security playbook (`docs/security.md`), support
+  first-response kit with ready-to-send replies (`docs/support.md`), beta onboarding
+  runbook with the first-14-days email arc and a day-7/day-30 retro template
+  (`docs/beta-onboarding.md`), production operations cadence with external uptime
+  monitoring (`docs/operations.md`), deploy wiring (`docs/deploy-wiring.md`), 7-day
+  launch checklist (`docs/launch-checklist.md`), and a 60-second Quickstart at the
+  top of the README.
+
+### Fixed
+
+- **No more stranded signups.** An account whose verification email was lost or
+  expired had no way in (no resend exists); completing a password reset now also
+  verifies the account, since a consumed reset link proves the same mailbox
+  ownership. "Forgot password" is the universal recovery path.
+
+### Security
+
+A five-wave hardening pass over attack surface, tenant isolation, auth, payments,
+and monitoring — each invariant landed with a regression test:
+
+- **Strict Content-Security-Policy** with a fresh per-request nonce: `script-src` is
+  nonce-only (no `'unsafe-inline'`), `object-src 'none'`, `frame-ancestors 'none'`,
+  `base-uri`/`form-action 'self'`; every inline event handler was refactored to a
+  single nonce-carrying delegated listener. Plus `Strict-Transport-Security` (1 year),
+  `Permissions-Policy` (camera/mic/geolocation/payment/USB all denied), and
+  `Cross-Origin-Opener-Policy: same-origin` on every response.
+- **Password KDF raised to PBKDF2-HMAC-SHA256 at 600k iterations** (OWASP-current),
+  with transparent re-hash-on-login for any account stored at a weaker work factor.
+- **Uploads bounded end to end:** per-image cap (75 MB) enforced with a bounded read
+  so an oversized body can't OOM the box, and public free-text fields length-capped
+  at the data layer.
+- **Tenant-matched joins in the AI/vision read paths** — a stray cross-tenant image
+  id is dropped by the join, not surfaced (defense-in-depth on top of scoping).
+- **Stripe settlement mode-guard:** only a `payment`-mode checkout event can settle
+  an invoice, so a subscription-mode event with hostile metadata can't mark client
+  invoices paid.
+- **Supply-chain hygiene:** `cryptography` floor raised past known CVEs and an
+  advisory `pip-audit` step added to CI.
+- **Audit completeness:** password resets now land in the audit trail alongside the
+  existing money, media, and access events.
+
+### Infrastructure & Operations
+
+- **On-demand TLS for tenant subdomains:** each `{slug}.domain` gets its own
+  certificate on first hit via Caddy on-demand issuance gated by Hestia's
+  `/internal/tls-check` (only real tenants and verified custom domains get certs) —
+  no wildcard cert, no DNS-provider credentials.
+- **Deploy activation:** production compose wiring (app + Caddy + daily backup
+  sidecar), a pre-tuned `.env.production.example`, and the hosted preflight gate
+  runnable against the live domain.
+- **CI privacy teeth:** every client-token template must carry `noindex` and
+  `robots.txt` must disallow every token prefix — enforced on every run, plus a
+  live-domain probe in preflight.
+
 ## [0.1.0] - 2026-07-02
 
 Initial release. Hestia is a hosted, AI-native, flat $40/month operating system for photography studios. It owns the whole business in one place — visitor to inquiry to client to gallery to AI cull to print/album offer to invoice to payment to retention — with a public studio site and booking front door, a CRM and delivery back office, and an operator control plane for running the hosted service. Every studio is a fully isolated tenant; client-facing links are password-free capability tokens; the background worker handles the follow-ups so the photographer doesn't have to.
@@ -134,4 +208,5 @@ Initial release. Hestia is a hosted, AI-native, flat $40/month operating system 
 - **Traceability and hardened responses.** Every response carries `nosniff`, `SAMEORIGIN` frame options, a strict referrer policy, and a per-request `X-Request-ID`.
 - **Streaming stays bounded.** Zip delivery streams one file at a time (`ZIP_STORED`) so a multi-GB gallery can't OOM the server, and client CSV import authenticates before reading the body, enforces a 5MB cap, and turns a malformed/binary file into a friendly error.
 
+[1.0.0]: https://github.com/Ayyitskevin/hestia/releases/tag/v1.0.0
 [0.1.0]: https://github.com/Ayyitskevin/hestia/releases/tag/v0.1.0
