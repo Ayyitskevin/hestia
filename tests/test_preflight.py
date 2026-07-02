@@ -70,6 +70,12 @@ def test_hosted_preflight_fails_on_launch_blockers(settings, tmp_path):
     assert checks["email backend"].level == "fail"
 
 
+GOOD_ROBOTS = "User-agent: *\n" + "\n".join(
+    f"Disallow: {p}" for p in ("/portal/", "/d/", "/pay/", "/a/", "/sign/", "/g/",
+                               "/t/", "/q/", "/invite/", "/media/")
+) + "\nAllow: /\n"
+
+
 def test_hosted_preflight_probes_health_and_readiness(settings, tmp_path):
     seen = []
 
@@ -79,18 +85,72 @@ def test_hosted_preflight_probes_health_and_readiness(settings, tmp_path):
             return 200, {"status": "ok", "db": "ok"}
         return 200, {"ready": True}
 
+    def text_fetcher(url: str, timeout: float):
+        seen.append((url, timeout))
+        return 200, GOOD_ROBOTS
+
     checks = run_preflight(
         _hosted_settings(settings, tmp_path),
         root=Path("."),
         health_url="https://app.hestia.test",
         timeout=1.5,
         fetcher=fetcher,
+        text_fetcher=text_fetcher,
     )
     by_name = _by_name(checks)
 
     assert by_name["runtime /healthz"].level == "pass"
     assert by_name["runtime /readyz"].level == "pass"
+    assert by_name["runtime /robots.txt"].level == "pass"
     assert seen == [
         ("https://app.hestia.test/healthz", 1.5),
         ("https://app.hestia.test/readyz", 1.5),
+        ("https://app.hestia.test/robots.txt", 1.5),
     ]
+
+
+def test_live_robots_missing_disallow_is_a_launch_blocker(settings, tmp_path):
+    """A proxy or stale deploy serving a permissive robots.txt would let leaked
+    client links get indexed — the live probe must name what's missing."""
+    def fetcher(url: str, timeout: float):
+        return 200, {"status": "ok", "db": "ok"} if url.endswith("/healthz") else {"ready": True}
+
+    def text_fetcher(url: str, timeout: float):
+        return 200, GOOD_ROBOTS.replace("Disallow: /d/\n", "").replace("Disallow: /portal/\n", "")
+
+    checks = _by_name(run_preflight(
+        _hosted_settings(settings, tmp_path),
+        root=Path("."),
+        health_url="https://app.hestia.test",
+        fetcher=fetcher,
+        text_fetcher=text_fetcher,
+    ))
+
+    assert checks["runtime /robots.txt"].level == "fail"
+    assert "/portal/" in checks["runtime /robots.txt"].detail
+    assert "/d/" in checks["runtime /robots.txt"].detail
+
+
+def test_backup_freshness_ladder(settings, tmp_path):
+    """warn before the first backup exists, pass while fresh, FAIL once stale —
+    a dead backup loop on a live box is a launch blocker."""
+    import os
+    import time
+
+    hosted = _hosted_settings(settings, tmp_path)
+
+    checks = _by_name(run_preflight(hosted, root=Path("."), env={}))
+    assert checks["backup freshness"].level == "warn"          # nothing backed up yet
+
+    backups = tmp_path / "data" / "backups"
+    backups.mkdir(parents=True, exist_ok=True)
+    artifact = backups / "hestia-20260701-020000.db.gz"
+    artifact.write_bytes(b"x")
+    checks = _by_name(run_preflight(hosted, root=Path("."), env={}))
+    assert checks["backup freshness"].level == "pass"          # fresh artifact
+
+    stale = time.time() - 30 * 3600
+    os.utime(artifact, (stale, stale))
+    checks = _by_name(run_preflight(hosted, root=Path("."), env={}))
+    assert checks["backup freshness"].level == "fail"          # 30h old > 26h limit
+    assert "backup service" in checks["backup freshness"].detail
