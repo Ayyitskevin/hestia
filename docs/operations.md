@@ -12,6 +12,17 @@ page.
 - **`/admin/integrity`** — per-tenant data-integrity overview.
 - **`GET /healthz`** (liveness) and **`GET /readyz`** (DB + migrations + storage).
 
+## Know when it's down before a client does
+
+The checks above only run when *you* look. Point a free external monitor
+(UptimeRobot, Better Stack, Pingdom — any of them) at
+**`https://$HESTIA_DOMAIN/readyz`** on a 1–5 minute interval with email/push alerts.
+`/readyz` is the right probe: it exercises DB, migrations, and storage, so it
+catches "up but broken," not just "down." Two minutes of setup buys you the
+difference between *you* telling a studio about an outage and a studio telling you.
+(Optional: a second monitor on a founder-demo studio's public page verifies the
+tenant-serving path end-to-end.)
+
 ## Daily (30 seconds)
 
 - [ ] `docker compose ps` — `hestia`, `caddy`, and `backup` all `Up`. A restarting
@@ -63,6 +74,9 @@ page.
    green when the schema is current.
 
 ## Incident quick-reference
+
+User-facing questions ("can't log in", "client lost the link", refunds, exports)
+have ready-to-send answers in `docs/support.md` — this table is for the box itself.
 
 | Symptom | First look | Runbook |
 |---------|-----------|---------|

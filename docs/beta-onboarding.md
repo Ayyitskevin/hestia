@@ -109,6 +109,46 @@ Why these stay manual: at first-cohort size, a founder reply-thread converts bet
 than any automation — and what you learn writing them becomes the next automated
 nudge.
 
+## 8. Day-7 and day-30 retro (copy this, fill it in)
+
+Thirty minutes each, calendar them now. Every number comes from **Admin → Launch**
+(+ its CSV export) and **Admin → Trials** — no spreadsheet archaeology.
+
+```text
+HESTIA BETA RETRO — day [7|30] — [date]
+
+FUNNEL (Admin → Launch)
+  interest → invited:        [n] → [n]
+  invited → studio created:  [n]   (invite links redeemed)
+  studio → verified:         [n]
+  verified → preset applied: [n]
+  preset → activated:        [n]   (first gallery uploaded)
+  activated → money link:    [n]   (first invoice/offer sent)
+  paid conversions:          [n]   → MRR $[n]
+
+HEALTH (Admin → Trials + /admin/system)
+  past-due studios: [n]      failed jobs: [n]      support emails: [n]
+  top 2 support themes: [theme] / [theme]
+
+THE THREE QUESTIONS
+  1. Where is the funnel's sharpest drop, and what did the studios
+     stuck there say (or do) before stalling?
+  2. What did I do by hand twice that the product should do once?
+  3. What did activated studios touch first — and does onboarding
+     lead with that?
+
+DECISIONS (pick, don't ponder)
+  [ ] Widen invites (next batch: [n])   — funnel holds at current size
+  [ ] Hold size, fix activation        — verified→activated is the leak
+  [ ] Personal-call the stalled cohort — n small enough to just ask
+  [ ] Pricing/packaging note: [only if 2+ studios said the same thing]
+
+ONE SENTENCE: what does Hestia know today that it didn't at the last retro?
+```
+
+Day-7 leans on questions 1 and 3 (is onboarding landing?); day-30 adds retention:
+did week-1 studios come back in week 4, and did anyone pay twice?
+
 ## Troubleshooting
 
 - **Invite email didn't arrive** → SMTP. Check `/admin` system health and
