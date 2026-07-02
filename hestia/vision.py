@@ -383,8 +383,12 @@ def search_images(conn: sqlite3.Connection, tenant_id: str, *, keyword: str = ""
         "       g.title AS gallery_title, g.slug AS gallery_slug, "
         "       a.alt_text, a.shot_type, a.keeper_score "
         "FROM image_analyses a "
-        "JOIN images i ON i.id = a.image_id "
-        "JOIN galleries g ON g.id = a.gallery_id "
+        # Tenant-matched joins: the WHERE already filters a.tenant_id and image/gallery
+        # ids are globally-unique PKs, so this is defense-in-depth — it makes the
+        # single-tenant invariant explicit and can't return another studio's row even
+        # if an analysis were ever mis-written against a foreign image/gallery id.
+        "JOIN images i ON i.id = a.image_id AND i.tenant_id = a.tenant_id "
+        "JOIN galleries g ON g.id = a.gallery_id AND g.tenant_id = a.tenant_id "
         "WHERE " + " AND ".join(where) +
         " ORDER BY " + order + " LIMIT ?",
         params,
