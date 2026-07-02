@@ -23,6 +23,28 @@ DEMO_TOURS = {
             "Gallery-to-offer workflow keeps print and album revenue in the same loop.",
         ],
     },
+    "portrait": {
+        "label": "Portrait & family",
+        "headline": "Portrait & family studio command center",
+        "summary": (
+            "Fill mini-session drops, book full sessions, collect agreements and "
+            "deposits, deliver AI-culled galleries, and sell artwork and repeat sessions."
+        ),
+        "accent": "portrait",
+        "before": "Session scheduler + gallery host + contract app + invoice tool + reminder spreadsheet",
+        "workflow": [
+            ("Inquiry", "A family lands on the studio site or a mini-session drop and becomes a lead."),
+            ("Booking", "Mini and full sessions book against real availability with deposit invoices."),
+            ("Shoot", "Questionnaire, wardrobe notes, contract, and payment stay attached to the session."),
+            ("Gallery", "The AI cull hides blinks and duplicates before the family ever sees proofs."),
+            ("Retention", "Print and album offers plus session reminders bring families back every year."),
+        ],
+        "proof": [
+            "Mini-session drops fill a whole day from one public page.",
+            "AI culling turns a full family session into a clean proof gallery fast.",
+            "Reconnect reminders make annual family sessions a recurring revenue line.",
+        ],
+    },
     "food": {
         "label": "Food & beverage",
         "headline": "F&B content studio command center",

@@ -4,6 +4,7 @@ import dataclasses
 
 from conftest import ADMIN_TOKEN, CSRFClient
 
+from hestia.founder_demo import FOUNDER_DEMO_STUDIOS
 from hestia.interest import (
     mark_beta_interest_converted,
     record_beta_interest,
@@ -74,7 +75,7 @@ def test_beta_launch_kit_builds_invite_links_and_followup_queue(conn, settings):
                for cmd in kit["operations"]["commands"])
     assert any(link["url"] == "https://hestia.example/beta"
                for link in kit["operations"]["links"])
-    assert kit["founder_demo"]["target"] == 3
+    assert kit["founder_demo"]["target"] == len(FOUNDER_DEMO_STUDIOS)
     assert kit["founder_demo"]["ready"] == 0
     assert any(link["url"] == "https://hestia.example/beta?source=beta&path=/beta"
                for link in kit["invite_links"])
@@ -225,7 +226,7 @@ def test_admin_launch_page_renders_invites_and_followups(settings, conn):
     assert "bash scripts/hosted-preflight.sh --url http://testserver" in page.text
     assert "http://testserver/beta" in page.text
     assert "Founder demo mode" in page.text
-    assert "0/3 sample studios ready" in page.text
+    assert f"0/{len(FOUNDER_DEMO_STUDIOS)} sample studios ready" in page.text
     assert "Seed founder demo studios" in page.text
     assert "Studio created" in page.text
     assert "Paid" in page.text
@@ -254,6 +255,7 @@ def test_admin_launch_seeds_founder_demo_studios(settings, conn):
     assert response.headers["location"] == "/admin/launch?demo=seeded"
     for slug, demo_email in [
         ("hestia-wedding-demo", "demo+wedding@hestia.local"),
+        ("hestia-portrait-demo", "demo+portrait@hestia.local"),
         ("hestia-food-demo", "demo+food@hestia.local"),
         ("hestia-real-estate-demo", "demo+real_estate@hestia.local"),
     ]:
@@ -277,10 +279,11 @@ def test_admin_launch_seeds_founder_demo_studios(settings, conn):
         ).fetchone()["n"] == 1
 
     kit = beta_launch_kit(conn, settings)
-    assert kit["founder_demo"]["ready"] == 3
+    target = len(FOUNDER_DEMO_STUDIOS)
+    assert kit["founder_demo"]["ready"] == target
     page = admin.get("/admin/launch?demo=seeded")
     assert "Founder demo studios are seeded" in page.text
-    assert "3/3 sample studios ready" in page.text
+    assert f"{target}/{target} sample studios ready" in page.text
     assert "http://testserver/studio/hestia-wedding-demo" in page.text
     assert 'href="/admin/tenants/' in page.text
 
