@@ -246,6 +246,21 @@ def _nudge_ending_trials(db_path: str | Path, settings: Settings) -> int:
         conn.close()
 
 
+def _nudge_past_due(db_path: str | Path, settings: Settings) -> int:
+    """Worker-cadence wrapper: dunning email for studios whose card failed, on the
+    billing.dunning_sent audit cooldown. Deferred import keeps the jobs↔launch
+    edge one-way."""
+    from .db import connect
+    from .launch import send_past_due_dunning
+    conn = connect(db_path)
+    try:
+        n = send_past_due_dunning(conn, settings)
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
 def _remind_stalled_proposals(db_path: str | Path, settings: Settings) -> int:
     """Worker-cadence wrapper: nudge sent proposal links that have gone quiet.
 
@@ -379,6 +394,11 @@ def run_worker(db_path: str | Path, settings: Settings, stop_event, *, idle_slee
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
                 log.warning("worker trial-nudge sweep failed",
                             extra={"action": "jobs.trial_nudges"}, exc_info=True)
+            try:
+                _nudge_past_due(db_path, settings)
+            except Exception:  # noqa: BLE001 - a mail miss must never kill the worker
+                log.warning("worker dunning sweep failed",
+                            extra={"action": "jobs.dunning"}, exc_info=True)
             try:
                 _send_gallery_sales_campaigns(db_path, settings)
             except Exception:  # noqa: BLE001 - a mail miss must never kill the worker

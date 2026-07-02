@@ -155,6 +155,73 @@ def send_trial_ending_nudges(
     return sent
 
 
+DUNNING_COOLDOWN_DAYS = 4
+DUNNING_ACTION = "billing.dunning_sent"
+
+
+def send_past_due_dunning(conn: sqlite3.Connection, settings: Settings, *,
+                          limit: int = 200) -> int:
+    """Card-failed outreach: every studio whose subscription is past_due gets one
+    polite fix-your-card email per cooldown window, on the same audit-row pattern
+    as launch nudges. past_due keeps full access (grace period) — this email is
+    how the grace period ends with a fixed card instead of a churned studio.
+    Returns the number sent."""
+    rows = conn.execute(
+        """
+        SELECT s.tenant_id, t.name FROM subscriptions s
+          JOIN tenants t ON t.id = s.tenant_id
+         WHERE s.status = 'past_due'
+           AND t.plan IN ('studio', 'studio_pro')
+         ORDER BY s.updated_at
+         LIMIT ?
+        """,
+        (int(limit),),
+    ).fetchall()
+    sent = 0
+    for row in rows:
+        tenant_id = row["tenant_id"]
+        cooling = conn.execute(
+            "SELECT 1 FROM audit_log WHERE action = ? AND tenant_id = ? "
+            "AND datetime(created_at) >= datetime('now', ?) LIMIT 1",
+            (DUNNING_ACTION, tenant_id, f"-{int(DUNNING_COOLDOWN_DAYS)} days"),
+        ).fetchone()
+        if cooling:
+            continue
+        owner = conn.execute(
+            "SELECT email FROM users WHERE tenant_id = ? AND role = 'owner' "
+            "ORDER BY id LIMIT 1",
+            (tenant_id,),
+        ).fetchone()
+        if not owner or not owner["email"]:
+            continue
+        billing_url = f"{settings.public_url.rstrip('/')}/settings/billing"
+        status = notify(
+            conn,
+            settings,
+            to=owner["email"],
+            tenant_id=tenant_id,
+            signed=False,
+            subject="Your Hestia payment needs attention",
+            body=(
+                f"Hi {row['name']},\n\n"
+                "The monthly payment for your Hestia studio didn't go through — "
+                "usually an expired or replaced card.\n\n"
+                "Nothing is lost: your studio, galleries, and client links are all "
+                "still running. To keep it that way, update your card here:\n\n"
+                f"  {billing_url}\n\n"
+                "It takes about a minute. If something looks off on our side, just "
+                "reply to this email.\n\n"
+                "— Hestia"
+            ),
+        )
+        if not status:
+            continue
+        audit(conn, actor="worker", action=DUNNING_ACTION, tenant_id=tenant_id,
+              detail=owner["email"])
+        sent += 1
+    return sent
+
+
 def build_beta_launch_digest(conn: sqlite3.Connection, settings: Settings) -> dict:
     kit = beta_launch_kit(conn, settings)
     pipeline = kit["revenue_pipeline"]
