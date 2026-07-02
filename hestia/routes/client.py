@@ -50,7 +50,7 @@ def _hero_urls(conn, storage: Storage, tenant_id: str, image_ids: list[int]) -> 
     for iid in image_ids:
         img = get_image(conn, tenant_id, iid)
         if img and not img["hidden"]:        # a culled frame never resurfaces on the public offer
-            out.append({"id": img["id"], "url": storage.public_path(img["storage_key"]),
+            out.append({"id": img["id"], "url": storage.image_url(img),
                         "filename": img["filename"]})
     return out
 
@@ -81,7 +81,7 @@ def public_offer(request: Request, slug: str, token: str):
         # owner has since culled (hidden) — they're gone from the gallery, so they can't
         # reappear in the offer's thumbnails or its favorites-package count.
         favs = [i for i in list_favorites(conn, tenant["id"], offer["gallery_id"]) if not i["hidden"]]
-        fav_thumbs = [{"url": storage.public_path(i["storage_key"]), "filename": i["filename"]}
+        fav_thumbs = [{"url": storage.image_url(i), "filename": i["filename"]}
                       for i in favs]
         fav_pkg = favorites_package(len(favs))
         # Live: a running sale discounts the prices and adds urgency.

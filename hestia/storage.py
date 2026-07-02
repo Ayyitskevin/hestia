@@ -34,6 +34,13 @@ class Storage(Protocol):
         """A path the app can serve/sign. Local → /media/<key>; S3 → signed URL."""
         ...
 
+    def image_url(self, image: dict) -> str:
+        """A client-facing URL for an image *row*. Local serves through the app's
+        /media route keyed by the row's unguessable ``access_token`` (never the
+        enumerable storage key); S3 returns its presigned/CDN URL. Use this for any
+        image shown to a client — the raw ``public_path(storage_key)`` is owner-only."""
+        ...
+
 
 class LocalStorage:
     """Filesystem backend rooted at ``media_dir``. Serves via the /media route."""
@@ -71,6 +78,12 @@ class LocalStorage:
 
     def public_path(self, key: str) -> str:
         return f"/media/{key}"
+
+    def image_url(self, image: dict) -> str:
+        # /media/<token>: no slashes, so serve_media routes it to the token lookup
+        # (which enforces published/not-hidden), not the owner-only storage-key path.
+        token = image["access_token"] if "access_token" in image.keys() else ""
+        return f"/media/{token}" if token else f"/media/{image['storage_key']}"
 
 
 class S3Storage:
@@ -123,6 +136,12 @@ class S3Storage:
         return self._client.generate_presigned_url(
             "get_object", Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=3600
         )
+
+    def image_url(self, image: dict) -> str:
+        # Presigned URLs are already unguessable + short-lived. NOTE: the
+        # public_base_url (CDN) mode serves the enumerable key directly — a private
+        # bucket + presigned mode is required to match the local backend's guarantee.
+        return self.public_path(image["storage_key"])
 
 
 def build_storage(settings) -> Storage:

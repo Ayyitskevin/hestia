@@ -61,7 +61,7 @@
         <section class="thumb-grid client-grid">
           {% for img in images %}
             <figure class="thumb proof" id="img-{{ img.id }}">
-              <img src="{{ storage.public_path(img.storage_key) }}" alt="{{ alts.get(img.id) or img.filename }}" loading="lazy">
+              <img src="{{ storage.image_url(img) }}" alt="{{ alts.get(img.id) or img.filename }}" loading="lazy">
               <div class="proof-bar">
                 <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/favorite/{{ img.id }}">
                   <button class="fav-btn {{ 'on' if img.id in favorites else '' }}" type="submit"
