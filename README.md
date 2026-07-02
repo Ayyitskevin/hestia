@@ -13,6 +13,21 @@ payments, fulfillment, and retention into one lightweight hosted product.
 > Strategy and wedge: [`docs/COMPETITIVE-STRATEGY.md`](docs/COMPETITIVE-STRATEGY.md)
 > Agents and contributors: read [`AGENTS.md`](AGENTS.md) first.
 
+## Quickstart
+
+Run it locally in under a minute — no external keys needed (every provider seam
+defaults to a mock):
+
+```bash
+python3.12 -m venv .venv && . .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env
+bash scripts/start-hestia.sh    # → http://localhost:8500 (open /demo for the buyer tour)
+```
+
+Full URLs and provider wiring: [Local Development](#local-development). Going to
+production instead? [`docs/launch-checklist.md`](docs/launch-checklist.md).
+
 ---
 
 ## The Offer

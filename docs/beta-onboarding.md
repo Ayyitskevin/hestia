@@ -75,6 +75,40 @@ cooldown — the two can't collide.
       you know).
 - [ ] Let the weekly digest be your Monday standup.
 
+## 7. The first-14-days email arc
+
+The spine is automated — never send these by hand (the cooldowns don't know about
+your outbox):
+
+- **Day 0 — welcome**, sent the moment a studio verifies its email. Names the three
+  first moves: preset → publish → first gallery.
+- **Trial ending**, when ≤3 days remain (worker, cooldown-safe, personalized).
+- **Card-failed dunning** after conversion (every 4 days until the card is fixed).
+
+Two personal touches from you close the gap in between. Send them from your own
+address, 2–3 sentences, no template smell — personalize the [bracketed] bits:
+
+**Day ~2, if the studio has no gallery yet** (check Admin → Trials → activation):
+
+> Subject: your first gallery
+>
+> Hey [name] — saw you set up [studio] on Hestia. The moment it clicks for most
+> photographers: upload any recent shoot to a gallery and watch the cull and the
+> offer draft appear. Takes about two minutes. Anything in your way?
+
+**Day ~7, if activated but no money link yet:**
+
+> Subject: getting paid through [studio]
+>
+> Hey [name] — your galleries look great. The next ten-minute win: send yourself an
+> invoice (Invoices → New) and open the payment link to see exactly what your client
+> sees. After that, real client money is one click away. Want a hand setting up
+> deposits or payment plans?
+
+Why these stay manual: at first-cohort size, a founder reply-thread converts better
+than any automation — and what you learn writing them becomes the next automated
+nudge.
+
 ## Troubleshooting
 
 - **Invite email didn't arrive** → SMTP. Check `/admin` system health and
