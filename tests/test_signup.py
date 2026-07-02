@@ -154,6 +154,28 @@ def test_verify_activates_and_starts_onboarding_session(settings, conn):
     assert "Set up your studio command center" in c.get("/onboarding").text
 
 
+def test_verify_sends_welcome_email_naming_the_first_three_moves(settings, conn):
+    c = _client(settings)
+    c.post("/signup", data={"name": "Welcome Studio", "email": "wel@s.com",
+                            "password": "password123", "shoot_type": "portrait"})
+    token = _verify_token(conn, "wel@s.com")
+    c.get(f"/verify/{token}")
+
+    mails = conn.execute(
+        "SELECT subject, body FROM emails WHERE to_addr = 'wel@s.com' ORDER BY id"
+    ).fetchall()
+    assert len(mails) == 2                                  # verification, then welcome
+    welcome = mails[-1]
+    assert "Welcome to Hestia" in welcome["subject"]
+    assert "Welcome Studio" in welcome["subject"]           # personal, not generic
+    for first_move in ("/onboarding", "/settings/site", "/galleries/new", "/dashboard"):
+        assert first_move in welcome["body"], first_move
+
+    c.get(f"/verify/{token}")                               # replayed token: no re-send
+    n = conn.execute("SELECT COUNT(*) AS n FROM emails WHERE to_addr = 'wel@s.com'").fetchone()["n"]
+    assert n == 2
+
+
 def test_login_routes_fresh_studio_to_onboarding(settings, conn):
     c = _client(settings)
     c.post("/signup", data={"name": "Fresh Studio", "email": "fresh@s.com",

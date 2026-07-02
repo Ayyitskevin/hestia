@@ -435,6 +435,36 @@ def signup_submit(request: Request, name: str = Form(...), email: str = Form(...
     return render(request, "signup.html", auth=None, sent=True, error=None)
 
 
+def _send_welcome_email(conn, settings, *, user: dict) -> None:
+    """The day-0 welcome, sent once at the verified moment (the token is single-use,
+    so this can't double-send). Names the three moves that take a studio from empty
+    to client-ready; the dashboard checklist carries them the rest of the way."""
+    tenant = get_tenant(conn, user["tenant_id"])
+    base = settings.public_url.rstrip("/")
+    studio = (tenant["name"] if tenant else "") or "Your studio"
+    notify(
+        conn, settings, to=user["email"], tenant_id=user["tenant_id"], signed=False,
+        subject=f"Welcome to Hestia — {studio} is live",
+        body=(
+            f"You're in — {studio} is verified and your 14-day trial is running.\n\n"
+            f"Three moves take you from empty to client-ready (most owners do all "
+            f"three in one sitting):\n\n"
+            f"1. Pick your studio preset — wedding, portrait, food, or real estate. "
+            f"It wires up booking types, packages, contracts, and forms for your "
+            f"niche:\n   {base}/onboarding\n\n"
+            f"2. Publish your studio site — one click gives you a public page that "
+            f"captures inquiries while you shoot:\n   {base}/settings/site\n\n"
+            f"3. Upload your first gallery — Hestia culls it, flags the heroes, and "
+            f"drafts a client-ready offer you can send the same day:\n   "
+            f"{base}/galleries/new\n\n"
+            f"Your dashboard keeps a setup checklist with the rest — booking, "
+            f"invoices, getting paid:\n{base}/dashboard\n\n"
+            f"Stuck on anything? Reply to this email — a human reads every one.\n\n"
+            f"— Hestia"
+        ),
+    )
+
+
 @router.get("/verify/{token}")
 def verify_email(request: Request, token: str):
     settings = settings_of(request)
@@ -447,6 +477,7 @@ def verify_email(request: Request, token: str):
         if not user or not user["tenant_id"]:
             return render(request, "login.html", auth=None, error=None,
                           notice="Email verified — sign in to your new studio.")
+        _send_welcome_email(conn, settings, user=user)
         session = create_session(conn, role=user["role"], user_id=user["id"],
                                  tenant_id=user["tenant_id"])
         target = _owner_home(conn, user["tenant_id"])
