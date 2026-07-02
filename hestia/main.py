@@ -17,8 +17,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .config import Settings, get_settings
@@ -184,6 +186,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         })
         response.headers["X-Request-ID"] = rid
         return response
+
+    def _wants_json(request) -> bool:
+        return request.url.path.startswith(("/api", "/webhooks"))
+
+    def _error_page(request, *, status: int, title: str, message: str):
+        return app.state.templates.TemplateResponse(
+            request=request, name="error.html", status_code=status,
+            context={"title": title, "message": message,
+                     "home_url": "/", "home_label": "Take me home"})
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_exception(request, exc):
+        # A mistyped URL gets a warm branded page instead of raw JSON. API/webhook routes
+        # and every other HTTP status keep the plain JSON contract their clients expect.
+        if exc.status_code == 404 and not _wants_json(request):
+            return _error_page(request, status=404, title="Page not found",
+                               message="That page moved, expired, or never existed — "
+                                       "let's get you back home.")
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code,
+                            headers=getattr(exc, "headers", None))
+
+    @app.exception_handler(Exception)
+    async def _unhandled(request, exc):
+        # Never leak a stack trace to a photographer; log it fully for us, show a warm page.
+        log.exception("unhandled error at %s", request.url.path)
+        if _wants_json(request):
+            return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
+        return _error_page(request, status=500, title="Something went sideways",
+                           message="A gremlin got into the wiring — we've been notified. "
+                                   "Give it a moment and try again.")
 
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
