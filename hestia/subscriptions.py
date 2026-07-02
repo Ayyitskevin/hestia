@@ -179,3 +179,60 @@ def canceled_tenant_from_event(payload: bytes) -> str | None:
         return None
     obj = (event.get("data") or {}).get("object") or {}
     return (obj.get("metadata") or {}).get("tenant_id")
+
+
+# Stripe subscription status → Hestia subscription status. Statuses Stripe owns
+# after checkout: the trial→active conversion and payment failure arrive ONLY on
+# customer.subscription.updated. `canceled` is deliberately absent — the terminal
+# customer.subscription.deleted event owns the downgrade.
+_STATUS_SYNC = {
+    "trialing": "trialing",
+    "active": "active",
+    "past_due": "past_due",
+    "unpaid": "past_due",
+}
+
+
+def subscription_status_from_event(payload: bytes) -> tuple[str, str] | None:
+    """(tenant_id, status) from a ``customer.subscription.updated`` event, else None.
+
+    Without this sync a studio that converts trial→paid stays 'trialing' in
+    Hestia forever (and keeps drawing trial-ending nudges), and a failed card
+    (past_due) keeps silent full access with no operator signal."""
+    try:
+        event = json.loads(payload)
+    except ValueError:
+        return None
+    if event.get("type") != "customer.subscription.updated":
+        return None
+    obj = (event.get("data") or {}).get("object") or {}
+    tenant_id = (obj.get("metadata") or {}).get("tenant_id")
+    status = _STATUS_SYNC.get(obj.get("status") or "")
+    if not tenant_id or not status:
+        return None
+    return tenant_id, status
+
+
+def set_subscription_status(conn: sqlite3.Connection, tenant_id: str, *, status: str,
+                            provider: str = "stripe") -> bool:
+    """Sync ONLY the subscription row's status — the plan is untouched (past_due
+    keeps access as a grace period; downgrades stay with the deleted event).
+    Returns False for unknown tenants or missing subscription rows, so bogus or
+    foreign webhook metadata can't 500 the endpoint or write orphan rows."""
+    row = conn.execute(
+        "SELECT s.status FROM subscriptions s JOIN tenants t ON t.id = s.tenant_id "
+        "WHERE s.tenant_id = ?",
+        (tenant_id,),
+    ).fetchone()
+    if not row:
+        return False
+    if row["status"] == status:
+        return True                     # replayed delivery — nothing to write
+    conn.execute(
+        "UPDATE subscriptions SET status = ?, provider = ?, updated_at = datetime('now') "
+        "WHERE tenant_id = ?",
+        (status, provider, tenant_id),
+    )
+    audit(conn, actor="stripe", action="subscription.status_synced", tenant_id=tenant_id,
+          detail=status)
+    return True
