@@ -529,6 +529,10 @@ def reset_submit(request: Request, token: str, password: str = Form(...),
         if user_id is None:  # raced/expired between the check and the burn
             return render(request, "reset.html", auth=None, token=token, valid=False, error=None)
         set_user_password(conn, user_id, password)
+        # Completing a reset proves control of the mailbox — the same property signup
+        # verification attests — so a lost/expired verify email can't strand an account:
+        # "Forgot password" is the universal recovery path.
+        mark_user_verified(conn, user_id)
         conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))  # log out everywhere
         # A password reset is a security-sensitive credential change — make it
         # attributable in the audit trail (invoice/gallery/subscription actions already are).

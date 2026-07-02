@@ -109,6 +109,29 @@ def test_old_sessions_killed_after_reset(client, conn):
     assert token_client.get("/dashboard", follow_redirects=False).status_code == 303
 
 
+def test_reset_recovers_an_unverified_account(client, conn):
+    """A lost verification email can't strand a signup: completing a password reset
+    proves the same mailbox ownership verification attests, so it also verifies."""
+    t = create_tenant(conn, name="Stranded Studio", shoot_type="wedding")
+    create_user(conn, tenant_id=t["id"], email="lost@verify.com",
+                password="oldpassword", verified=0)
+    conn.commit()
+
+    blocked = client.post("/login", data={"email": "lost@verify.com", "password": "oldpassword"})
+    assert "verify your email" in blocked.text.lower()      # stranded before the fix
+
+    client.post("/forgot", data={"email": "lost@verify.com"})
+    token = _token_from_outbox(conn, "lost@verify.com")
+    client.post(f"/reset/{token}", data={"password": "newpassword1", "confirm": "newpassword1"})
+
+    assert conn.execute(
+        "SELECT verified FROM users WHERE email = 'lost@verify.com'"
+    ).fetchone()["verified"] == 1
+    ok = client.post("/login", data={"email": "lost@verify.com", "password": "newpassword1"},
+                     follow_redirects=False)
+    assert ok.status_code == 303                            # in — no verification wall
+
+
 def test_reset_is_audited(client, conn):
     """A password reset is a credential change — it must land in the audit trail."""
     creds = onboard_studio(client, email="audit@me.com", password="oldpassword")
