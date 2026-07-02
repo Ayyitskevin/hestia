@@ -13,6 +13,9 @@
       {% else %}
         <a class="btn" href="/beta?source=demo&amp;path=/demo/{{ tour.key }}">Request beta access</a>
       {% endif %}
+      {% if live_demo_url %}
+        <a class="btn secondary" href="{{ live_demo_url }}">Tour a live demo studio</a>
+      {% endif %}
       <a class="btn secondary" href="/login">Sign in</a>
     </div>
     <p class="muted">$40/month after the 14-day free trial. No tiers. Cancel anytime.</p>

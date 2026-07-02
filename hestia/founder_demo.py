@@ -180,6 +180,24 @@ def _seed_showcase_gallery(conn: sqlite3.Connection, storage, settings: Settings
             "analyzed": summary["analyzed"], "culled": hidden, "album_id": album["id"]}
 
 
+def live_demo_studio_url(conn: sqlite3.Connection, landing_path: str) -> str:
+    """Public path of the seeded, published demo studio behind a marketing tour
+    page, or "" when it isn't live yet. The tour → studio mapping rides on
+    landing_path, so a new niche in FOUNDER_DEMO_STUDIOS gets its tour CTA
+    automatically once seeded — no template or route changes."""
+    spec = next(
+        (s for s in FOUNDER_DEMO_STUDIOS if s["landing_path"] == landing_path), None
+    )
+    if not spec:
+        return ""
+    tenant = get_tenant_by_slug(conn, spec["slug"])
+    if not tenant:
+        return ""
+    if not get_profile(conn, tenant["id"]).get("published"):
+        return ""
+    return f"/studio/{tenant['slug']}"
+
+
 def _has_showcase(conn: sqlite3.Connection, tenant_id: str) -> bool:
     """A published gallery with persisted vision analyses — the demo can show the moat."""
     return conn.execute(

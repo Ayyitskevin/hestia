@@ -30,6 +30,7 @@ from ..dashboard import (
 from ..db import audit
 from ..demo import demo_nav, demo_tour
 from ..email import notify
+from ..founder_demo import live_demo_studio_url
 from ..galleries import list_galleries
 from ..hosted import tenant_from_custom_domain, tenant_slug_from_request
 from ..interest import (
@@ -128,14 +129,22 @@ def landing(request: Request):
     return render(request, "landing.html", auth=auth)
 
 
+def _demo_page(request: Request, niche: str):
+    tour = demo_tour(niche)
+    with db_conn(request) as conn:
+        live_url = live_demo_studio_url(conn, f"/demo/{tour['key']}")
+    return render(request, "demo.html", auth=None, tour=tour, demos=demo_nav(),
+                  live_demo_url=live_url)
+
+
 @router.get("/demo")
 def demo(request: Request, niche: str = "wedding"):
-    return render(request, "demo.html", auth=None, tour=demo_tour(niche), demos=demo_nav())
+    return _demo_page(request, niche)
 
 
 @router.get("/demo/{niche}")
 def demo_niche(request: Request, niche: str):
-    return render(request, "demo.html", auth=None, tour=demo_tour(niche), demos=demo_nav())
+    return _demo_page(request, niche)
 
 
 @router.get("/pricing")
