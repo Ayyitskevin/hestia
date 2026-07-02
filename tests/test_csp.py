@@ -16,6 +16,8 @@ def test_hardened_response_headers_present(client):
     assert h["x-frame-options"] == "SAMEORIGIN"
     assert h["referrer-policy"] == "strict-origin-when-cross-origin"
     assert "max-age=31536000" in h["strict-transport-security"]   # HSTS, pin to HTTPS
+    assert "camera=()" in h["permissions-policy"]                 # deny unused powerful features
+    assert h["cross-origin-opener-policy"] == "same-origin"
 
 
 def test_csp_header_is_present_and_locked_down(client):
