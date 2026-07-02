@@ -189,3 +189,16 @@ def test_webhook_cancel_downgrades_known_tenant(settings, conn):
     assert r.status_code == 200 and r.json()["subscription"] == "beta:canceled"
     assert get_tenant(conn, t["id"])["plan"] == "beta"
     assert get_subscription(conn, t["id"])["status"] == "canceled"
+
+
+def test_checkout_token_requires_payment_mode():
+    """A subscription-mode checkout.session.completed carries the tenant_id in
+    client_reference_id — it must NOT be mis-read as an invoice payment. Only payment
+    (or a mode-less legacy/test payload) yields an invoice token."""
+    def evt(obj):
+        return json.dumps({"type": "checkout.session.completed", "data": {"object": obj}}).encode()
+
+    assert checkout_token_from_event(evt({"mode": "payment", "client_reference_id": "inv_tok"})) == "inv_tok"
+    assert checkout_token_from_event(evt({"client_reference_id": "inv_tok"})) == "inv_tok"   # legacy, no mode
+    assert checkout_token_from_event(evt({"mode": "subscription", "client_reference_id": "tenant123"})) is None
+    assert checkout_token_from_event(evt({"mode": "setup", "client_reference_id": "x"})) is None

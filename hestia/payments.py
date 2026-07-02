@@ -75,6 +75,13 @@ def checkout_token_from_event(payload: bytes) -> str | None:
     if event.get("type") != "checkout.session.completed":
         return None
     obj = (event.get("data") or {}).get("object") or {}
+    # Only a payment-mode checkout settles an invoice. A subscription-mode
+    # checkout.session.completed carries the tenant_id in client_reference_id and is
+    # handled by subscription_from_event; without this guard it could be mis-read as
+    # an invoice payment (inert today only because tenant ids and invoice tokens never
+    # collide — this makes it robust). "setup" mode carries no payment either.
+    if obj.get("mode") not in (None, "payment"):
+        return None
     return obj.get("client_reference_id") or (obj.get("metadata") or {}).get("invoice_token")
 
 
