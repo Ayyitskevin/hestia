@@ -48,3 +48,25 @@ def test_fully_configured_stripe_is_clean(settings):
     s = dataclasses.replace(settings, payments_backend="stripe", subscription_backend="stripe",
                             stripe_secret_key="sk", stripe_webhook_secret="whsec_x")
     assert s.config_warnings == []
+
+
+def test_config_warnings_name_secrets_never_echo_their_values(settings):
+    """config_warnings is logged at boot (main.py). It must warn by NAME, never print a
+    secret's value — set real secrets with the non-secret companion config missing so
+    warnings fire, then prove no secret value appears in the output."""
+    import dataclasses
+
+    s = dataclasses.replace(
+        settings,
+        payments_backend="stripe", subscription_backend="stripe",
+        stripe_secret_key="sk_live_SENTINEL_SECRET", stripe_webhook_secret="",
+        fulfillment_backend="lab", fulfillment_api_key="SENTINEL_FULFILL_KEY",
+        fulfillment_endpoint="",
+        storage_backend="s3", s3_bucket="",
+        email_backend="smtp", smtp_password="SENTINEL_SMTP_PW", smtp_host="",
+    )
+    warnings = s.config_warnings
+    assert warnings                                     # this misconfig does produce warnings
+    blob = " ".join(warnings)
+    for secret in ("sk_live_SENTINEL_SECRET", "SENTINEL_FULFILL_KEY", "SENTINEL_SMTP_PW"):
+        assert secret not in blob                       # warned by name, never by value
