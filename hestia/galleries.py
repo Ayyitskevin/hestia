@@ -13,6 +13,7 @@ import sqlite3
 from typing import BinaryIO
 
 from .automations import emit_event
+from .crypto import new_session_token
 from .storage import Storage, image_key
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -209,11 +210,12 @@ def add_image(
     # Insert first to get the id, then compute key and persist the blob.
     cur = conn.execute(
         """
-        INSERT INTO images (gallery_id, tenant_id, filename, storage_key, content_type,
-                            width, height, bytes, position)
-        VALUES (?, ?, ?, '', ?, ?, ?, ?, ?)
+        INSERT INTO images (gallery_id, tenant_id, filename, storage_key, access_token,
+                            content_type, width, height, bytes, position)
+        VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, ?)
         """,
-        (gallery_id, tenant_id, filename, content_type, width, height, len(data), position),
+        (gallery_id, tenant_id, filename, new_session_token(), content_type,
+         width, height, len(data), position),
     )
     image_id = cur.lastrowid
     key = image_key(tenant_id, gallery_id, image_id, ext)
