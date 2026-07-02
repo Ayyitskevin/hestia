@@ -25,6 +25,15 @@ FOUNDER_DEMO_STUDIOS = (
         "landing_path": "/demo/wedding",
     },
     {
+        "key": "portrait",
+        "preset": "portrait",
+        "label": "Portrait & Family",
+        "name": "Hestia Portrait Demo Studio",
+        "slug": "hestia-portrait-demo",
+        "owner_email": "founder-demo+portrait@hestia.local",
+        "landing_path": "/demo/portrait",
+    },
+    {
         "key": "food",
         "preset": "food",
         "label": "Food & Beverage",

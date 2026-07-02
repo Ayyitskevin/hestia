@@ -57,6 +57,23 @@ def test_beta_page_has_share_metadata(client):
     )
 
 
+def test_portrait_demo_is_its_own_tour(client):
+    """Portrait must render its own tour — not silently fall back to wedding —
+    so all four onboarding niches have a real demo landing page."""
+    _assert_share_meta(
+        client.get("/demo/portrait"),
+        title="Portrait & family demo - Hestia",
+        description=(
+            "Preview Hestia's portrait & family workflow for photographers: inquiry, "
+            "booking, contract, gallery delivery, payment, and retention in one "
+            "$40/month studio OS."
+        ),
+        canonical="http://testserver/demo/portrait",
+    )
+    page = client.get("/demo/portrait").text
+    assert "mini-session drop" in page                 # portrait workflow, not wedding's
+
+
 def test_demo_page_has_niche_share_metadata(client):
     _assert_share_meta(
         client.get("/demo/food"),
