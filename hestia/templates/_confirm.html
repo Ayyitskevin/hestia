@@ -1,0 +1,9 @@
+<script nonce="{{ csp_nonce }}">
+// Delegated confirm-on-submit: any <form data-confirm="…"> asks before submitting.
+// Replaces inline onsubmit="return confirm(…)" handlers so script-src can stay strict
+// (no 'unsafe-inline'). Behaviour is identical — cancel the confirm, cancel the submit.
+document.addEventListener("submit", function (e) {
+  var message = e.target.getAttribute("data-confirm");
+  if (message && !window.confirm(message)) e.preventDefault();
+});
+</script>

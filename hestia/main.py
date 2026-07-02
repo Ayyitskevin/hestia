@@ -10,6 +10,7 @@ modules, not services — see :mod:`hestia.vision` and :mod:`hestia.sales`.
 from __future__ import annotations
 
 import logging
+import secrets
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -135,10 +136,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.middleware("http")
     async def security_headers(request, call_next):
+        # Per-request nonce: the two inline scripts (the confirm-on-submit delegator in
+        # _confirm.html and the pipeline live-poller) carry it, so script-src can stay
+        # strict — no 'unsafe-inline', so an injected inline script won't execute.
+        nonce = secrets.token_urlsafe(16)
+        request.state.csp_nonce = nonce
         resp = await call_next(request)
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        # Content-Security-Policy. script-src is nonce-only (strict). style-src keeps
+        # 'unsafe-inline' for the many low-risk inline style= attributes (nonces don't
+        # apply to inline styles); img-src allows data: for the emoji favicon.
+        resp.headers.setdefault("Content-Security-Policy", "; ".join([
+            "default-src 'self'",
+            "base-uri 'self'",
+            "object-src 'none'",
+            "frame-ancestors 'none'",
+            "form-action 'self'",
+            "img-src 'self' data:",
+            "style-src 'self' 'unsafe-inline'",
+            f"script-src 'self' 'nonce-{nonce}'",
+        ]))
         return resp
 
     @app.middleware("http")

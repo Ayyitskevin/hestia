@@ -499,6 +499,12 @@ def reset_submit(request: Request, token: str, password: str = Form(...),
             return render(request, "reset.html", auth=None, token=token, valid=False, error=None)
         set_user_password(conn, user_id, password)
         conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))  # log out everywhere
+        # A password reset is a security-sensitive credential change — make it
+        # attributable in the audit trail (invoice/gallery/subscription actions already are).
+        reset_user = get_user(conn, user_id)
+        audit(conn, actor="user", action="password.reset",
+              tenant_id=reset_user["tenant_id"] if reset_user else None,
+              detail=f"user:{user_id}")
     return render(request, "login.html", auth=None, error=None,
                   notice="Password updated — sign in with your new password.")
 

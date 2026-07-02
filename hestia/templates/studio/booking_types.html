@@ -71,7 +71,7 @@
             <button class="btn ghost" type="submit">Archive</button>
           </form>
           <form method="post" action="/settings/booking-types/{{ t.id }}/delete" style="display:inline"
-                onsubmit="return confirm('Delete this session type?')">
+                data-confirm="Delete this session type?">
             {% include "_csrf.html" %}
             <button class="btn ghost" type="submit" title="Delete">✕</button>
           </form>

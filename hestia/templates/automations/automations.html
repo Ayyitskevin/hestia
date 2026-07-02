@@ -38,7 +38,7 @@
         <td style="text-align:right; white-space:nowrap">
           <form method="post" action="/automations/{{ a.id }}/toggle" style="display:inline">{% include "_csrf.html" %}<button class="btn ghost" type="submit">{{ 'Disable' if a.enabled else 'Enable' }}</button></form>
           <form method="post" action="/automations/{{ a.id }}/delete" style="display:inline"
-                onsubmit="return confirm('Delete this automation?')">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Delete</button></form>
+                data-confirm="Delete this automation?">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Delete</button></form>
         </td>
       </tr>
       {% endfor %}

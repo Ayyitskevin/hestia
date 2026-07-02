@@ -45,7 +45,7 @@
       payment schedule, and galleries.</p>
     <a class="offer-url" href="{{ portal_link }}" target="_blank">{{ portal_link }}</a>
     <form method="post" action="/clients/{{ client.id }}/portal/regenerate" style="margin-top:6px"
-          onsubmit="return confirm('Regenerate the portal link? The current link will stop working.')">
+          data-confirm="Regenerate the portal link? The current link will stop working.">
       {% include "_csrf.html" %}
       <button class="btn ghost" type="submit">Regenerate link</button>
     </form>

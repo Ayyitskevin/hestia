@@ -52,7 +52,7 @@
             <button class="btn ghost" type="submit">Disable</button>
           </form>
           <form method="post" action="/settings/discounts/{{ d.id }}/delete" style="display:inline"
-                onsubmit="return confirm('Delete this code?')">
+                data-confirm="Delete this code?">
             {% include "_csrf.html" %}
             <button class="btn ghost" type="submit" title="Delete">✕</button>
           </form>
@@ -82,7 +82,7 @@
             <button class="btn ghost" type="submit">Enable</button>
           </form>
           <form method="post" action="/settings/discounts/{{ d.id }}/delete" style="display:inline"
-                onsubmit="return confirm('Delete this code?')">
+                data-confirm="Delete this code?">
             {% include "_csrf.html" %}
             <button class="btn ghost" type="submit" title="Delete">✕</button>
           </form>
