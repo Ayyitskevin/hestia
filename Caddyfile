@@ -1,4 +1,27 @@
-{$HESTIA_DOMAIN}, *.{$HESTIA_DOMAIN} {
+# Global on-demand TLS gate. Caddy asks this endpoint before issuing a certificate
+# for a hostname it doesn't already have; Hestia approves only the apex, a subdomain
+# whose slug is a real tenant, or a verified custom domain — so no one can make us
+# mint certs (and burn ACME rate limits) for arbitrary hostnames.
+{
+	on_demand_tls {
+		ask http://hestia:8500/internal/tls-check
+	}
+}
+
+# Apex + marketing site: a normal managed certificate, provisioned at startup.
+{$HESTIA_DOMAIN} {
 	encode gzip
+	reverse_proxy hestia:8500
+}
+
+# Per-studio subdomains ({slug}.{$HESTIA_DOMAIN}). A wildcard certificate would need
+# a DNS-01 challenge plus DNS-provider credentials; on-demand TLS instead issues a
+# per-subdomain cert the first time each studio's subdomain is hit (HTTP-01), gated
+# by the ask endpoint above so only real tenants ever get one.
+*.{$HESTIA_DOMAIN} {
+	encode gzip
+	tls {
+		on_demand
+	}
 	reverse_proxy hestia:8500
 }

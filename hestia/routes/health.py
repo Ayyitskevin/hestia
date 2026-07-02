@@ -3,13 +3,45 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from .. import __version__
 from ..db import connect
+from ..domains import get_tenant_by_custom_domain
+from ..hosted import RESERVED_SUBDOMAINS
+from ..tenants import get_tenant_by_slug
 from .deps import settings_of
 
 router = APIRouter()
+
+
+@router.get("/internal/tls-check")
+def tls_check(request: Request, domain: str = "") -> Response:
+    """Caddy on-demand TLS gate. Caddy queries this before issuing a certificate for
+    a hostname; we approve (200) only the apex, a ``{slug}.{HESTIA_DOMAIN}`` whose
+    slug is a real tenant, or a verified custom domain — never an arbitrary host,
+    which would let anyone make us mint certs against ACME rate limits. Anything
+    else is 404 so Caddy refuses issuance."""
+    settings = settings_of(request)
+    host = (domain or "").strip().lower().rstrip(".")
+    base = (getattr(settings, "hosted_domain", "") or "").strip().lower()
+    if not host:
+        return Response(status_code=404)
+    if base and host == base:
+        return Response(status_code=200)                       # apex / marketing site
+    conn = connect(settings.db_path)
+    try:
+        if base and host.endswith(f".{base}"):
+            slug = host[: -(len(base) + 1)].strip(".")
+            if (slug and "." not in slug and slug not in RESERVED_SUBDOMAINS
+                    and get_tenant_by_slug(conn, slug)):
+                return Response(status_code=200)               # real tenant subdomain
+            return Response(status_code=404)
+        if get_tenant_by_custom_domain(conn, host):
+            return Response(status_code=200)                   # verified custom domain
+    finally:
+        conn.close()
+    return Response(status_code=404)
 
 
 @router.get("/healthz")

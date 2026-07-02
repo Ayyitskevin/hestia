@@ -9,6 +9,12 @@ day at a time. Every gate is a command you can run — no vibes, no "should be f
 - [ ] Point DNS at it: apex `A` record for `HESTIA_DOMAIN` **and** wildcard
       `*.HESTIA_DOMAIN` (tenant sites resolve as `{slug}.domain`).
 - [ ] Open ports 80 and 443. Nothing else.
+- TLS is automatic and needs **no** DNS-provider credentials: the apex gets a
+      normal managed certificate, and each `{slug}.domain` subdomain gets its own
+      certificate on first hit via Caddy on-demand TLS (a wildcard cert would need a
+      DNS-01 challenge — this avoids it). Caddy asks Hestia's `/internal/tls-check`
+      before issuing, so only real tenant subdomains and verified custom domains get
+      certs. First request to a brand-new subdomain carries a one-time issuance delay.
 
 ## Day 2 — configure + boot
 
