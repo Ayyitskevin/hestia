@@ -145,6 +145,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        # HSTS: pin clients to HTTPS for a year (browsers only honor it over TLS, so it's
+        # inert on the internal http hop). setdefault so an edge proxy can still override.
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         # Content-Security-Policy. script-src is nonce-only (strict). style-src keeps
         # 'unsafe-inline' for the many low-risk inline style= attributes (nonces don't
         # apply to inline styles); img-src allows data: for the emoji favicon.
