@@ -13,6 +13,7 @@ import json
 import os
 import stat
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,8 +28,14 @@ from .domains import normalize_custom_domain, validate_custom_domain
 
 Level = Literal["pass", "warn", "fail"]
 FetchJson = Callable[[str, float], tuple[int, dict]]
+FetchText = Callable[[str, float], tuple[int, str]]
 
 LOCAL_HOSTS = {"", "127.0.0.1", "::1", "0.0.0.0", "localhost", "testserver"}
+
+# Client-token prefixes that must be robots-disallowed on the LIVE domain — the
+# same list ci-smoke enforces in code; this proves the deployed box serves it.
+ROBOTS_REQUIRED = ("/portal/", "/d/", "/pay/", "/a/", "/sign/", "/g/", "/t/", "/q/",
+                   "/invite/", "/media/")
 
 
 @dataclass(frozen=True)
@@ -88,7 +95,21 @@ def fetch_json(url: str, timeout: float) -> tuple[int, dict]:
             return exc.code, {}
 
 
-def _runtime_probe(base_url: str, *, timeout: float, fetcher: FetchJson) -> list[PreflightCheck]:
+def fetch_text(url: str, timeout: float) -> tuple[int, str]:
+    try:
+        with urlopen(url, timeout=timeout) as resp:  # noqa: S310 - operator-provided URL
+            return resp.status, resp.read().decode("utf-8", "replace")
+    except HTTPError as exc:
+        return exc.code, exc.read().decode("utf-8", "replace")
+
+
+def _runtime_probe(
+    base_url: str,
+    *,
+    timeout: float,
+    fetcher: FetchJson,
+    text_fetcher: FetchText,
+) -> list[PreflightCheck]:
     base = base_url.rstrip("/")
     checks: list[PreflightCheck] = []
     for path in ("/healthz", "/readyz"):
@@ -108,7 +129,48 @@ def _runtime_probe(base_url: str, *, timeout: float, fetcher: FetchJson) -> list
                 checks.append(_check("pass", "runtime /readyz", "app is ready to serve traffic"))
             else:
                 checks.append(_check("fail", "runtime /readyz", f"unexpected response {status}: {body}"))
+    url = f"{base}/robots.txt"
+    try:
+        status, text = text_fetcher(url, timeout)
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError) as exc:
+        checks.append(_check("fail", "runtime /robots.txt", f"{url} is not reachable: {exc}"))
+    else:
+        missing = [p for p in ROBOTS_REQUIRED if f"Disallow: {p}" not in text]
+        if status == 200 and not missing:
+            checks.append(
+                _check("pass", "runtime /robots.txt", "client-token paths are disallowed on the live domain")
+            )
+        elif status != 200:
+            checks.append(_check("fail", "runtime /robots.txt", f"unexpected status {status}"))
+        else:
+            checks.append(
+                _check("fail", "runtime /robots.txt", f"missing Disallow entries: {', '.join(missing)}")
+            )
     return checks
+
+
+def _backup_freshness(settings: Settings, env: dict[str, str], *, max_age_hours: float = 26.0) -> PreflightCheck:
+    """Backups must actually be happening. Warn before first boot (no artifacts is
+    legitimate then); FAIL when the newest artifact is stale — a dead backup loop
+    on a live box is a launch blocker, not a footnote."""
+    backups_dir = Path(env.get("HESTIA_BACKUP_DIR") or settings.data_dir / "backups")
+    artifacts = sorted(backups_dir.glob("hestia-*.db.gz"), key=lambda p: p.stat().st_mtime)
+    if not artifacts:
+        return _check(
+            "warn",
+            "backup freshness",
+            f"no backups in {backups_dir} yet — the compose backup service creates one at start",
+        )
+    newest = artifacts[-1]
+    age_hours = (time.time() - newest.stat().st_mtime) / 3600
+    if age_hours > max_age_hours:
+        return _check(
+            "fail",
+            "backup freshness",
+            f"newest backup {newest.name} is {age_hours:.1f}h old (limit {max_age_hours:.0f}h) — "
+            "is the backup service running?",
+        )
+    return _check("pass", "backup freshness", f"newest backup {newest.name} is {age_hours:.1f}h old")
 
 
 def run_preflight(
@@ -119,6 +181,7 @@ def run_preflight(
     timeout: float = 3.0,
     env: dict[str, str] | None = None,
     fetcher: FetchJson = fetch_json,
+    text_fetcher: FetchText = fetch_text,
 ) -> list[PreflightCheck]:
     settings = settings or Settings.from_env()
     root = Path(root)
@@ -277,6 +340,7 @@ def run_preflight(
 
     data_ok, data_detail = _can_write_dir(settings.data_dir)
     checks.append(_check("pass" if data_ok else "fail", "data volume", data_detail))
+    checks.append(_backup_freshness(settings, env))
     if settings.storage_backend == "local":
         media_ok, media_detail = _can_write_dir(settings.media_dir)
         checks.append(_check("pass" if media_ok else "fail", "media volume", media_detail))
@@ -319,7 +383,9 @@ def run_preflight(
 
     probe_url = health_url or env.get("HESTIA_PREFLIGHT_URL", "")
     if probe_url:
-        checks.extend(_runtime_probe(probe_url, timeout=timeout, fetcher=fetcher))
+        checks.extend(
+            _runtime_probe(probe_url, timeout=timeout, fetcher=fetcher, text_fetcher=text_fetcher)
+        )
     else:
         checks.append(
             _check("warn", "runtime probe", "skipped; set HESTIA_PREFLIGHT_URL or pass --url after boot")
