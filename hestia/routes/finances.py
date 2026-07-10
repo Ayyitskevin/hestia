@@ -7,10 +7,11 @@ import io
 import math
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import RedirectResponse
 
 from ..auth import context_from_session
 from ..crm import get_project, list_projects
+from ..csv_export import csv_response
 from ..db import audit
 from ..finances import (
     EXPENSE_CATEGORIES,
@@ -36,24 +37,6 @@ from ..reports import (
 from .deps import db_conn, render
 
 router = APIRouter()
-
-
-def _csv_safe(value) -> str:
-    """Neutralize CSV formula injection: a cell starting with = + - @ (or a control
-    char) is treated as a formula by Excel/Sheets. Client names come from the public
-    inquiry form, so an attacker-controlled value can reach the owner's export —
-    prefix a quote so it stays literal text."""
-    s = str(value)
-    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
-
-
-def _csv_response(filename: str, header: list[str], rows: list[list]) -> Response:
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(header)
-    writer.writerows([[_csv_safe(cell) for cell in row] for row in rows])
-    return Response(content=buf.getvalue(), media_type="text/csv",
-                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 def _dollars(cents: int) -> str:
@@ -247,7 +230,7 @@ def export_expenses(request: Request):
         expenses = list_expenses(conn, auth.tenant["id"], limit=100000)
     rows = [[e["incurred_on"] or e["created_at"], e["category"], e["description"],
              e.get("project_name") or "", _dollars(e["amount_cents"])] for e in expenses]
-    return _csv_response("expenses.csv", ["date", "category", "description", "project", "amount"], rows)
+    return csv_response("expenses.csv", ["date", "category", "description", "project", "amount"], rows)
 
 
 @router.get("/finances/export/income.csv")
@@ -259,7 +242,7 @@ def export_income(request: Request):
         income = income_rows(conn, auth.tenant["id"])
     rows = [[r["date"], r["type"], r["description"], r["client"], _dollars(r["amount_cents"])]
             for r in income]
-    return _csv_response("income.csv", ["date", "type", "description", "client", "amount"], rows)
+    return csv_response("income.csv", ["date", "type", "description", "client", "amount"], rows)
 
 
 @router.get("/finances/export/tax.csv")
@@ -271,4 +254,4 @@ def export_tax(request: Request):
             return RedirectResponse("/login", status_code=303)
         periods = tax_by_period(conn, auth.tenant["id"], months=24)
     rows = [[p["month"], _dollars(p["cents"])] for p in periods["rows"]]
-    return _csv_response("tax-by-month.csv", ["month", "tax_collected"], rows)
+    return csv_response("tax-by-month.csv", ["month", "tax_collected"], rows)

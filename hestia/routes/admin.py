@@ -7,12 +7,10 @@ studio's ``hestia_tk_*`` API key. No service wiring — it's one app now.
 
 from __future__ import annotations
 
-import csv
 import hmac
-import io
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import RedirectResponse
 
 from .. import __version__
 from ..auth import (
@@ -24,6 +22,7 @@ from ..auth import (
     destroy_session,
 )
 from ..billing import PLANS, plan_status
+from ..csv_export import csv_response
 from ..db import applied_migrations, audit
 from ..domains import custom_domain_summary, set_custom_domain_status
 from ..founder_demo import seed_founder_demo_studios
@@ -92,21 +91,6 @@ def _admin_ctx(request: Request, conn):
 
 def _redirect_login() -> RedirectResponse:
     return RedirectResponse("/admin", status_code=303)
-
-
-def _csv_safe(value) -> str:
-    s = str(value)
-    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
-
-
-def _csv_response(filename: str, rows: list[dict]) -> Response:
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(_LAUNCH_EXPORT_HEADER)
-    for row in rows:
-        writer.writerow([_csv_safe(row.get(key, "")) for key in _LAUNCH_EXPORT_HEADER])
-    return Response(content=buf.getvalue(), media_type="text/csv",
-                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @router.get("")
@@ -202,7 +186,11 @@ def launch_export(request: Request):
         if not auth:
             return _redirect_login()
         rows = beta_launch_export_rows(conn, settings)
-    return _csv_response("hestia-beta-launch.csv", rows)
+    return csv_response(
+        "hestia-beta-launch.csv",
+        _LAUNCH_EXPORT_HEADER,
+        ([row.get(key, "") for key in _LAUNCH_EXPORT_HEADER] for row in rows),
+    )
 
 
 @router.post("/launch/{tenant_id}/nudge")
