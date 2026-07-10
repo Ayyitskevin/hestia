@@ -34,6 +34,7 @@ from ..crm import (
     set_project_status,
     tags_for_client,
 )
+from ..csv_export import csv_response
 from ..db import audit
 from ..email import list_emails, notify
 from ..invoices import client_statement, list_invoices, money
@@ -90,14 +91,6 @@ def clients_list(request: Request, tag: str = ""):
     return render(request, "crm/clients.html", auth=auth, clients=clients, tags=tags, active_tag=tag)
 
 
-def _csv_safe(value) -> str:
-    """Neutralize CSV formula injection — a cell starting with = + - @ (or a control
-    char) is treated as a formula by spreadsheets; prefix a quote so it stays text.
-    Client names/tags are owner-entered, but better safe."""
-    s = str(value)
-    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
-
-
 @router.get("/clients/export.csv")
 def clients_export(request: Request, tag: str = ""):
     """Export the client book as CSV (name, contact, tags, projects, lifetime value),
@@ -107,16 +100,22 @@ def clients_export(request: Request, tag: str = ""):
         if not auth:
             return RedirectResponse("/login", status_code=303)
         clients = list_clients(conn, auth.tenant["id"], tag=tag or None)
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(["name", "email", "phone", "tags", "projects", "lifetime_value"])
-    for c in clients:
-        writer.writerow([_csv_safe(x) for x in (
-            c["name"], c.get("email") or "", c.get("phone") or "",
-            " ".join(c.get("tags") or []), c["project_count"], f"{c['lifetime_cents'] / 100:.2f}",
-        )])
-    return Response(content=buf.getvalue(), media_type="text/csv",
-                    headers={"Content-Disposition": 'attachment; filename="clients.csv"'})
+    rows = (
+        (
+            client["name"],
+            client.get("email") or "",
+            client.get("phone") or "",
+            " ".join(client.get("tags") or []),
+            client["project_count"],
+            f"{client['lifetime_cents'] / 100:.2f}",
+        )
+        for client in clients
+    )
+    return csv_response(
+        "clients.csv",
+        ["name", "email", "phone", "tags", "projects", "lifetime_value"],
+        rows,
+    )
 
 
 _CSV_FIELDS = ("name", "email", "phone", "tags", "notes")
