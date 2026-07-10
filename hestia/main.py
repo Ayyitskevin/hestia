@@ -23,6 +23,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
+from .auth import SESSION_COOKIE
 from .config import Settings, get_settings
 from .csrf import csrf_protect
 from .db import init_db
@@ -80,6 +81,36 @@ log = logging.getLogger("hestia")
 _HERE = Path(__file__).resolve().parent
 TEMPLATES_DIR = _HERE / "templates"
 STATIC_DIR = _HERE / "static"
+
+_CAPABILITY_PATH_PREFIXES = (
+    "/portal/",
+    "/d/",
+    "/pay/",
+    "/a/",
+    "/sign/",
+    "/g/",
+    "/s/",
+    "/book/",
+    "/q/",
+    "/t/",
+    "/invite/",
+    "/verify/",
+    "/reset/",
+    "/calendar/",
+    "/media/",
+    "/proposal/",
+)
+_AUTH_PATHS = frozenset({"/login", "/signup", "/forgot", "/admin"})
+
+
+def _sensitive_response(request, response) -> bool:
+    path = request.url.path
+    return bool(
+        request.cookies.get(SESSION_COOKIE)
+        or response.headers.get("set-cookie")
+        or path in _AUTH_PATHS
+        or path.startswith(("/admin/", *_CAPABILITY_PATH_PREFIXES))
+    )
 
 
 def _build_templates() -> Jinja2Templates:
@@ -170,6 +201,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "style-src 'self' 'unsafe-inline'",
             f"script-src 'self' 'nonce-{nonce}'",
         ]))
+        if _sensitive_response(request, resp):
+            # Authenticated pages and capability URLs can carry client PII, media,
+            # signatures, invoices, or session cookies. Never let a browser or
+            # intermediary retain them after access is revoked.
+            resp.headers["Cache-Control"] = "no-store"
+            resp.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
         return resp
 
     @app.middleware("http")

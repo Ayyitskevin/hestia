@@ -33,10 +33,9 @@ def test_s3_public_path_presigned():
     assert "k/1.jpg" in url and "Signature" in url and "Expires" in url
 
 
-def test_s3_public_path_cdn():
-    # public base url branch never touches the client
-    s = S3Storage("b", public_base_url="https://cdn.example.com/", client=object())
-    assert s.public_path("a/b.jpg") == "https://cdn.example.com/a/b.jpg"
+def test_s3_rejects_public_media_base():
+    with pytest.raises(ValueError, match="bypass"):
+        S3Storage("b", public_base_url="https://cdn.example.com/", client=object())
 
 
 def test_s3_requires_bucket():

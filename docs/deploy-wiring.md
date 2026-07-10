@@ -64,9 +64,9 @@ personal inbox and confirm the verification link actually arrives.
   `backup` service; restore drill in `docs/backup-restore.md`. Good for launch.
 - **s3** (`HESTIA_STORAGE_BACKEND=s3` + `HESTIA_S3_BUCKET`, plus AWS creds via the
   standard chain): use a **private** bucket so images are served by short-lived
-  presigned URLs. Do **not** set `HESTIA_S3_PUBLIC_BASE_URL` to a public/CDN bucket for
-  client galleries — that serves enumerable object keys and defeats the per-image
-  capability-token privacy the local backend and presigned mode guarantee.
+  presigned URLs. `HESTIA_S3_PUBLIC_BASE_URL` must stay blank: Hestia now rejects
+  public/CDN object URLs at boot and in preflight because they expose enumerable
+  storage keys outside gallery visibility and capability-token checks.
 
 ## Reminder
 

@@ -25,6 +25,22 @@ def test_limiter_keys_are_independent():
     assert rl.check("b", "ip1", limit=1, window=60, now=1) is False
 
 
+def test_limiter_bounds_unique_identity_state():
+    rl = RateLimiter(max_keys=2)
+    assert rl.check("b", "ip1", limit=1, window=60, now=0) is True
+    assert rl.check("b", "ip2", limit=1, window=60, now=0) is True
+    assert rl.check("b", "ip3", limit=1, window=60, now=0) is False
+    assert len(rl._hits) == 2
+
+
+def test_limiter_prunes_expired_identities_before_rejecting_new_ones():
+    rl = RateLimiter(max_keys=2)
+    assert rl.check("b", "ip1", limit=1, window=10, now=0) is True
+    assert rl.check("b", "ip2", limit=1, window=10, now=0) is True
+    assert rl.check("b", "ip3", limit=1, window=10, now=11) is True
+    assert len(rl._hits) == 1
+
+
 class _Req:
     def __init__(self, xff=None, host="1.2.3.4"):
         self.headers = {"x-forwarded-for": xff} if xff else {}

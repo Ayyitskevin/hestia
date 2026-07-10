@@ -9,6 +9,8 @@ inline event-handler attribute remains anywhere (those can't be nonce'd).
 import re
 from pathlib import Path
 
+from conftest import login_owner, onboard_studio
+
 
 def test_hardened_response_headers_present(client):
     h = client.get("/").headers
@@ -40,6 +42,28 @@ def test_nonce_is_fresh_per_request(client):
     a = client.get("/").headers["content-security-policy"]
     b = client.get("/").headers["content-security-policy"]
     assert a != b                          # a replayed nonce would defeat the point
+
+
+def test_public_marketing_page_remains_cacheable_and_indexable(client):
+    headers = client.get("/").headers
+    assert headers.get("cache-control") != "no-store"
+    assert "x-robots-tag" not in headers
+
+
+def test_auth_and_capability_pages_are_not_cached_or_indexed(client):
+    for path in ("/login", "/pay/not-a-valid-token", "/media/not-a-valid-token"):
+        headers = client.get(path).headers
+        assert headers["cache-control"] == "no-store"
+        assert headers["x-robots-tag"] == "noindex, nofollow, noarchive"
+
+
+def test_authenticated_pages_are_not_cached_or_indexed(client):
+    creds = onboard_studio(client)
+    login_owner(client, creds)
+
+    headers = client.get("/dashboard").headers
+    assert headers["cache-control"] == "no-store"
+    assert headers["x-robots-tag"] == "noindex, nofollow, noarchive"
 
 
 def test_no_inline_event_handlers_remain_in_templates():

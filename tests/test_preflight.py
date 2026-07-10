@@ -88,6 +88,22 @@ def test_mock_invoice_payments_is_a_launch_blocker(settings, tmp_path):
     assert _by_name(run_preflight(good, root=Path(".")))["invoice payments"].level == "pass"
 
 
+def test_hosted_preflight_rejects_public_s3_media(settings, tmp_path):
+    bad = _hosted_settings(
+        settings,
+        tmp_path,
+        storage_backend="s3",
+        s3_bucket="private-media",
+        s3_public_base_url="https://cdn.example.com",
+    )
+    checks = _by_name(run_preflight(bad, root=Path(".")))
+    assert checks["private s3 media"].level == "fail"
+
+    good = dataclasses.replace(bad, s3_public_base_url="")
+    checks = _by_name(run_preflight(good, root=Path(".")))
+    assert checks["private s3 media"].level == "pass"
+
+
 def test_hosted_preflight_probes_health_and_readiness(settings, tmp_path):
     seen = []
 

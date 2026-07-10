@@ -63,7 +63,9 @@ class Settings:
     s3_bucket: str = ""
     s3_region: str = "us-east-1"
     s3_endpoint_url: str = ""        # set for Cloudflare R2 / MinIO; blank = AWS S3
-    s3_public_base_url: str = ""     # public/CDN base; blank = presigned GET urls
+    # Kept only to detect and reject legacy unsafe config. Client media must come
+    # from a private bucket through presigned URLs.
+    s3_public_base_url: str = ""
 
     # Payments. mock = simulate checkout (no keys, testable). stripe = live API.
     payments_backend: str = "mock"  # mock | stripe
@@ -177,6 +179,11 @@ class Settings:
                         "HESTIA_FULFILLMENT_ENDPOINT is unset (paid orders record as 'failed')")
         if self.storage_backend == "s3" and not self.s3_bucket:
             warn.append("storage_backend=s3 but HESTIA_S3_BUCKET is unset")
+        if self.s3_public_base_url:
+            warn.append(
+                "HESTIA_S3_PUBLIC_BASE_URL is unsafe and unsupported; "
+                "use a private bucket with presigned URLs"
+            )
         if self.email_backend == "smtp" and not self.smtp_host:
             warn.append("email_backend=smtp but HESTIA_SMTP_HOST is unset")
         xai = [b for b in ("vision", "album", "content", "product")
