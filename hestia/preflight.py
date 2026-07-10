@@ -356,6 +356,18 @@ def run_preflight(
                 f"S3 bucket is {settings.s3_bucket}" if settings.s3_bucket else "set HESTIA_S3_BUCKET",
             )
         )
+        checks.append(
+            _check(
+                "fail" if settings.s3_public_base_url else "pass",
+                "private s3 media",
+                (
+                    "unset HESTIA_S3_PUBLIC_BASE_URL; public object URLs bypass "
+                    "gallery visibility and capability checks"
+                    if settings.s3_public_base_url
+                    else "S3 media uses private, short-lived presigned URLs"
+                ),
+            )
+        )
         if not (env.get("AWS_ACCESS_KEY_ID") and env.get("AWS_SECRET_ACCESS_KEY")):
             checks.append(
                 _check("warn", "s3 credentials", "no AWS env credentials found; relying on host IAM/role")

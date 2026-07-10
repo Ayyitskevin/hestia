@@ -23,6 +23,16 @@ def test_s3_without_bucket_warns(settings):
     assert any("storage_backend=s3" in w for w in s.config_warnings)
 
 
+def test_public_s3_media_base_warns(settings):
+    s = dataclasses.replace(
+        settings,
+        storage_backend="s3",
+        s3_bucket="private-media",
+        s3_public_base_url="https://cdn.example.com",
+    )
+    assert any("HESTIA_S3_PUBLIC_BASE_URL" in w for w in s.config_warnings)
+
+
 def test_smtp_without_host_warns(settings):
     s = dataclasses.replace(settings, email_backend="smtp", smtp_host="")
     assert any("email_backend=smtp" in w for w in s.config_warnings)

@@ -37,7 +37,7 @@ class Storage(Protocol):
     def image_url(self, image: dict) -> str:
         """A client-facing URL for an image *row*. Local serves through the app's
         /media route keyed by the row's unguessable ``access_token`` (never the
-        enumerable storage key); S3 returns its presigned/CDN URL. Use this for any
+        enumerable storage key); S3 returns a short-lived presigned URL. Use this for any
         image shown to a client — the raw ``public_path(storage_key)`` is owner-only."""
         ...
 
@@ -91,8 +91,8 @@ class S3Storage:
 
     Credentials come from the standard AWS chain (``AWS_ACCESS_KEY_ID`` /
     ``AWS_SECRET_ACCESS_KEY`` env or instance role). Set ``endpoint_url`` for R2 /
-    MinIO. ``public_base_url`` (a CDN or public bucket) yields direct URLs;
-    otherwise ``public_path`` returns a short-lived presigned GET URL.
+    MinIO. Media buckets must remain private; ``public_path`` returns a
+    short-lived presigned GET URL.
     """
 
     backend = "s3"
@@ -101,8 +101,12 @@ class S3Storage:
                  public_base_url: str = "", client=None):
         if not bucket:
             raise ValueError("S3 storage requires HESTIA_S3_BUCKET")
+        if public_base_url:
+            raise ValueError(
+                "HESTIA_S3_PUBLIC_BASE_URL is unsafe: public object URLs bypass "
+                "gallery visibility and per-image capability checks"
+            )
         self.bucket = bucket
-        self.public_base_url = public_base_url.rstrip("/")
         if client is not None:
             self._client = client
         else:  # pragma: no cover - exercised via injected client in tests
@@ -131,16 +135,13 @@ class S3Storage:
         self._client.delete_object(Bucket=self.bucket, Key=key)
 
     def public_path(self, key: str) -> str:
-        if self.public_base_url:
-            return f"{self.public_base_url}/{key}"
         return self._client.generate_presigned_url(
             "get_object", Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=3600
         )
 
     def image_url(self, image: dict) -> str:
-        # Presigned URLs are already unguessable + short-lived. NOTE: the
-        # public_base_url (CDN) mode serves the enumerable key directly — a private
-        # bucket + presigned mode is required to match the local backend's guarantee.
+        # Presigned URLs are short-lived and the bucket is private, so knowing an
+        # enumerable storage key never grants permanent public access.
         return self.public_path(image["storage_key"])
 
 

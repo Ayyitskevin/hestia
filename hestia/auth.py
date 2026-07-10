@@ -10,6 +10,7 @@ Two ways in, mirroring the Plutus pattern:
 
 from __future__ import annotations
 
+import hmac
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -110,16 +111,29 @@ def context_from_session(conn: sqlite3.Connection, request: Request) -> AuthCont
     if not session:
         return None
     if session["role"] == "admin":
+        if session["user_id"] is not None or session["tenant_id"] is not None:
+            destroy_session(conn, token)
+            return None
         return AuthContext(kind="admin", role="admin")
+    if not session["user_id"] or not session["tenant_id"]:
+        destroy_session(conn, token)
+        return None
     tenant = get_tenant(conn, session["tenant_id"]) if session["tenant_id"] else None
     if not tenant:
         return None
     user = None
     if session["user_id"]:
         row = conn.execute(
-            "SELECT * FROM users WHERE id = ?", (session["user_id"],)
+            "SELECT * FROM users WHERE id = ? AND tenant_id = ?",
+            (session["user_id"], session["tenant_id"]),
         ).fetchone()
-        user = dict(row) if row else None
+        if not row or row["role"] != session["role"]:
+            # A user session is valid only while its user, tenant, and role still
+            # agree. Fail closed on stale/corrupt rows instead of granting the
+            # tenant access encoded in the session record alone.
+            destroy_session(conn, token)
+            return None
+        user = dict(row)
     return AuthContext(kind="user", role=session["role"], user=user, tenant=tenant)
 
 
@@ -137,7 +151,7 @@ def context_from_bearer(
     if not token:
         return None
     # Admin master token.
-    if settings.api_token and token == settings.api_token:
+    if settings.api_token and hmac.compare_digest(token, settings.api_token):
         return AuthContext(kind="admin", role="admin")
     # Per-tenant API key.
     tenant = find_tenant_by_api_key(conn, settings, token)
