@@ -264,6 +264,26 @@ def get_user(conn: sqlite3.Connection, user_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+def list_tenant_users(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
+    """Everyone on a studio's account — the owner plus any secondary admins."""
+    rows = conn.execute(
+        "SELECT id, email, role, created_at FROM users WHERE tenant_id = ? ORDER BY id",
+        (tenant_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_tenant_user(conn: sqlite3.Connection, tenant_id: str, user_id: int) -> bool:
+    """Remove a secondary admin from the studio. Only ``admin``-role rows are
+    deletable here (the owner can't be removed — transferring ownership is a
+    separate step), and the row must belong to this tenant."""
+    cur = conn.execute(
+        "DELETE FROM users WHERE id = ? AND tenant_id = ? AND role = 'admin'",
+        (user_id, tenant_id),
+    )
+    return cur.rowcount > 0
+
+
 # ── Tenant API keys (hestia_tk_<slug>_<secret>) ─────────────────────────────
 
 

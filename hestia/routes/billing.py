@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
+from ..auth import ADMIN
 from ..billing import PLANS, plan_status
 from ..domains import custom_domain_summary, set_custom_domain, verify_custom_domain_dns
 from ..subscriptions import (
@@ -13,8 +14,14 @@ from ..subscriptions import (
     build_subscriptions,
     get_subscription,
 )
-from ..tenants import get_tenant
-from .deps import db_conn, render, settings_of, tenant_user
+from ..tenants import (
+    create_user,
+    delete_tenant_user,
+    get_tenant,
+    get_user_by_email,
+    list_tenant_users,
+)
+from .deps import db_conn, owner_only, render, settings_of, tenant_user
 
 router = APIRouter()
 
@@ -41,8 +48,8 @@ def account(request: Request, dns: str = ""):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
-        if not auth:
-            return RedirectResponse("/login", status_code=303)
+        if forbid := owner_only(auth):
+            return forbid
         tenant = get_tenant(conn, auth.tenant["id"])
         sub = get_subscription(conn, tenant["id"])
         owner_email = _owner_email(conn, tenant["id"])
@@ -78,8 +85,8 @@ def account_domain(request: Request, custom_domain: str = Form("")):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
-        if not auth:
-            return RedirectResponse("/login", status_code=303)
+        if forbid := owner_only(auth):
+            return forbid
         try:
             set_custom_domain(
                 conn,
@@ -118,8 +125,8 @@ def account_domain_check_dns(request: Request):
     to click Mark verified. Banners the outcome via a query param."""
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
-        if not auth:
-            return RedirectResponse("/login", status_code=303)
+        if forbid := owner_only(auth):
+            return forbid
         result = verify_custom_domain_dns(conn, auth.tenant["id"])
         conn.commit()
     return RedirectResponse(f"/settings/account?dns={result['status']}", status_code=303)
@@ -130,8 +137,8 @@ def billing(request: Request):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
-        if not auth:
-            return RedirectResponse("/login", status_code=303)
+        if forbid := owner_only(auth):
+            return forbid
         tenant = get_tenant(conn, auth.tenant["id"])
         sub = get_subscription(conn, tenant["id"])
     return render(request, "billing.html", auth=auth, tenant=tenant, plan=plan_status(tenant, subscription_backend=settings.subscription_backend),
@@ -143,8 +150,8 @@ def subscribe(request: Request, plan: str = Form(...)):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
-        if not auth:
-            return RedirectResponse("/login", status_code=303)
+        if forbid := owner_only(auth):
+            return forbid
         if plan != "studio" or plan not in PLANS:
             return RedirectResponse("/settings/billing", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
@@ -167,8 +174,8 @@ def billing_portal(request: Request):
     return_url = f"{settings.public_url.rstrip('/')}/settings/account"
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
-        if not auth:
-            return RedirectResponse("/login", status_code=303)
+        if forbid := owner_only(auth):
+            return forbid
         tenant = get_tenant(conn, auth.tenant["id"])
         sub = get_subscription(conn, tenant["id"])
         provider = build_subscriptions(settings)
@@ -184,8 +191,8 @@ def cancel(request: Request):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
-        if not auth:
-            return RedirectResponse("/login", status_code=303)
+        if forbid := owner_only(auth):
+            return forbid
         # Nothing to cancel on the free plan — a no-op keeps repeat POSTs from writing
         # junk 'canceled' subscription rows and audit noise.
         if get_tenant(conn, auth.tenant["id"])["plan"] == "beta":
@@ -194,3 +201,57 @@ def cancel(request: Request):
         apply_plan(conn, auth.tenant["id"], plan="beta", status="canceled",
                    provider=build_subscriptions(settings).backend)
     return RedirectResponse("/settings/billing", status_code=303)
+
+
+# ── Team — owner-only multi-admin management ─────────────────────────────────
+
+
+@router.get("/settings/team")
+def team(request: Request, invited: str = "", error: str = ""):
+    with db_conn(request) as conn:
+        auth = tenant_user(request, conn)
+        if forbid := owner_only(auth):
+            return forbid
+        tenant = get_tenant(conn, auth.tenant["id"])
+        users = list_tenant_users(conn, auth.tenant["id"])
+    return render(request, "team.html", auth=auth, tenant=tenant, users=users,
+                  invited=invited, error=error)
+
+
+@router.post("/settings/team/invite")
+def team_invite(request: Request, email: str = Form(...), password: str = Form(...)):
+    """Add a secondary studio admin. The owner provides the invitee's email and a
+    temporary password (communicated out-of-band); a proper emailed setup link is
+    a future step. The owner stays the sole account holder."""
+    with db_conn(request) as conn:
+        auth = tenant_user(request, conn)
+        if forbid := owner_only(auth):
+            return forbid
+        email_clean = (email or "").strip().lower()
+        if not email_clean or not (password or "").strip() or len(password) < 8:
+            return _team_render_error(request, auth, "Add a valid email and a password of at least 8 characters.")
+        if get_user_by_email(conn, email_clean):
+            return _team_render_error(request, auth, "That email is already on this or another account.")
+        create_user(conn, tenant_id=auth.tenant["id"], email=email_clean,
+                    password=password, role=ADMIN)
+        conn.commit()
+    return RedirectResponse("/settings/team?invited=1", status_code=303)
+
+
+@router.post("/settings/team/{user_id}/remove")
+def team_remove(request: Request, user_id: int):
+    with db_conn(request) as conn:
+        auth = tenant_user(request, conn)
+        if forbid := owner_only(auth):
+            return forbid
+        delete_tenant_user(conn, auth.tenant["id"], user_id)
+        conn.commit()
+    return RedirectResponse("/settings/team", status_code=303)
+
+
+def _team_render_error(request: Request, auth, message: str):
+    with db_conn(request) as conn:
+        tenant = get_tenant(conn, auth.tenant["id"])
+        users = list_tenant_users(conn, auth.tenant["id"])
+    return render(request, "team.html", auth=auth, tenant=tenant, users=users,
+                  invited="", error=message, status_code=400)

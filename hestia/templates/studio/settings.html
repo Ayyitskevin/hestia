@@ -7,6 +7,11 @@
   <a class="btn secondary" href="/studio/{{ tenant.slug }}" target="_blank">View public site ↗</a>
 </div>
 
+{% if request.query_params.get('forbidden') %}
+  <div class="alert error">That's owner-only — billing, the plan, and team management are
+    reserved for the account holder. Ask the studio owner to make the change.</div>
+{% endif %}
+
 <div class="card stack">
   <p class="muted">Your public page lives at
     <span class="mono">{{ settings.public_url }}/studio/{{ tenant.slug }}</span>.
@@ -152,4 +157,13 @@
     public site — social proof that turns visitors into bookings.</p>
   <div><a class="btn secondary" href="/settings/testimonials">Manage testimonials →</a></div>
 </div>
+
+{% if auth.is_owner %}
+<div class="card stack" style="margin-top:18px">
+  <h3>Team</h3>
+  <p class="muted">Add a secondary studio admin to share the workload — they can run galleries,
+    clients, and the AI pipeline, but can't change the plan or manage the team.</p>
+  <div><a class="btn secondary" href="/settings/team">Manage team →</a></div>
+</div>
+{% endif %}
 {% endblock %}

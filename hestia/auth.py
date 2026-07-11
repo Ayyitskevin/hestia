@@ -24,6 +24,14 @@ from .tenants import find_tenant_by_api_key, get_tenant, get_user_by_email, set_
 SESSION_COOKIE = "hestia_session"
 SESSION_TTL = timedelta(hours=12)
 
+# Per-tenant roles. ``owner`` is the account holder — billing, the plan, the
+# danger zone, and managing other admins. ``admin`` is a secondary studio admin
+# who can run the studio (galleries, clients, pipeline, non-billing settings)
+# but not change the plan or manage the team. Enforced at the route seam.
+OWNER = "owner"
+ADMIN = "admin"
+ROLES = (OWNER, ADMIN)
+
 
 @dataclass
 class AuthContext:
@@ -35,6 +43,11 @@ class AuthContext:
     @property
     def is_admin(self) -> bool:
         return self.kind == "admin"
+
+    @property
+    def is_owner(self) -> bool:
+        """A tenant user acting as the account owner (not the founder admin)."""
+        return self.kind == "user" and self.role == OWNER
 
     @property
     def tenant_id(self) -> str | None:
@@ -110,11 +123,15 @@ def context_from_session(conn: sqlite3.Connection, request: Request) -> AuthCont
     session = get_valid_session(conn, token)
     if not session:
         return None
-    if session["role"] == "admin":
-        if session["user_id"] is not None or session["tenant_id"] is not None:
-            destroy_session(conn, token)
-            return None
-        return AuthContext(kind="admin", role="admin")
+    # A founder-admin session carries no user or tenant; a studio-user session
+    # always carries both. Distinguish on that, not on the role string — a
+    # secondary studio admin (role "admin") is a user, not the founder admin,
+    # and must resolve through the tenant path below.
+    if session["user_id"] is None and session["tenant_id"] is None:
+        if session["role"] == "admin":
+            return AuthContext(kind="admin", role="admin")
+        destroy_session(conn, token)
+        return None
     if not session["user_id"] or not session["tenant_id"]:
         destroy_session(conn, token)
         return None
