@@ -8,3 +8,9 @@ __pycache__/
 data/
 *.db
 .DS_Store
+
+# pytest-cov artifacts
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
