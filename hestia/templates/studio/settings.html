@@ -115,6 +115,37 @@
   {% endif %}
 </div>
 
+{% if vision_live %}
+<div class="card stack" style="margin-top:18px">
+  <h3>Live AI vision — your own xAI key</h3>
+  <p class="muted">Your plan includes one founder-hosted live AI gallery process. Once that's
+    used, add your own xAI key to keep live culling on every gallery with no image cap —
+    you pay xAI directly for those calls. The key is encrypted at rest and never leaves
+    this server except to call xAI.</p>
+  {% if ai_subsidy and ai_subsidy.message %}
+    <p class="muted" style="margin:0 0 10px">{{ ai_subsidy.message }}</p>
+  {% endif %}
+  {% if ai_subsidy and ai_subsidy.own_key %}
+    <p class="muted" style="margin:0 0 10px"><strong>Your own xAI key is set.</strong>
+      Live vision runs on it with no subsidy cap.</p>
+    <form method="post" action="/settings/ai-key/clear">
+      {% include "_csrf.html" %}
+      <div class="form-actions"><button class="btn secondary" type="submit">Remove key</button></div>
+    </form>
+  {% else %}
+    <form method="post" action="/settings/ai-key">
+      {% include "_csrf.html" %}
+      <input type="password" name="xai_api_key" autocomplete="off"
+        placeholder="xai-... (paste your xAI API key)">
+      <div class="form-actions">
+        <button class="btn" type="submit">Save key</button>
+        <span class="muted" style="margin-left:8px">Leave blank + Save to clear.</span>
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="card stack" style="margin-top:18px">
   <h3>Testimonials</h3>
   <p class="muted">Ask happy clients for a review and feature the best ones right here on your

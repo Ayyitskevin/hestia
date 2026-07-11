@@ -8,6 +8,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from .. import messaging
+from ..ai_usage import tenant_subsidy_status
 from ..booking import list_booking_types
 from ..dashboard import set_digest_enabled
 from ..db import list_audit
@@ -21,10 +22,12 @@ from ..referrals import attribute_referral
 from ..studio import create_inquiry, get_profile, upsert_profile
 from ..tenants import (
     can_use_style_profile,
+    clear_tenant_ai_key,
     get_tenant,
     get_tenant_by_slug,
     set_email_signature,
     set_tax_rate,
+    set_tenant_ai_key,
     set_vision_style,
 )
 from ..testimonials import featured_testimonials
@@ -136,8 +139,11 @@ def site_settings(request: Request):
         tenant = get_tenant(conn, auth.tenant["id"])
         profile = get_profile(conn, tenant["id"])
         integrity = integrity_report(conn, tenant["id"], sample_limit=0)
+        settings = settings_of(request)
+        ai_subsidy = tenant_subsidy_status(conn, settings, auth.tenant["id"])
     return render(request, "studio/settings.html", auth=auth, tenant=tenant, profile=profile,
-                  can_style=can_use_style_profile(tenant), integrity=integrity)
+                  can_style=can_use_style_profile(tenant), integrity=integrity,
+                  ai_subsidy=ai_subsidy, vision_live=settings.vision_backend != "mock")
 
 
 @router.post("/settings/vision-style")
@@ -149,6 +155,33 @@ def vision_style_save(request: Request, vision_style: str = Form("")):
         tenant = get_tenant(conn, auth.tenant["id"])
         if can_use_style_profile(tenant):  # tier gate enforced server-side
             set_vision_style(conn, auth.tenant["id"], vision_style)
+    return RedirectResponse("/settings/site", status_code=303)
+
+
+@router.post("/settings/ai-key")
+def ai_key_save(request: Request, xai_api_key: str = Form("")):
+    """Store (or clear, when blank) the studio's own xAI key for live vision."""
+    with db_conn(request) as conn:
+        auth = tenant_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        settings = settings_of(request)
+        key = (xai_api_key or "").strip()
+        if key:
+            set_tenant_ai_key(conn, auth.tenant["id"], key,
+                              session_secret=settings.session_secret)
+        else:
+            clear_tenant_ai_key(conn, auth.tenant["id"])
+    return RedirectResponse("/settings/site", status_code=303)
+
+
+@router.post("/settings/ai-key/clear")
+def ai_key_clear(request: Request):
+    with db_conn(request) as conn:
+        auth = tenant_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        clear_tenant_ai_key(conn, auth.tenant["id"])
     return RedirectResponse("/settings/site", status_code=303)
 
 

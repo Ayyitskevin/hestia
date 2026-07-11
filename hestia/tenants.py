@@ -168,6 +168,53 @@ def set_vision_style(conn: sqlite3.Connection, tenant_id: str, style: str) -> No
     )
 
 
+# ── Tenant-owned AI keys (bring-your-own xAI, post-subsidy) ──────────────────
+
+
+def set_tenant_ai_key(
+    conn: sqlite3.Connection, tenant_id: str, api_key: str, *, session_secret: str
+) -> None:
+    """Store a studio's own xAI key, encrypted at rest. An empty key clears it."""
+    from .crypto import encrypt_token
+
+    key = (api_key or "").strip()
+    enc = encrypt_token(key, session_secret) if key else ""
+    conn.execute(
+        "INSERT INTO tenant_ai_keys (tenant_id, key_enc, has_key, set_at) "
+        "VALUES (?, ?, ?, datetime('now')) "
+        "ON CONFLICT(tenant_id) DO UPDATE SET "
+        "  key_enc = excluded.key_enc, has_key = excluded.has_key, "
+        "  set_at = datetime('now')",
+        (tenant_id, enc, 1 if enc else 0),
+    )
+
+
+def clear_tenant_ai_key(conn: sqlite3.Connection, tenant_id: str) -> None:
+    conn.execute("DELETE FROM tenant_ai_keys WHERE tenant_id = ?", (tenant_id,))
+
+
+def tenant_has_own_ai_key(conn: sqlite3.Connection, tenant_id: str) -> bool:
+    row = conn.execute(
+        "SELECT has_key FROM tenant_ai_keys WHERE tenant_id = ?", (tenant_id,)
+    ).fetchone()
+    return bool(row and row["has_key"])
+
+
+def get_tenant_ai_key(
+    conn: sqlite3.Connection, tenant_id: str, *, session_secret: str
+) -> str:
+    """Decrypt and return the studio's own xAI key, or '' if none/undecryptable."""
+    from .crypto import decrypt_token
+
+    row = conn.execute(
+        "SELECT key_enc FROM tenant_ai_keys WHERE tenant_id = ?", (tenant_id,)
+    ).fetchone()
+    if not row or not row["key_enc"]:
+        return ""
+    return decrypt_token(row["key_enc"], session_secret)
+
+
+
 def set_email_signature(conn: sqlite3.Connection, tenant_id: str, signature: str) -> None:
     """Set the studio's email signature — free text appended to client-facing mail."""
     conn.execute(
