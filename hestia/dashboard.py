@@ -11,7 +11,6 @@ from datetime import UTC, date, datetime, timedelta
 from .config import Settings
 from .email import notify
 from .invoices import accounts_receivable, money
-from .presets import preset_applied
 from .proposals import proposal_followups
 from .reports import monthly_pnl
 
@@ -396,61 +395,94 @@ def trial_cockpit(
     }
 
 
-def _has_any(conn: sqlite3.Connection, tenant_id: str, table: str) -> bool:
-    """Whether the tenant owns at least one row in ``table`` (table name is a fixed
-    literal from the caller, never user input)."""
-    return conn.execute(
-        f"SELECT 1 FROM {table} WHERE tenant_id = ? LIMIT 1", (tenant_id,)
-    ).fetchone() is not None
+def activation_signals(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    *,
+    published: bool | None = None,
+) -> dict:
+    """Single-query activation + engagement snapshot for one studio."""
+    row = conn.execute(
+        """
+        SELECT
+            (SELECT COUNT(*) FROM proposals
+              WHERE tenant_id = ? AND status IN ('sent', 'accepted')) AS proposals_sent,
+            (SELECT COUNT(*) FROM proposals
+              WHERE tenant_id = ? AND status = 'accepted') AS proposals_accepted,
+            (SELECT COALESCE(SUM(view_count), 0) FROM proposals
+              WHERE tenant_id = ?) AS proposal_views,
+            (SELECT COUNT(*) FROM galleries
+              WHERE tenant_id = ? AND status = 'published') AS published_galleries,
+            (SELECT COUNT(*) FROM offers
+              WHERE tenant_id = ? AND status = 'active') AS active_offers,
+            (SELECT COUNT(*) FROM invoices
+              WHERE tenant_id = ? AND status IN ('sent', 'paid')) AS money_links,
+            (SELECT COUNT(*) FROM booking_types
+              WHERE tenant_id = ? AND active = 1) AS active_booking_types,
+            (SELECT COUNT(*) FROM service_packages
+              WHERE tenant_id = ? AND active = 1) AS active_packages,
+            (SELECT COUNT(*) FROM questionnaires
+              WHERE tenant_id = ?) AS questionnaires,
+            EXISTS(SELECT 1 FROM projects WHERE tenant_id = ?) AS has_project,
+            EXISTS(SELECT 1 FROM images WHERE tenant_id = ?) AS has_uploaded_gallery,
+            EXISTS(SELECT 1 FROM offers WHERE tenant_id = ? AND status = 'active') AS has_active_offer,
+            EXISTS(SELECT 1 FROM invoices WHERE tenant_id = ?
+              AND status IN ('sent', 'paid')) AS has_money_link,
+            COALESCE((SELECT published FROM studio_profiles WHERE tenant_id = ?), 0) AS profile_published
+        """,
+        (tenant_id,) * 14,
+    ).fetchone()
+    published_flag = bool(published) if published is not None else bool(row["profile_published"])
+    has_preset = (
+        int(row["active_booking_types"] or 0) > 0
+        or int(row["active_packages"] or 0) > 0
+        or int(row["questionnaires"] or 0) > 0
+    )
+    return {
+        "proposals_sent": int(row["proposals_sent"] or 0),
+        "proposals_accepted": int(row["proposals_accepted"] or 0),
+        "proposal_views": int(row["proposal_views"] or 0),
+        "published_galleries": int(row["published_galleries"] or 0),
+        "active_offers": int(row["active_offers"] or 0),
+        "money_links": int(row["money_links"] or 0),
+        "active_booking_types": int(row["active_booking_types"] or 0),
+        "active_packages": int(row["active_packages"] or 0),
+        "has_preset": has_preset,
+        "published": published_flag,
+        "has_active_booking_type": int(row["active_booking_types"] or 0) > 0,
+        "has_project": bool(row["has_project"]),
+        "has_uploaded_gallery": bool(row["has_uploaded_gallery"]),
+        "has_active_offer": bool(row["has_active_offer"]),
+        "has_money_link": bool(row["has_money_link"]),
+    }
 
 
-def _has_active_booking_type(conn: sqlite3.Connection, tenant_id: str) -> bool:
-    return conn.execute(
-        "SELECT 1 FROM booking_types WHERE tenant_id = ? AND active = 1 LIMIT 1",
-        (tenant_id,),
-    ).fetchone() is not None
-
-
-def _has_uploaded_gallery(conn: sqlite3.Connection, tenant_id: str) -> bool:
-    return conn.execute(
-        "SELECT 1 FROM images WHERE tenant_id = ? LIMIT 1",
-        (tenant_id,),
-    ).fetchone() is not None
-
-
-def _has_active_offer(conn: sqlite3.Connection, tenant_id: str) -> bool:
-    return conn.execute(
-        "SELECT 1 FROM offers WHERE tenant_id = ? AND status = 'active' LIMIT 1",
-        (tenant_id,),
-    ).fetchone() is not None
-
-
-def _has_money_link(conn: sqlite3.Connection, tenant_id: str) -> bool:
-    return conn.execute(
-        "SELECT 1 FROM invoices WHERE tenant_id = ? AND status IN ('sent', 'paid') LIMIT 1",
-        (tenant_id,),
-    ).fetchone() is not None
-
-
-def setup_checklist(conn: sqlite3.Connection, tenant_id: str, *, published: bool) -> dict:
+def setup_checklist(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    *,
+    published: bool | None = None,
+    signals: dict | None = None,
+) -> dict:
     """A studio's commercial activation path — the first loop from public presence to
     a shareable offer and money link. These checks intentionally use existing tenant
     data instead of a separate onboarding state machine, so the checklist stays honest
     when owners skip around."""
+    snap = signals or activation_signals(conn, tenant_id, published=published)
     steps = [
-        {"stage": "Preset", "label": "Choose a studio preset", "done": preset_applied(conn, tenant_id),
+        {"stage": "Preset", "label": "Choose a studio preset", "done": snap["has_preset"],
          "href": "/onboarding", "value": "booking, packages, forms"},
-        {"stage": "Launch", "label": "Publish studio site", "done": bool(published),
+        {"stage": "Launch", "label": "Publish studio site", "done": snap["published"],
          "href": "/settings/site", "value": "public lead capture"},
-        {"stage": "Book", "label": "Add a bookable session", "done": _has_active_booking_type(conn, tenant_id),
+        {"stage": "Book", "label": "Add a bookable session", "done": snap["has_active_booking_type"],
          "href": "/settings/booking-types", "value": "self-serve booking path"},
-        {"stage": "Client", "label": "Start a client project", "done": _has_any(conn, tenant_id, "projects"),
+        {"stage": "Client", "label": "Start a client project", "done": snap["has_project"],
          "href": "/projects/new", "value": "CRM spine"},
-        {"stage": "Deliver", "label": "Upload gallery images", "done": _has_uploaded_gallery(conn, tenant_id),
+        {"stage": "Deliver", "label": "Upload gallery images", "done": snap["has_uploaded_gallery"],
          "href": "/galleries/new", "value": "client delivery"},
-        {"stage": "Sell", "label": "Generate an offer link", "done": _has_active_offer(conn, tenant_id),
+        {"stage": "Sell", "label": "Generate an offer link", "done": snap["has_active_offer"],
          "href": "/galleries", "value": "print and album upsell"},
-        {"stage": "Collect", "label": "Send an invoice or retainer", "done": _has_money_link(conn, tenant_id),
+        {"stage": "Collect", "label": "Send an invoice or retainer", "done": snap["has_money_link"],
          "href": "/invoices/new", "value": "cash collection"},
     ]
     done = sum(1 for s in steps if s["done"])

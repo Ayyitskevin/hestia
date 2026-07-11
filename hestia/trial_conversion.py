@@ -11,7 +11,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 
 from .config import Settings
-from .dashboard import setup_checklist
+from .dashboard import activation_signals, setup_checklist
 from .presets import preset_applied
 from .studio import get_profile
 from .subscriptions import get_subscription
@@ -55,12 +55,12 @@ def trial_conversion_for_tenant(
     owner = _owner(conn, tenant_id)
     subscription = get_subscription(conn, tenant_id)
     profile = get_profile(conn, tenant_id)
-    setup = setup_checklist(conn, tenant_id, published=bool(profile.get("published")))
-    signals = _signals(conn, tenant_id)
+    signals = activation_signals(conn, tenant_id, published=bool(profile.get("published")))
+    setup = setup_checklist(conn, tenant_id, published=signals["published"], signals=signals)
     trial_state = _trial_state(tenant, subscription)
     days_left = _trial_days_left(subscription, settings) if trial_state == "trialing" else None
     verified = bool(owner.get("verified"))
-    has_preset = preset_applied(conn, tenant_id)
+    has_preset = signals["has_preset"]
     action = _operator_action(
         verified=verified,
         has_preset=has_preset,
@@ -102,7 +102,16 @@ def trial_conversion_for_tenant(
         "risk_reason": risk["reason"],
         "setup_complete": bool(setup["complete"]),
         "setup_next": setup.get("next"),
-        **signals,
+        **{k: signals[k] for k in (
+            "proposals_sent",
+            "proposals_accepted",
+            "proposal_views",
+            "published_galleries",
+            "active_offers",
+            "money_links",
+            "active_booking_types",
+            "active_packages",
+        )},
     }
 
 
@@ -317,32 +326,6 @@ def _owner(conn: sqlite3.Connection, tenant_id: str) -> dict:
     if not row:
         return {"email": "", "verified": 0}
     return dict(row)
-
-
-def _signals(conn: sqlite3.Connection, tenant_id: str) -> dict:
-    row = conn.execute(
-        """
-        SELECT
-            (SELECT COUNT(*) FROM proposals
-              WHERE tenant_id = ? AND status IN ('sent', 'accepted')) AS proposals_sent,
-            (SELECT COUNT(*) FROM proposals
-              WHERE tenant_id = ? AND status = 'accepted') AS proposals_accepted,
-            (SELECT COALESCE(SUM(view_count), 0) FROM proposals
-              WHERE tenant_id = ?) AS proposal_views,
-            (SELECT COUNT(*) FROM galleries
-              WHERE tenant_id = ? AND status = 'published') AS published_galleries,
-            (SELECT COUNT(*) FROM offers
-              WHERE tenant_id = ? AND status = 'active') AS active_offers,
-            (SELECT COUNT(*) FROM invoices
-              WHERE tenant_id = ? AND status IN ('sent', 'paid')) AS money_links,
-            (SELECT COUNT(*) FROM booking_types
-              WHERE tenant_id = ? AND active = 1) AS active_booking_types,
-            (SELECT COUNT(*) FROM service_packages
-              WHERE tenant_id = ? AND active = 1) AS active_packages
-        """,
-        (tenant_id, tenant_id, tenant_id, tenant_id, tenant_id, tenant_id, tenant_id, tenant_id),
-    ).fetchone()
-    return {k: int(row[k] or 0) for k in row.keys()}
 
 
 def _trial_state(tenant: dict, subscription: dict | None) -> str:
