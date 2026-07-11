@@ -6,7 +6,7 @@ import sqlite3
 
 from ..config import Settings
 from ..db import audit
-from ..email import notify
+from ..email import delivery_ok, notify
 from ..tenants import get_tenant
 from ..trial_conversion import trial_conversion_cockpit, trial_conversion_for_tenant
 from .kit import (
@@ -71,7 +71,7 @@ def send_trial_ending_nudges(
         if days_left is None or days_left > max(0, int(days_threshold)):
             continue
         result = send_beta_launch_nudge(conn, settings, studio["tenant_id"])
-        if not result or result.get("skipped") or not result.get("email_status"):
+        if not result or result.get("skipped") or not delivery_ok(result.get("email_status")):
             continue
         audit(conn, actor="worker", action="launch.nudge_sent",
               tenant_id=studio["tenant_id"], detail=result["owner_email"])
@@ -134,7 +134,7 @@ def send_past_due_dunning(conn: sqlite3.Connection, settings: Settings, *,
                 "— Hestia"
             ),
         )
-        if not status:
+        if not delivery_ok(status):
             continue
         audit(conn, actor="worker", action=DUNNING_ACTION, tenant_id=tenant_id,
               detail=owner["email"])
@@ -220,10 +220,19 @@ def send_beta_launch_digest(
         body=digest["body"],
         signed=False,
     )
-    audit(conn, actor=actor, action="launch.digest_sent", detail=f"{to}:{status or ''}")
+    if not delivery_ok(status):
+        audit(conn, actor=actor, action="launch.digest_failed",
+              detail=f"{to}:{status or 'missing'}")
+        return {
+            "sent": False,
+            "status": status or "error",
+            "to": to,
+            "subject": digest["subject"],
+        }
+    audit(conn, actor=actor, action="launch.digest_sent", detail=f"{to}:{status}")
     return {
         "sent": True,
-        "status": status or "sent",
+        "status": status,
         "to": to,
         "subject": digest["subject"],
     }

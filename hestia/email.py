@@ -102,13 +102,23 @@ def notify(conn: sqlite3.Connection, settings: Settings, *, to: str, subject: st
     Client-facing mail is signed with the studio's signature (``signed=True``, the
     default). Pass ``signed=False`` for platform/owner mail — signup verification,
     password resets, lead alerts — which shouldn't carry the studio's client-facing
-    sign-off."""
+    sign-off.
+
+    Success statuses are ``"sent"`` (SMTP) and ``"recorded"`` (mock). Failures
+    return ``"error: …"`` — callers must use :func:`delivery_ok` before treating
+    a send as successful (audit rows, cooldowns, counters).
+    """
     if not to or not to.strip():
         return None
     if signed and tenant_id:
         body = _with_signature(conn, tenant_id, body)
     msg = EmailMessage(to=to.strip(), subject=subject, body=body, tenant_id=tenant_id)
     return build_emailer(settings).send(conn, msg)
+
+
+def delivery_ok(status: str | None) -> bool:
+    """True when ``notify`` actually delivered (or mock-recorded) the message."""
+    return status in ("sent", "recorded")
 
 
 def list_emails(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 50,
