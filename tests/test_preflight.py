@@ -104,6 +104,63 @@ def test_hosted_preflight_rejects_public_s3_media(settings, tmp_path):
     assert checks["private s3 media"].level == "pass"
 
 
+def test_xai_vision_without_key_is_a_launch_blocker(settings, tmp_path):
+    """vision_backend=xai without a key silently falls back to mock per-request —
+    the operator thinks demos run on real AI and they don't. Fail closed."""
+    bad = _hosted_settings(settings, tmp_path, vision_backend="xai", xai_api_key="")
+    checks = _by_name(run_preflight(bad, root=Path(".")))
+    assert checks["live ai vision"].level == "fail"
+
+    good = _hosted_settings(settings, tmp_path, vision_backend="xai", xai_api_key="xai-live-key")
+    checks = _by_name(run_preflight(good, root=Path(".")))
+    assert checks["live ai vision"].level == "pass"
+
+
+def test_mock_vision_warns_so_demos_are_not_mistaken_for_real_ai(settings, tmp_path):
+    checks = _by_name(run_preflight(_hosted_settings(settings, tmp_path), root=Path(".")))
+    assert checks["live ai vision"].level == "warn"
+    assert "simulated" in checks["live ai vision"].detail
+
+
+def test_ai_subsidy_without_live_vision_warns_hollow(settings, tmp_path):
+    """Subsidy enabled but vision mock → the founder-hosted credit promise is hollow."""
+    bad = _hosted_settings(settings, tmp_path, ai_subsidy_enabled=True, vision_backend="mock")
+    checks = _by_name(run_preflight(bad, root=Path(".")))
+    assert checks["ai subsidy coherence"].level == "warn"
+
+    good = _hosted_settings(
+        settings, tmp_path, ai_subsidy_enabled=True,
+        vision_backend="xai", xai_api_key="xai-live-key",
+    )
+    checks = _by_name(run_preflight(good, root=Path(".")))
+    assert checks["ai subsidy coherence"].level == "pass"
+
+
+def test_lab_fulfillment_without_credentials_is_a_launch_blocker(settings, tmp_path):
+    """fulfillment_backend=lab without key/endpoint records paid print orders as
+    'failed' — silent revenue leakage on a live box. Fail closed like mock payments."""
+    bad = _hosted_settings(
+        settings, tmp_path,
+        fulfillment_backend="lab", fulfillment_api_key="", fulfillment_endpoint="",
+    )
+    checks = _by_name(run_preflight(bad, root=Path(".")))
+    assert checks["print fulfillment"].level == "fail"
+
+    good = _hosted_settings(
+        settings, tmp_path,
+        fulfillment_backend="lab",
+        fulfillment_api_key="lab-key", fulfillment_endpoint="https://lab.example.com/orders",
+    )
+    checks = _by_name(run_preflight(good, root=Path(".")))
+    assert checks["print fulfillment"].level == "pass"
+
+
+def test_mock_fulfillment_warns_prints_never_ship(settings, tmp_path):
+    checks = _by_name(run_preflight(_hosted_settings(settings, tmp_path), root=Path(".")))
+    assert checks["print fulfillment"].level == "warn"
+    assert "never shipped" in checks["print fulfillment"].detail
+
+
 def test_hosted_preflight_probes_health_and_readiness(settings, tmp_path):
     seen = []
 

@@ -331,6 +331,47 @@ def run_preflight(
         )
     )
 
+    # Live AI vision is the product's wedge. mock is runnable but the magic moment
+    # (real culls) is fake — warn so the operator knows demos run on simulated AI.
+    # xai selected without a key silently falls back to mock per-request — fail.
+    if settings.vision_backend == "xai":
+        checks.append(
+            _check(
+                "pass" if settings.xai_api_key else "fail",
+                "live ai vision",
+                (
+                    "xAI vision is configured for real culls"
+                    if settings.xai_api_key
+                    else "HESTIA_VISION_BACKEND=xai but HESTIA_XAI_API_KEY is unset; vision silently falls back to mock"
+                ),
+            )
+        )
+    else:
+        checks.append(
+            _check(
+                "warn",
+                "live ai vision",
+                "vision_backend=mock; the magic moment runs on simulated culls — set HESTIA_VISION_BACKEND=xai for real demos",
+            )
+        )
+
+    # The beta subsidy promises founder-hosted xAI credits for the first gallery
+    # per studio. With it enabled but no live vision, that promise is hollow.
+    if settings.ai_subsidy_enabled:
+        subsidy_live = settings.vision_backend == "xai" and bool(settings.xai_api_key)
+        checks.append(
+            _check(
+                "pass" if subsidy_live else "warn",
+                "ai subsidy coherence",
+                (
+                    f"subsidy is live: {settings.ai_subsidy_galleries_per_tenant} gallery · "
+                    f"{settings.ai_subsidy_image_cap} image cap on xAI"
+                    if subsidy_live
+                    else "ai_subsidy_enabled but vision is not live; subsidized galleries cull on mock — set HESTIA_VISION_BACKEND=xai + key"
+                ),
+            )
+        )
+
     # FAIL, not warn: with mock invoice payments a client who clicks "pay" flips the
     # invoice to paid (and fulfills any backing order) with $0 actually charged. On a
     # live box that is silent revenue loss — gate it as hard as the subscription backend.
@@ -340,6 +381,33 @@ def run_preflight(
         checks.append(
             _check("fail", "invoice payments",
                    "set HESTIA_PAYMENTS_BACKEND=stripe; mock payments mark invoices paid without charging")
+        )
+
+    # Print fulfillment. lab selected without credentials records paid print orders
+    # as 'failed' — silent revenue leakage on a live box, so fail like mock payments.
+    # mock is runnable but physical prints never ship automatically; warn for beta.
+    if settings.fulfillment_backend == "lab":
+        lab_ready = bool(settings.fulfillment_api_key and settings.fulfillment_endpoint)
+        checks.append(
+            _check(
+                "pass" if lab_ready else "fail",
+                "print fulfillment",
+                (
+                    "lab fulfillment is configured to submit real print orders"
+                    if lab_ready
+                    else "HESTIA_FULFILLMENT_BACKEND=lab but HESTIA_FULFILLMENT_API_KEY or "
+                         "HESTIA_FULFILLMENT_ENDPOINT is unset; paid orders record as 'failed'"
+                ),
+            )
+        )
+    else:
+        checks.append(
+            _check(
+                "warn",
+                "print fulfillment",
+                "fulfillment_backend=mock; paid print orders are recorded but never shipped — "
+                "set HESTIA_FULFILLMENT_BACKEND=lab to close the physical print loop",
+            )
         )
 
     data_ok, data_detail = _can_write_dir(settings.data_dir)
