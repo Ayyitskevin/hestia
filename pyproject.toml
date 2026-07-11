@@ -27,6 +27,7 @@ s3 = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
     "ruff>=0.4",
     "boto3>=1.34",
     "moto[s3]>=5.0",
@@ -55,3 +56,30 @@ ignore = [
 testpaths = ["tests"]
 asyncio_mode = "auto"
 filterwarnings = ["ignore::DeprecationWarning"]
+
+# Coverage is an opt-in gate (``scripts/coverage.sh``), not the default pytest
+# run, so regular ``ci-smoke`` stays fast and a coverage dip never blocks a
+# launch on its own. The gate measures the revenue spine only — the modules a
+# $40/mo studio lives or dies by — and is run deliberately before merge.
+[tool.coverage.run]
+branch = false
+source = [
+    "hestia/pipeline",
+    "hestia/sales",
+    "hestia/orders",
+    "hestia/invoices",
+    "hestia/payments",
+    "hestia/fulfillment",
+    "hestia/vision",
+    "hestia/ai_usage",
+    "hestia/domains",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
