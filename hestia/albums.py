@@ -161,18 +161,23 @@ def generate_album(
     spreads = _build_spreads(ordered, hero_by_id, per_spread)
     title = f"{gallery['title']} — album"
 
+    backend = getattr(arranger, "backend", "mock")
     if existing:
         conn.execute(
             "UPDATE albums SET title = ?, backend = ?, spreads_json = ?, updated_at = datetime('now') WHERE id = ?",
-            (title, getattr(arranger, "backend", "mock"), json.dumps(spreads), existing["id"]),
+            (title, backend, json.dumps(spreads), existing["id"]),
         )
         album_id = existing["id"]
     else:
         cur = conn.execute(
             "INSERT INTO albums (tenant_id, gallery_id, title, backend, spreads_json) VALUES (?, ?, ?, ?, ?)",
-            (tenant["id"], gallery["id"], title, getattr(arranger, "backend", "mock"), json.dumps(spreads)),
+            (tenant["id"], gallery["id"], title, backend, json.dumps(spreads)),
         )
         album_id = cur.lastrowid
+    if backend != "mock":
+        from .ai_usage import record_usage
+        record_usage(conn, tenant_id=tenant["id"], module="album", backend=backend,
+                     units=1, gallery_id=gallery["id"])
     conn.commit()
     return get_album(conn, tenant["id"], album_id)
 

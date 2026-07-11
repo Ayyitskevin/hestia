@@ -26,7 +26,7 @@ from ..proofing import (
     toggle_favorite,
 )
 from ..ratelimit import enforce
-from ..sales import favorites_package, get_offer_by_token
+from ..sales import favorites_package, get_offer_by_token, get_tenant_catalog
 from ..storage import Storage
 from ..tenants import get_tenant_by_slug
 from ..vision import alt_text_map
@@ -83,7 +83,10 @@ def public_offer(request: Request, slug: str, token: str):
         favs = [i for i in list_favorites(conn, tenant["id"], offer["gallery_id"]) if not i["hidden"]]
         fav_thumbs = [{"url": storage.image_url(i), "filename": i["filename"]}
                       for i in favs]
-        fav_pkg = favorites_package(len(favs))
+        fav_pkg = favorites_package(
+            len(favs),
+            price_per_print_cents=get_tenant_catalog(conn, tenant["id"])["favorite_print_cents"],
+        )
         # Live: a running sale discounts the prices and adds urgency.
         campaign = get_active_campaign(conn, offer["gallery_id"], tenant_id=tenant["id"])
         pct = campaign["discount_pct"] if campaign else 0

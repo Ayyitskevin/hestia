@@ -13,6 +13,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from .. import __version__
+from ..ai_usage import operator_usage_summary
 from ..auth import (
     SESSION_COOKIE,
     SESSION_TTL,
@@ -333,6 +334,7 @@ def system(request: Request):
             "log_format": settings.log_format,
             "signup_enabled": settings.signup_enabled,
             "warnings": settings.config_warnings,
+            "ai_usage": operator_usage_summary(conn),
         }
     return render(request, "admin/system.html", auth=auth, info=info)
 

@@ -105,6 +105,35 @@
 {% endif %}
 
 <div class="card stack" style="margin-top:18px">
+  <h3>AI usage ledger</h3>
+  {% if info.ai_usage.total_units %}
+    <p class="muted">{{ info.ai_usage.total_units }} live provider call{{ '' if info.ai_usage.total_units == 1 else 's' }}
+      recorded · {{ info.ai_usage.recent_30d_units }} in the last 30 days.</p>
+    <table>
+      <thead><tr><th>Module</th><th>Backend</th><th>Calls</th></tr></thead>
+      <tbody>
+        {% for row in info.ai_usage.by_module %}
+        <tr><td>{{ row.module }}</td><td class="mono">{{ row.backend }}</td><td>{{ row.units }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if info.ai_usage.top_tenants %}
+    <h4 style="margin-top:16px">Top studios</h4>
+    <table>
+      <thead><tr><th>Studio</th><th>Slug</th><th>Calls</th></tr></thead>
+      <tbody>
+        {% for row in info.ai_usage.top_tenants %}
+        <tr><td>{{ row.name }}</td><td class="mono">{{ row.slug }}</td><td>{{ row.units }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  {% else %}
+    <p class="muted">No live AI calls recorded yet — mock backends do not write to the ledger.</p>
+  {% endif %}
+</div>
+
+<div class="card stack" style="margin-top:18px">
   <h3>Migrations</h3>
   <table>
     <thead><tr><th>Version</th><th>Name</th><th>Applied</th></tr></thead>

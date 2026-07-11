@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Print &amp; album offers — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Print &amp; album offers</h1>
+  <a class="btn secondary" href="/settings/site">← Site settings</a>
+</div>
+
+{% if saved %}
+  <div class="alert ok">Offer catalog saved. Re-process a gallery to refresh bundle prices on its client link.</div>
+{% endif %}
+
+<div class="card stack">
+  <p class="muted">Set the prices and names your clients see on gallery offer links
+    (<span class="mono">/s/…</span>). Disabled bundles are omitted from new offers.
+    Re-processing a gallery updates prices while keeping the same share link.</p>
+  <form method="post" action="/settings/offers">
+    {% include "_csrf.html" %}
+    <label for="favorite_print">Per-favorite archival print ($)</label>
+    <input type="text" id="favorite_print" name="favorite_print" inputmode="decimal"
+           value="{{ favorite_print_dollars }}" placeholder="15">
+    <p class="hint">When a client hearts photos, Hestia auto-builds a favorites package at this rate.</p>
+
+    {% for row in rows %}
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--border)">
+    <h3>{{ row.label }}</h3>
+    <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px">
+      <input type="checkbox" name="{{ row.sku }}_enabled" value="1"
+             {{ 'checked' if row.enabled else '' }} style="width:auto">
+      Include in gallery offers
+    </label>
+    <label for="{{ row.sku }}_name">Display name</label>
+    <input type="text" id="{{ row.sku }}_name" name="{{ row.sku }}_name" value="{{ row.name }}">
+    <label for="{{ row.sku }}_blurb">Description</label>
+    <input type="text" id="{{ row.sku }}_blurb" name="{{ row.sku }}_blurb" value="{{ row.blurb }}">
+    <label for="{{ row.sku }}_price">Price ($)</label>
+    <input type="text" id="{{ row.sku }}_price" name="{{ row.sku }}_price" inputmode="decimal"
+           value="{{ row.price_dollars }}">
+    {% endfor %}
+
+    <div class="form-actions"><button class="btn" type="submit">Save catalog</button></div>
+  </form>
+</div>
+{% endblock %}

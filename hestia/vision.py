@@ -147,6 +147,36 @@ class MockVisionProvider:
                             exposure=exposure, sharpness=sharpness)
 
 
+def vision_prompt(style: str = "") -> str:
+    """The xAI vision prompt — tuned for blink rejection, hero ranking, and technical flags."""
+    style_line = ""
+    if style.strip():
+        style_line = (
+            f" The studio's style preference is: {style.strip()}. "
+            "Weight keeper_score and hero_potential toward frames that match it."
+        )
+    shot_types = ", ".join(SHOT_TYPES)
+    return (
+        "You are a professional photographer's culling assistant analyzing one frame. "
+        "Return ONLY compact JSON with these keys:\n"
+        "- keywords: array of 3-6 lowercase strings (subject, lighting, mood, moment)\n"
+        f"- shot_type: exactly one of {shot_types}\n"
+        "- keeper_score: 0-1 float — technical deliverability; penalize blur, bad exposure, "
+        "awkward poses, and mid-blink expressions\n"
+        "- hero_potential: 0-1 float — cover-worthy emotional peak; favor connection and "
+        "story over mere sharpness; near-duplicates of the same moment score lower than "
+        "the best frame\n"
+        "- alt_text: one descriptive sentence for accessibility\n"
+        "- eyes_closed: 0-1 float — likelihood ANY visible subject blinked or has eyes "
+        "closed/mid-blink; score 0.85+ means likely discard\n"
+        "- exposure: 0-1 float — ~0.3 underexposed, ~0.5 well-exposed, ~0.9+ blown highlights\n"
+        "- sharpness: 0-1 float — 1 tack-sharp/in focus, below 0.4 soft or motion-blurred\n"
+        "Score honestly. A technically sharp but emotionally flat frame should beat a blurry "
+        "peak moment only when the blur ruins deliverability."
+        + style_line
+    )
+
+
 class XaiVisionProvider:
     """xAI Grok vision backend. Best-effort JSON extraction with safe fallback."""
 
@@ -163,17 +193,7 @@ class XaiVisionProvider:
         if not self.settings.xai_api_key:
             raise VisionError("HESTIA_XAI_API_KEY not set for xai vision backend")
         b64 = base64.b64encode(data).decode()
-        style_line = (f" The studio's style preference is: {style.strip()}. Weight keeper_score "
-                      "and hero_potential toward frames that match it." if style.strip() else "")
-        prompt = (
-            "You are a photo-culling assistant. Return ONLY compact JSON with keys: "
-            "keywords (array of 3-6 lowercase strings), keeper_score (0-1 float), "
-            "hero_potential (0-1 float), shot_type (one word), alt_text (one sentence), "
-            "eyes_closed (0-1 float — likelihood a subject blinked or has closed eyes), "
-            "exposure (0-1 float — overall brightness: ~0 underexposed/dark, ~0.5 well-exposed, "
-            "~1 overexposed/blown), sharpness (0-1 float — 1 tack-sharp/in focus, 0 soft/blurred)."
-            + style_line
-        )
+        prompt = vision_prompt(style)
         body = {
             "model": self.settings.xai_model,
             "messages": [{
@@ -295,8 +315,15 @@ def analyze_gallery(
             counts[kw] = counts.get(kw, 0) + 1
     top_keywords = [kw for kw, _ in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:12]]
 
+    backend = getattr(provider, "backend", "mock")
+    if backend != "mock":
+        from .ai_usage import record_usage
+        record_usage(conn, tenant_id=tenant_id, module="vision", backend=backend,
+                     units=len(analyzed), gallery_id=gallery_id)
+        conn.commit()
+
     return {
-        "backend": getattr(provider, "backend", "mock"),
+        "backend": backend,
         "image_count": len(images),
         "analyzed": len(analyzed),
         "keeper_count": keeper_count,

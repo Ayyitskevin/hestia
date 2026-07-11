@@ -17,7 +17,7 @@ from .db import audit
 from .invoices import create_invoice, get_invoice_by_token, money, tax_for
 from .jobs import enqueue
 from .proofing import favorite_count
-from .sales import favorites_package
+from .sales import favorites_package, get_tenant_catalog
 
 
 def _resolve_bundle(
@@ -30,7 +30,9 @@ def _resolve_bundle(
     """The orderable item for ``sku`` — a stored offer bundle, or the live
     favorites package (whose price depends on the current favorite count)."""
     if sku == "favorites":
-        return favorites_package(favorite_count(conn, offer["gallery_id"], tenant_id=tenant_id))
+        fav_cents = get_tenant_catalog(conn, tenant_id)["favorite_print_cents"] if tenant_id else 1500
+        return favorites_package(favorite_count(conn, offer["gallery_id"], tenant_id=tenant_id),
+                                 price_per_print_cents=fav_cents)
     return next((b for b in offer.get("bundles", []) if b.get("sku") == sku), None)
 
 

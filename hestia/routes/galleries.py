@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse, Response
 
 from .. import messaging
+from ..ai_usage import gallery_usage_summary
 from ..albums import get_album_for_gallery
 from ..auth import context_from_session
 from ..campaigns import (
@@ -134,6 +135,7 @@ def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
         cull = cull_summary(conn, auth.tenant["id"], gallery_id)
         analysis = gallery_analysis_map(conn, gallery_id)
         hero_ids = hero_suggestions(conn, auth.tenant["id"], gallery_id)
+        ai_usage = gallery_usage_summary(conn, auth.tenant["id"], gallery_id)
     culled_ids = cull.get("culled_ids") or set()
     # How many flagged frames are still visible (the "apply" button only matters if > 0),
     # and how many are currently hidden (so the owner can see/undo the cull state).
@@ -153,7 +155,8 @@ def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
                   sales_opportunity=sales_opportunity, orders=orders, fulfillments=fulfillments,
                   cull=cull, cull_pending=cull_pending, hidden_count=hidden_count, analysis=analysis, hero_ids=hero_ids,
                   flagged_pending=flagged_pending, too_large=too_large,
-                  cover_id=gallery.get("cover_image_id"), delivery_link=delivery_link)
+                  cover_id=gallery.get("cover_image_id"), delivery_link=delivery_link,
+                  ai_usage=ai_usage)
 
 
 @router.get("/{gallery_id}/selects.txt")

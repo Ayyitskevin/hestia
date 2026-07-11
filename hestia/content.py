@@ -166,12 +166,16 @@ def generate_pack(
     keywords = project_keywords(conn, tenant["id"], project["id"])
     body = provider.generate(project=project, recipe=recipe, keywords=keywords)
     label = RECIPES[recipe][0]
+    backend = getattr(provider, "backend", "mock")
     cur = conn.execute(
         "INSERT INTO content_packs (tenant_id, project_id, title, recipe, backend, body_json) "
         "VALUES (?, ?, ?, ?, ?, ?)",
         (tenant["id"], project["id"], f"{label} — {project['name']}", recipe,
-         getattr(provider, "backend", "mock"), json.dumps(body)),
+         backend, json.dumps(body)),
     )
+    if backend != "mock":
+        from .ai_usage import record_usage
+        record_usage(conn, tenant_id=tenant["id"], module="content", backend=backend, units=1)
     conn.commit()
     return get_pack(conn, tenant["id"], cur.lastrowid)
 

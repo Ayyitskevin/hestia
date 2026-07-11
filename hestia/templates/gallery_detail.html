@@ -55,6 +55,10 @@
   <div class="label">Client offer ready · {{ offer.bundles|length }} bundles</div>
   <a class="offer-url" href="{{ offer_url }}" target="_blank">{{ offer_url }}</a>
   <p class="muted">Idempotent — re-process this gallery as often as you like; this link never changes.</p>
+  {% if ai_usage.total_units %}
+  <p class="hint">Live AI usage on this gallery: {{ ai_usage.total_units }} call{{ '' if ai_usage.total_units == 1 else 's' }}
+    ({% for row in ai_usage.by_module %}{{ row.module }} {{ row.units }}{% if not loop.last %}, {% endif %}{% endfor %}).</p>
+  {% endif %}
 </div>
 
 <div class="card stack" style="margin-top:18px">
