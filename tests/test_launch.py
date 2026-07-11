@@ -77,6 +77,9 @@ def test_beta_launch_kit_builds_invite_links_and_followup_queue(conn, settings):
                for link in kit["operations"]["links"])
     assert kit["founder_demo"]["target"] == len(FOUNDER_DEMO_STUDIOS)
     assert kit["founder_demo"]["ready"] == 0
+    assert "ai_usage" in kit and "total_units" in kit["ai_usage"]
+    assert kit["ai_subsidy"]["galleries_per_tenant"] == 1
+    assert any(item["label"] == "Live AI vision" for item in kit["operations"]["readiness"])
     assert any(link["url"] == "https://hestia.example/beta?source=beta&path=/beta"
                for link in kit["invite_links"])
     assert any(link["url"] == "https://hestia.example/signup?source=pricing&path=/pricing"

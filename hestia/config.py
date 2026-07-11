@@ -57,6 +57,11 @@ class Settings:
     # Product-photo variant renderer (marketplace-spec packshots)
     product_backend: str = "mock"  # mock | xai
 
+    # Beta AI subsidy — founder-hosted xAI credits for the first gallery per studio.
+    ai_subsidy_enabled: bool = True
+    ai_subsidy_galleries_per_tenant: int = 1
+    ai_subsidy_image_cap: int = 150
+
     # Storage (native gallery hosting). local = filesystem; s3 = S3/R2/MinIO.
     storage_backend: str = "local"  # local | s3
     media_dir: Path = field(default_factory=lambda: Path("./data/media"))
@@ -117,6 +122,9 @@ class Settings:
             album_backend=os.getenv("HESTIA_ALBUM_BACKEND", "mock"),
             content_backend=os.getenv("HESTIA_CONTENT_BACKEND", "mock"),
             product_backend=os.getenv("HESTIA_PRODUCT_BACKEND", "mock"),
+            ai_subsidy_enabled=_env_bool("HESTIA_AI_SUBSIDY_ENABLED", True),
+            ai_subsidy_galleries_per_tenant=int(os.getenv("HESTIA_AI_SUBSIDY_GALLERIES", "1")),
+            ai_subsidy_image_cap=int(os.getenv("HESTIA_AI_SUBSIDY_IMAGE_CAP", "150")),
             storage_backend=os.getenv("HESTIA_STORAGE_BACKEND", "local"),
             media_dir=media_dir,
             s3_bucket=os.getenv("HESTIA_S3_BUCKET", ""),

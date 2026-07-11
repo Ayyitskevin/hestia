@@ -126,6 +126,34 @@
   </div>
 </section>
 
+{% if kit.ai_usage %}
+<section class="card stack" style="margin-top:18px">
+  <h3>AI credit ledger</h3>
+  {% if kit.ai_usage.total_units %}
+    <p class="muted">{{ kit.ai_usage.total_units }} live provider call{{ '' if kit.ai_usage.total_units == 1 else 's' }}
+      across all studios · {{ kit.ai_usage.recent_30d_units }} in the last 30 days.
+      {% if kit.ai_subsidy.enabled %}
+      Subsidy: {{ kit.ai_subsidy.galleries_per_tenant }} live gallery per studio, max
+      {{ kit.ai_subsidy.image_cap }} images{% if kit.ai_subsidy.live %} (xAI active){% else %} (set xAI key){% endif %}.
+      {% endif %}</p>
+    {% if kit.ai_usage.top_tenants %}
+    <table>
+      <thead><tr><th>Studio</th><th>Slug</th><th>Calls</th></tr></thead>
+      <tbody>
+        {% for row in kit.ai_usage.top_tenants %}
+        <tr><td>{{ row.name }}</td><td class="mono">{{ row.slug }}</td><td>{{ row.units }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  {% else %}
+    <p class="muted">No live AI calls yet. Set <span class="mono">HESTIA_VISION_BACKEND=xai</span> and
+      <span class="mono">HESTIA_XAI_API_KEY</span>, then seed founder demos or process a beta gallery.</p>
+  {% endif %}
+  <p class="hint">Full breakdown: <a href="/admin/system">Admin → System</a></p>
+</section>
+{% endif %}
+
 <section class="card stack" style="margin-top:18px">
   <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">
     <div>

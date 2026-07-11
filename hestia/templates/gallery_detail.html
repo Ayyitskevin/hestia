@@ -58,6 +58,8 @@
   {% if ai_usage.total_units %}
   <p class="hint">Live AI usage on this gallery: {{ ai_usage.total_units }} call{{ '' if ai_usage.total_units == 1 else 's' }}
     ({% for row in ai_usage.by_module %}{{ row.module }} {{ row.units }}{% if not loop.last %}, {% endif %}{% endfor %}).</p>
+  {% elif ai_subsidy.active and ai_subsidy.message %}
+  <p class="hint">{{ ai_subsidy.message }}</p>
   {% endif %}
 </div>
 

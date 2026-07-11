@@ -6,6 +6,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
+from .ai_usage import operator_usage_summary
 from .config import Settings
 from .db import audit
 from .email import notify
@@ -35,6 +36,14 @@ def beta_launch_kit(conn: sqlite3.Connection, settings: Settings) -> dict:
         "invite_links": _invite_links(settings),
         "operations": _launch_operations(settings),
         "founder_demo": founder_demo_summary(conn, settings),
+        "ai_usage": operator_usage_summary(conn),
+        "ai_subsidy": {
+            "enabled": settings.ai_subsidy_enabled,
+            "galleries_per_tenant": settings.ai_subsidy_galleries_per_tenant,
+            "image_cap": settings.ai_subsidy_image_cap,
+            "vision_backend": settings.vision_backend,
+            "live": settings.vision_backend == "xai" and bool(settings.xai_api_key),
+        },
         "followups": _followups(studios, nudge_activity=nudge_activity),
         "cohort": _cohort_summary(studios, nudge_activity=nudge_activity),
         "interest": interest,
@@ -782,6 +791,7 @@ def _launch_operations(settings: Settings) -> dict:
     base = settings.public_url.rstrip("/") or "http://127.0.0.1:8500"
     hosted_domain = (settings.hosted_domain or "").strip()
     price = _single_price_label(settings)
+    xai_live = settings.vision_backend == "xai" and bool(settings.xai_api_key)
     return {
         "base_url": base,
         "hosted_domain": hosted_domain,
@@ -799,6 +809,12 @@ def _launch_operations(settings: Settings) -> dict:
                 "Point apex and wildcard DNS at the Caddy host.",
             ),
             _readiness(
+                "Self-serve signup",
+                "on" if settings.signup_enabled else "invite-only",
+                settings.signup_enabled,
+                "Enable for open beta; keep invite-only while hand-picking the first cohort.",
+            ),
+            _readiness(
                 "Billing",
                 settings.subscription_backend,
                 settings.subscription_backend == "stripe",
@@ -809,6 +825,18 @@ def _launch_operations(settings: Settings) -> dict:
                 settings.email_backend,
                 settings.email_backend == "smtp",
                 "Use SMTP so verification, invites, nudges, and digests leave the mock outbox.",
+            ),
+            _readiness(
+                "Live AI vision",
+                settings.vision_backend,
+                xai_live,
+                "Set HESTIA_VISION_BACKEND=xai and HESTIA_XAI_API_KEY for real culls on demo + beta galleries.",
+            ),
+            _readiness(
+                "AI subsidy",
+                f"{settings.ai_subsidy_galleries_per_tenant} gallery · {settings.ai_subsidy_image_cap} img cap",
+                settings.ai_subsidy_enabled,
+                "Founder-hosted credits: first gallery per studio uses live vision when configured.",
             ),
             _readiness(
                 "Plan contract",

@@ -197,6 +197,8 @@ gallery host, invoice app, AI helper, and retention spreadsheet just to look pro
 
 ## 9. After you ship this pack
 
+Follow [`launch-week1.md`](launch-week1.md) day-by-day. Quick version:
+
 1. Seed demos: **Admin → Launch → Seed founder demo studios**
 2. Set live AI (optional): `HESTIA_VISION_BACKEND=xai` + key in `.env`
 3. Set your prices: **Settings → Offers** (`/settings/offers`)

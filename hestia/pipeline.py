@@ -164,6 +164,11 @@ def execute_run(
             _begin(vision)
             _save_run(conn, run)
             try:
+                from .ai_usage import resolve_vision_provider
+                provider, subsidy_note = resolve_vision_provider(
+                    conn, settings, tenant_id=tenant["id"], gallery_id=gallery["id"],
+                    provider=provider,
+                )
                 summary = analyze_gallery(
                     conn, storage, settings, tenant_id=tenant["id"],
                     gallery_id=gallery["id"], hero_count=flags.hero_count, provider=provider,
@@ -171,10 +176,13 @@ def execute_run(
             except VisionError as exc:
                 _finish(vision, status="error", detail=str(exc))
                 return _fail(conn, run, f"vision failed: {exc}")
-            _finish(vision, status="done",
-                    detail=f"{summary['analyzed']} analyzed · {summary['keeper_count']} keepers · "
-                           f"{len(summary['hero_image_ids'])} heroes",
-                    output={"summary": summary})
+            detail = (
+                f"{summary['analyzed']} analyzed · {summary['keeper_count']} keepers · "
+                f"{len(summary['hero_image_ids'])} heroes"
+            )
+            if subsidy_note:
+                detail = f"{detail} · {subsidy_note}"
+            _finish(vision, status="done", detail=detail, output={"summary": summary})
             _save_run(conn, run)
 
         # 2. offer (idempotent) ----------------------------------------------

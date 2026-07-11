@@ -247,6 +247,11 @@ Everything runs without external keys by default.
 | Email | `HESTIA_EMAIL_BACKEND` | `mock` | `smtp` |
 | Print fulfillment | `HESTIA_FULFILLMENT_BACKEND` | `mock` | `lab` |
 
+Beta AI subsidy (when vision uses `xai`): `HESTIA_AI_SUBSIDY_ENABLED` (default `true`),
+`HESTIA_AI_SUBSIDY_GALLERIES` (default `1` live gallery per studio),
+`HESTIA_AI_SUBSIDY_IMAGE_CAP` (default `150` images). After the subsidy is used, new
+galleries fall back to mock cull — see [`docs/launch-week1.md`](docs/launch-week1.md).
+
 Real backends should fail loudly in logs and degrade to safe behavior where the
 product path allows it. Billing and payment secrets stay in untracked environment
 files.
