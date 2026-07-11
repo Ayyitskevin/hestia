@@ -34,6 +34,9 @@
 
   <div class="card stack">
     <h3 style="margin:0">Custom domain</h3>
+    {% if dns_message %}
+      <div class="alert {{ 'success' if custom_domain.status == 'verified' else 'info' }}">{{ dns_message }}</div>
+    {% endif %}
     {% if domain_error %}<div class="alert error">{{ domain_error }}</div>{% endif %}
     <form method="post" action="/settings/account/domain" class="stack">
       {% include "_csrf.html" %}
@@ -58,6 +61,12 @@
       </div>
       {% if custom_domain.url %}
       <a class="btn secondary" href="{{ custom_domain.url }}" target="_blank">Open custom domain</a>
+      {% endif %}
+      {% if custom_domain.domain and custom_domain.status != 'verified' %}
+      <form method="post" action="/settings/account/domain/check">
+        {% include "_csrf.html" %}
+        <button class="btn" type="submit">Check DNS &amp; verify</button>
+      </form>
       {% endif %}
     {% else %}
       <p class="hint">Leave blank to use the hosted Hestia subdomain.</p>

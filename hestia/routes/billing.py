@@ -6,7 +6,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from ..billing import PLANS, plan_status
-from ..domains import custom_domain_summary, set_custom_domain
+from ..domains import custom_domain_summary, set_custom_domain, verify_custom_domain_dns
 from ..subscriptions import (
     SubscriptionError,
     apply_plan,
@@ -37,7 +37,7 @@ def _hosted_url(settings, tenant: dict) -> str:
 
 
 @router.get("/settings/account")
-def account(request: Request):
+def account(request: Request, dns: str = ""):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
@@ -48,6 +48,14 @@ def account(request: Request):
         owner_email = _owner_email(conn, tenant["id"])
         custom_domain = custom_domain_summary(settings, tenant)
     studio_url = f"{settings.public_url.rstrip('/')}/studio/{tenant['slug']}"
+    dns_messages = {
+        "verified": "DNS verified — your custom domain is live.",
+        "no-match": "TXT record not found or it doesn't match the token yet. "
+                    "DNS can take a few minutes to propagate; try again shortly.",
+        "unavailable": "Couldn't run a DNS check from this host. "
+                       "Ask the operator to mark the domain verified.",
+        "unset": "Save a custom domain before checking DNS.",
+    }
     return render(
         request,
         "account.html",
@@ -61,6 +69,7 @@ def account(request: Request):
         hosted_url=_hosted_url(settings, tenant),
         custom_domain=custom_domain,
         domain_error="",
+        dns_message=dns_messages.get(dns, ""),
     )
 
 
@@ -96,9 +105,24 @@ def account_domain(request: Request, custom_domain: str = Form("")):
                 hosted_url=_hosted_url(settings, tenant),
                 custom_domain=custom_domain_summary(settings, tenant),
                 domain_error="Enter a valid domain you control, like photos.example.com.",
+                dns_message="",
                 status_code=400,
             )
     return RedirectResponse("/settings/account", status_code=303)
+
+
+@router.post("/settings/account/domain/check")
+def account_domain_check_dns(request: Request):
+    """Owner self-serve DNS check: look up the verification TXT record and flip
+    to verified on an exact token match, so pro studios don't wait on the founder
+    to click Mark verified. Banners the outcome via a query param."""
+    with db_conn(request) as conn:
+        auth = tenant_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        result = verify_custom_domain_dns(conn, auth.tenant["id"])
+        conn.commit()
+    return RedirectResponse(f"/settings/account?dns={result['status']}", status_code=303)
 
 
 @router.get("/settings/billing")

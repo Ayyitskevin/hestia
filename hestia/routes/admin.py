@@ -25,7 +25,7 @@ from ..auth import (
 from ..billing import PLANS, plan_status
 from ..csv_export import csv_response
 from ..db import applied_migrations, audit
-from ..domains import custom_domain_summary, set_custom_domain_status
+from ..domains import custom_domain_summary, set_custom_domain_status, verify_custom_domain_dns
 from ..founder_demo import seed_founder_demo_studios
 from ..integrity import tenant_integrity_overview
 from ..interest import send_beta_interest_invite, send_beta_invite_batch
@@ -390,11 +390,11 @@ def onboarding_submit(
 
 
 @router.get("/tenants/{tenant_id}")
-def tenant_detail(request: Request, tenant_id: str):
+def tenant_detail(request: Request, tenant_id: str, dns: str = ""):
     with db_conn(request) as conn:
         if not _is_admin(request, conn):
             return _redirect_login()
-    return _render_tenant_detail(request, tenant_id)
+    return _render_tenant_detail(request, tenant_id, dns_message=dns)
 
 
 @router.post("/tenants/{tenant_id}/shoot-type")
@@ -429,6 +429,23 @@ def verify_custom_domain(request: Request, tenant_id: str):
     return RedirectResponse(f"/admin/tenants/{tenant_id}", status_code=303)
 
 
+@router.post("/tenants/{tenant_id}/custom-domain/check-dns")
+def check_custom_domain_dns(request: Request, tenant_id: str):
+    """Founder-side DNS probe: same TXT check as the owner self-serve path, for
+    when the owner asks the founder to look. Banners the outcome on the detail page."""
+    with db_conn(request) as conn:
+        if not _is_admin(request, conn):
+            return _redirect_login()
+        result = verify_custom_domain_dns(conn, tenant_id)
+        if result["verified"]:
+            audit(conn, actor="admin", action="custom_domain.verified",
+                  tenant_id=tenant_id, detail="dns-check")
+        conn.commit()
+    return RedirectResponse(
+        f"/admin/tenants/{tenant_id}?dns={result['status']}", status_code=303
+    )
+
+
 @router.post("/tenants/{tenant_id}/custom-domain/pending")
 def reset_custom_domain(request: Request, tenant_id: str):
     with db_conn(request) as conn:
@@ -443,7 +460,8 @@ def reset_custom_domain(request: Request, tenant_id: str):
 
 
 def _render_tenant_detail(request: Request, tenant_id: str, *,
-                          new_api_key: str | None = None, created: bool = False):
+                          new_api_key: str | None = None, created: bool = False,
+                          dns_message: str = ""):
     settings = settings_of(request)
     with db_conn(request) as conn:
         auth = _admin_ctx(request, conn)
@@ -463,9 +481,16 @@ def _render_tenant_detail(request: Request, tenant_id: str, *,
             "SELECT prefix, created_at FROM tenant_api_keys WHERE tenant_id = ? ORDER BY id DESC",
             (tenant_id,),
         ).fetchall()
+    dns_labels = {
+        "verified": "DNS verified — custom domain is live.",
+        "no-match": "TXT record not found or doesn't match the token yet.",
+        "unavailable": "No DNS resolver (dig/nslookup) on this host; use Mark verified.",
+        "unset": "No custom domain to verify.",
+    }
     return render(request, "admin/tenant_detail.html", auth=auth, tenant=tenant, flags=flags,
                   plan=plan, plans=PLANS, new_api_key=new_api_key, created=created,
                   api_keys=[dict(r) for r in api_keys],
                   custom_domain=custom_domain_summary(settings, tenant),
                   conversion=conversion,
-                  conversion_timeline=conversion_timeline)
+                  conversion_timeline=conversion_timeline,
+                  dns_message=dns_labels.get(dns_message, ""))

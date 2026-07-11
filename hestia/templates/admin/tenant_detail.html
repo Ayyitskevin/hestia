@@ -70,6 +70,10 @@
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap">
         {% if custom_domain.status != 'verified' %}
+        <form method="post" action="/admin/tenants/{{ tenant.id }}/custom-domain/check-dns">
+          {% include "_csrf.html" %}
+          <button class="btn" type="submit">Check DNS</button>
+        </form>
         <form method="post" action="/admin/tenants/{{ tenant.id }}/custom-domain/verify">
           {% include "_csrf.html" %}
           <button class="btn" type="submit">Mark verified</button>
@@ -81,6 +85,9 @@
         </form>
         {% endif %}
       </div>
+      {% if dns_message %}
+      <p class="muted">{{ dns_message }}</p>
+      {% endif %}
     {% else %}
       <p class="muted">No custom domain requested.</p>
       <p class="hint">The studio owner can add one at <span class="mono">/settings/account</span>.</p>
