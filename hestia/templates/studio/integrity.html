@@ -34,7 +34,9 @@
   </div>
   <div class="card stack">
     <h3>Repair</h3>
-    {% if report.repairable_total %}
+    {% if not auth.is_owner %}
+      <p class="muted">Repair is owner-only — ask the account holder to clear repairable issues.</p>
+    {% elif report.repairable_total %}
       <p class="muted">This will not delete clients, projects, invoices, galleries, albums, or images.</p>
       <form method="post" action="/settings/integrity/repair">
         {% include "_csrf.html" %}

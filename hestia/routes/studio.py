@@ -31,7 +31,7 @@ from ..tenants import (
     set_vision_style,
 )
 from ..testimonials import featured_testimonials
-from .deps import db_conn, render, settings_of, tenant_user
+from .deps import db_conn, owner_only, render, settings_of, tenant_user
 
 router = APIRouter()
 
@@ -163,8 +163,8 @@ def ai_key_save(request: Request, xai_api_key: str = Form("")):
     """Store (or clear, when blank) the studio's own xAI key for live vision."""
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
-        if not auth:
-            return RedirectResponse("/login", status_code=303)
+        if forbid := owner_only(auth):
+            return forbid
         settings = settings_of(request)
         key = (xai_api_key or "").strip()
         if key:
@@ -179,8 +179,8 @@ def ai_key_save(request: Request, xai_api_key: str = Form("")):
 def ai_key_clear(request: Request):
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
-        if not auth:
-            return RedirectResponse("/login", status_code=303)
+        if forbid := owner_only(auth):
+            return forbid
         clear_tenant_ai_key(conn, auth.tenant["id"])
     return RedirectResponse("/settings/site", status_code=303)
 
@@ -247,8 +247,8 @@ def integrity_settings(request: Request):
 def integrity_repair(request: Request):
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
-        if not auth:
-            return RedirectResponse("/login", status_code=303)
+        if forbid := owner_only(auth):
+            return forbid
         result = repair_integrity(conn, auth.tenant["id"])
     return render(request, "studio/integrity.html", auth=auth, report=result["report"], repaired=result)
 

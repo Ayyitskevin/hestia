@@ -88,3 +88,29 @@ def test_cockpit_counts_past_due(conn, settings):
     summary = trial_conversion_cockpit(conn, settings)["summary"]
     assert summary["past_due"] == 1
     assert summary["active"] == 1
+
+
+def test_failed_dunning_does_not_start_cooldown(conn, settings, monkeypatch):
+    """A failed SMTP send must not write the dunning audit row — otherwise the
+    studio goes silent for the cooldown with a still-broken card and no email."""
+    t = _studio(conn, name="Silent Fail Studio", email="silent@x.test",
+                status="past_due")
+    monkeypatch.setattr("hestia.launch.actions.notify",
+                        lambda *a, **k: "error: smtp down")
+    assert send_past_due_dunning(conn, settings) == 0
+    conn.commit()
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE action = ? AND tenant_id = ?",
+        (DUNNING_ACTION, t["id"]),
+    ).fetchone()
+    assert row["n"] == 0
+    monkeypatch.setattr("hestia.launch.actions.notify",
+                        lambda *a, **k: "recorded")
+    assert send_past_due_dunning(conn, settings) == 1
+    conn.commit()
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE action = ? AND tenant_id = ?",
+        (DUNNING_ACTION, t["id"]),
+    ).fetchone()
+    assert row["n"] == 1
+    # Failed send left no cooldown — a recovered backend can still dunning-email.

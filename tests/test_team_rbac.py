@@ -136,6 +136,22 @@ def test_admin_cannot_change_plan(settings):
     assert "forbidden" in r.headers["location"]
 
 
+def test_admin_cannot_set_ai_key_or_repair_integrity(settings):
+    """BYOK keys and integrity repair are account-holder surface — same gate as billing."""
+    c, _ = _owner_client(settings)
+    _invite_admin(c)
+    admin = CSRFClient(c.app)
+    _login(admin, ADMIN_EMAIL, ADMIN_PW)
+    for url, data in (
+        ("/settings/ai-key", {"xai_api_key": "xai-sneaky-key"}),
+        ("/settings/ai-key/clear", {}),
+        ("/settings/integrity/repair", {}),
+    ):
+        r = admin.post(url, data=data, follow_redirects=False)
+        assert r.status_code == 303, url
+        assert "forbidden" in r.headers["location"], url
+
+
 def test_owner_can_access_billing(settings):
     c, _ = _owner_client(settings)
     assert c.get("/settings/billing", follow_redirects=False).status_code == 200

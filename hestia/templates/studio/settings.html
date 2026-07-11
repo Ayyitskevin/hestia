@@ -8,8 +8,9 @@
 </div>
 
 {% if request.query_params.get('forbidden') %}
-  <div class="alert error">That's owner-only — billing, the plan, and team management are
-    reserved for the account holder. Ask the studio owner to make the change.</div>
+  <div class="alert error">That's owner-only — billing, the plan, team management,
+    AI keys, and data repair are reserved for the account holder. Ask the studio
+    owner to make the change.</div>
 {% endif %}
 
 <div class="card stack">
@@ -120,7 +121,7 @@
   {% endif %}
 </div>
 
-{% if vision_live %}
+{% if vision_live and auth.is_owner %}
 <div class="card stack" style="margin-top:18px">
   <h3>Live AI vision — your own xAI key</h3>
   <p class="muted">Your plan includes one founder-hosted live AI gallery process. Once that's

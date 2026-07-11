@@ -159,6 +159,7 @@ def _seed_showcase_gallery(conn: sqlite3.Connection, storage, settings: Settings
     the founder staged it."""
     import io
 
+    from .ai_usage import resolve_vision_provider
     from .albums import enable_album_review, generate_album
     from .delivery import enable_delivery
     from .galleries import add_image, apply_cull, create_gallery, publish_gallery
@@ -177,8 +178,11 @@ def _seed_showcase_gallery(conn: sqlite3.Connection, storage, settings: Settings
         add_image(conn, storage, tenant_id=tenant_id, gallery_id=gallery["id"],
                   filename=filename, fileobj=io.BytesIO(_demo_png(rgb)),
                   content_type="image/png")
+    provider, _note = resolve_vision_provider(
+        conn, settings, tenant_id=tenant_id, gallery_id=gallery["id"],
+    )
     summary = analyze_gallery(conn, storage, settings, tenant_id=tenant_id,
-                              gallery_id=gallery["id"])
+                              gallery_id=gallery["id"], provider=provider)
     hidden = apply_cull(conn, tenant_id, gallery["id"])
     publish_gallery(conn, tenant_id, gallery["id"])
     enable_delivery(conn, tenant_id, gallery["id"])

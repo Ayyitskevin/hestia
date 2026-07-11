@@ -26,6 +26,7 @@ from ..billing import PLANS, plan_status
 from ..csv_export import csv_response
 from ..db import applied_migrations, audit
 from ..domains import custom_domain_summary, set_custom_domain_status, verify_custom_domain_dns
+from ..email import delivery_ok
 from ..founder_demo import seed_founder_demo_studios
 from ..integrity import tenant_integrity_overview
 from ..interest import send_beta_interest_invite, send_beta_invite_batch
@@ -212,7 +213,7 @@ def launch_nudge(request: Request, tenant_id: str):
                 tenant_id=tenant_id,
                 detail=f"cooldown:{result['owner_email']}",
             )
-        elif result:
+        elif result and delivery_ok(result.get("email_status")):
             nudge_status = "sent"
             audit(
                 conn,
@@ -220,6 +221,15 @@ def launch_nudge(request: Request, tenant_id: str):
                 action="launch.nudge_sent",
                 tenant_id=tenant_id,
                 detail=result["owner_email"],
+            )
+        elif result:
+            nudge_status = "failed"
+            audit(
+                conn,
+                actor="admin",
+                action="launch.nudge_failed",
+                tenant_id=tenant_id,
+                detail=f"{result.get('owner_email')}:{result.get('email_status')}",
             )
     return RedirectResponse(f"/admin/launch?nudge={nudge_status}", status_code=303)
 

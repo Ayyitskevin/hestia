@@ -25,9 +25,10 @@ SESSION_COOKIE = "hestia_session"
 SESSION_TTL = timedelta(hours=12)
 
 # Per-tenant roles. ``owner`` is the account holder — billing, the plan, the
-# danger zone, and managing other admins. ``admin`` is a secondary studio admin
-# who can run the studio (galleries, clients, pipeline, non-billing settings)
-# but not change the plan or manage the team. Enforced at the route seam.
+# danger zone (integrity repair), bring-your-own AI keys, and managing other
+# admins. ``admin`` is a secondary studio admin who can run the studio
+# (galleries, clients, pipeline, non-billing settings) but not change the plan
+# or manage the team. Enforced at the route seam.
 OWNER = "owner"
 ADMIN = "admin"
 ROLES = (OWNER, ADMIN)

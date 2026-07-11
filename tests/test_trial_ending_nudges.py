@@ -69,3 +69,33 @@ def test_manual_nudge_blocks_the_sweep(conn, settings):
     conn.commit()
     assert len([e for e in list_emails(conn, t["id"])
                 if e["to_addr"] == "clicked@x.test"]) == 1
+
+
+def test_failed_nudge_does_not_start_cooldown(conn, settings, monkeypatch):
+    """SMTP failure must not write launch.nudge_sent — otherwise the studio is
+    silenced for the whole cooldown window without ever getting the email."""
+    from hestia.launch import send_beta_launch_nudge
+
+    t = _trialing_studio(conn, name="Broken Mail Studio", email="broken@x.test",
+                         days_into_trial=13)
+    monkeypatch.setattr("hestia.launch.actions.notify",
+                        lambda *a, **k: "error: smtp down")
+    result = send_beta_launch_nudge(conn, settings, t["id"])
+    assert result["email_status"].startswith("error:")
+    assert send_trial_ending_nudges(conn, settings) == 0       # truthy-but-failed
+    conn.commit()
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'launch.nudge_sent' "
+        "AND tenant_id = ?", (t["id"],),
+    ).fetchone()
+    assert row["n"] == 0
+    # After mail recovers, the next sweep should still be able to send.
+    monkeypatch.setattr("hestia.launch.actions.notify",
+                        lambda *a, **k: "recorded")
+    assert send_trial_ending_nudges(conn, settings) == 1
+    conn.commit()
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'launch.nudge_sent' "
+        "AND tenant_id = ?", (t["id"],),
+    ).fetchone()
+    assert row["n"] == 1
