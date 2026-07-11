@@ -12,6 +12,7 @@ which is the whole point of consolidating the suite into one app.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import sqlite3
 from dataclasses import dataclass, field
@@ -26,6 +27,14 @@ SHOT_TYPES = ["portrait", "candid", "detail", "wide", "group", "landscape", "sti
 BLINK_THRESHOLD = 0.85
 KEEPER_THRESHOLD = 0.7
 
+# Perceptual near-duplicate clustering. Two burst frames that look almost
+# identical (same moment, fractional exposure/pose differences) rarely hash to
+# the *same* 64-bit aHash, so we cluster by Hamming distance instead of exact
+# equality: frames differing in ≤ this many bits are treated as one moment and
+# culled to the best keeper. 5 bits on a 64-bit aHash catches a typical burst
+# while keeping genuinely different compositions apart.
+DUP_HAMMING_THRESHOLD = 5
+
 # Per-frame technical sub-scores feed owner-facing advisory flags only (never auto-cull):
 # exposure is overall brightness (0 dark .. 1 blown), sharpness is focus (0 soft .. 1 sharp).
 SHARP_THRESHOLD = 0.40    # softer than this → "soft" (likely out of focus / motion-blurred)
@@ -34,11 +43,124 @@ BRIGHT_THRESHOLD = 0.90   # brighter than this → "bright" (overexposed / blown
 
 
 def content_dup_key(data: bytes) -> str:
-    """A content signature for duplicate detection — byte-identical frames (the
-    same file uploaded twice, a re-export) share a key. Computed from the image
-    content, so distinct shots never falsely group. (Perceptual near-dup of burst
-    frames is a vision-model enhancement; the mock floor is exact duplicates.)"""
+    """A content signature for *exact* duplicate detection — byte-identical frames
+    (the same file uploaded twice, a re-export) share a key. Computed from the
+    image content, so distinct shots never falsely group. This is the mock floor
+    used when Pillow isn't available; with Pillow, :func:`perceptual_hash` drives
+    near-duplicate clustering instead (see :func:`cluster_duplicate_ids`)."""
     return "d_" + hashlib.sha256(data).hexdigest()[:16]
+
+
+def perceptual_hash(data: bytes) -> int | None:
+    """A 64-bit average hash (aHash) of a decoded image for near-duplicate detection.
+
+    Resize to 8×8 grayscale, threshold each pixel against the mean → a 64-bit
+    signature that's stable across minor exposure/JPEG/pose differences (a burst)
+    but distinct across genuinely different compositions. Returns ``None`` when
+    Pillow is unavailable or the bytes don't decode as an image, so the caller
+    degrades to the exact-content floor (:func:`content_dup_key`) — never raises.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            gray = im.convert("L").resize((8, 8), Image.Resampling.LANCZOS)
+            pixels = list(gray.getdata())
+    except Exception:  # noqa: BLE001 - undecodable bytes are "not an image", not a crash
+        return None
+    avg = sum(pixels) / 64.0
+    bits = 0
+    for i, p in enumerate(pixels):
+        if p >= avg:
+            bits |= 1 << (63 - i)
+    return bits
+
+
+def _phash_hex(h: int) -> str:
+    return "p_" + f"{h:016x}"
+
+
+def _phash_from_hex(s: str) -> int | None:
+    """Inverse of :func:`_phash_hex`; ``None`` for non-perceptual keys."""
+    if not s or not s.startswith("p_"):
+        return None
+    try:
+        return int(s[2:], 16)
+    except ValueError:
+        return None
+
+
+def _hamming_distance(a: int, b: int) -> int:
+    return (a ^ b).bit_count()
+
+
+def _hamming_duplicate_ids(
+    items: list[tuple[int, int, float]], threshold: int = DUP_HAMMING_THRESHOLD,
+) -> set[int]:
+    """Group ``items`` (image_id, phash, keeper_score) by Hamming distance ≤
+    threshold (union-find), keep the best keeper in each cluster, return the rest
+    as duplicate ids. O(n²) on the perceptual set, which is bounded by gallery
+    size — fine for hundreds-to-low-thousands of frames."""
+    n = len(items)
+    parent = list(range(n))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if _hamming_distance(items[i][1], items[j][1]) <= threshold:
+                union(i, j)
+    clusters: dict[int, list[int]] = {}
+    for i in range(n):
+        clusters.setdefault(find(i), []).append(i)
+    dup_ids: set[int] = set()
+    for members in clusters.values():
+        if len(members) < 2:
+            continue
+        best = max(members, key=lambda i: items[i][2])
+        dup_ids.update(items[i][0] for i in members if i != best)
+    return dup_ids
+
+
+def cluster_duplicate_ids(
+    rows, threshold: int = DUP_HAMMING_THRESHOLD,
+) -> set[int]:
+    """The shared near-duplicate cull: given ``(image_id, dup_key, keeper_score)``
+    tuples, return the ids of the non-best frame in each duplicate cluster.
+
+    A perceptual key (``p_<hex>``) clusters by Hamming distance ≤ threshold, so a
+    burst of near-identical frames collapses to its single best keeper. A content
+    key (``d_<sha>`` — the Pillow-absent floor) clusters by exact equality. Both
+    the live run (:func:`analyze_gallery`) and the persisted recompute
+    (:func:`cull_summary`) go through here, so the owner view matches what the
+    pipeline culled."""
+    perceptual: list[tuple[int, int, float]] = []
+    exact: dict[str, list[tuple[int, float]]] = {}
+    for image_id, dup_key, keeper in rows:
+        ph = _phash_from_hex(dup_key)
+        if ph is not None:
+            perceptual.append((image_id, ph, keeper))
+        elif dup_key:
+            exact.setdefault(dup_key, []).append((image_id, keeper))
+    dup_ids: set[int] = set()
+    for group in exact.values():
+        if len(group) < 2:
+            continue
+        best = max(group, key=lambda p: p[1])
+        dup_ids.update(iid for iid, _ in group if iid != best[0])
+    dup_ids |= _hamming_duplicate_ids(perceptual, threshold)
+    return dup_ids
 
 _KEYWORD_PALETTE = [
     "golden-hour", "candid", "portrait", "detail", "bokeh", "monochrome",
@@ -267,7 +389,8 @@ def analyze_gallery(
     for img in images:
         data = storage.open(img["storage_key"])
         result = provider.analyze(filename=img["filename"], data=data, style=style)
-        img_dup_key = content_dup_key(data)
+        ph = perceptual_hash(data)
+        img_dup_key = _phash_hex(ph) if ph is not None else content_dup_key(data)
         dup_keys[img["id"]] = img_dup_key
         conn.execute(
             """
@@ -290,17 +413,11 @@ def analyze_gallery(
         analyzed.append((img, result))
     conn.commit()
 
-    # Cull: in each duplicate cluster keep only the best keeper; flag likely blinks.
-    # Heroes are then drawn only from the kept frames — never a dup or a blink.
-    clusters: dict[str, list] = {}
-    for img, r in analyzed:
-        clusters.setdefault(dup_keys[img["id"]], []).append((img, r))
-    duplicate_ids: set[int] = set()
-    for cluster in clusters.values():
-        if len(cluster) < 2:
-            continue
-        best = max(cluster, key=lambda pair: pair[1].keeper_score)
-        duplicate_ids.update(img["id"] for img, _ in cluster if img["id"] != best[0]["id"])
+    # Cull: near-duplicate clusters (perceptual Hamming, or exact-content floor)
+    # keep only the best keeper; flag likely blinks. Heroes are then drawn only
+    # from the kept frames — never a dup or a blink.
+    dup_rows = [(img["id"], dup_keys[img["id"]], r.keeper_score) for img, r in analyzed]
+    duplicate_ids = cluster_duplicate_ids(dup_rows)
     blink_ids = {img["id"] for img, r in analyzed if r.eyes_closed >= BLINK_THRESHOLD}
     culled_ids = duplicate_ids | blink_ids
 
@@ -511,22 +628,17 @@ def flagged_image_ids(conn: sqlite3.Connection, tenant_id: str, gallery_id: int)
 
 def cull_summary(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> dict:
     """Recompute the cull picture from persisted analyses, for the owner view —
-    which frames are near-duplicates, likely blinks, or otherwise culled."""
+    which frames are near-duplicates, likely blinks, or otherwise culled. Uses
+    the same :func:`cluster_duplicate_ids` as the live run so the owner view
+    matches what the pipeline culled."""
     rows = conn.execute(
         "SELECT image_id, keeper_score, eyes_closed, dup_key FROM image_analyses "
         "WHERE tenant_id = ? AND gallery_id = ?",
         (tenant_id, gallery_id),
     ).fetchall()
-    clusters: dict[str, list] = {}
-    for r in rows:
-        if r["dup_key"]:
-            clusters.setdefault(r["dup_key"], []).append(r)
-    duplicate_ids: set[int] = set()
-    for cluster in clusters.values():
-        if len(cluster) < 2:
-            continue
-        best = max(cluster, key=lambda x: x["keeper_score"] or 0)
-        duplicate_ids.update(r["image_id"] for r in cluster if r["image_id"] != best["image_id"])
+    duplicate_ids = cluster_duplicate_ids(
+        [(r["image_id"], r["dup_key"] or "", r["keeper_score"] or 0) for r in rows]
+    )
     blink_ids = {r["image_id"] for r in rows if (r["eyes_closed"] or 0) >= BLINK_THRESHOLD}
     return {
         "analyzed": len(rows),
