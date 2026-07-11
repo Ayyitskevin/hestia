@@ -6,8 +6,9 @@ public token is created once and reused on every re-run, so re-processing a
 gallery never produces a second client link — the exact gap the research found in
 the real Plutus (`storefront.py` INSERTs a fresh token every call).
 
-Stripe checkout is a Phase 1 scaffold (see :mod:`hestia.billing`); the offer page
-renders and shares today without it.
+Stripe checkout is implemented (see :mod:`hestia.payments` and
+:mod:`hestia.routes.webhooks`); the offer page renders and shares today, and
+collects real money when the Stripe backend is configured.
 """
 
 from __future__ import annotations

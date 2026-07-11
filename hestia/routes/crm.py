@@ -11,7 +11,6 @@ from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse, Response
 
 from .. import messaging
-from ..auth import context_from_session
 from ..checklists import apply_checklist
 from ..content import list_packs, recipes_for
 from ..contracts import list_contracts
@@ -51,16 +50,11 @@ from ..questionnaires import list_questionnaires
 from ..referral_rewards import credit_balance, list_credits, redeem_credit
 from ..referrals import referral_code_for, referral_link
 from ..scheduler import list_appointments
-from .deps import db_conn, render, settings_of, storage_of
+from .deps import db_conn, render, settings_of, storage_of, tenant_user
 
 router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 # ── Search ──────────────────────────────────────────────────────────────────
@@ -69,7 +63,7 @@ def _user(request: Request, conn):
 @router.get("/search")
 def search(request: Request, q: str = ""):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         results = search_crm(conn, auth.tenant["id"], q)
@@ -83,7 +77,7 @@ def search(request: Request, q: str = ""):
 @router.get("/clients")
 def clients_list(request: Request, tag: str = ""):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         clients = list_clients(conn, auth.tenant["id"], tag=tag or None)
@@ -96,7 +90,7 @@ def clients_export(request: Request, tag: str = ""):
     """Export the client book as CSV (name, contact, tags, projects, lifetime value),
     honoring the active tag filter — e.g. export just the 'vip' clients."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         clients = list_clients(conn, auth.tenant["id"], tag=tag or None)
@@ -172,7 +166,7 @@ def _parse_client_csv(text: str) -> list[dict]:
 @router.get("/clients/import")
 def clients_import_form(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
     return render(request, "crm/clients_import.html", auth=auth, summary=None, error=None)
@@ -183,7 +177,7 @@ async def clients_import(request: Request, file: UploadFile = File(...)):
     # Authenticate BEFORE touching the body — an anonymous (cookieless) POST is
     # CSRF-exempt, so reading/parsing first would let it force an unbounded read.
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         raw = await file.read()
@@ -213,7 +207,7 @@ async def clients_import(request: Request, file: UploadFile = File(...)):
 @router.get("/clients/new")
 def client_new(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
     return render(request, "crm/client_new.html", auth=auth)
@@ -223,7 +217,7 @@ def client_new(request: Request):
 def client_create(request: Request, name: str = Form(...), email: str = Form(""),
                   phone: str = Form(""), notes: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         client = create_client(conn, tenant_id=auth.tenant["id"], name=name,
@@ -241,7 +235,7 @@ def clients_broadcast_compose(request: Request, tag: str = ""):
     filled per recipient on send."""
     seg = tag.strip()
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         if not seg:                                  # broadcast is always to a chosen segment
@@ -262,7 +256,7 @@ def clients_broadcast_send(request: Request, tag: str = Form(""),
     seg = tag.strip()
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         sent = 0
@@ -286,7 +280,7 @@ def clients_broadcast_send(request: Request, tag: str = Form(""),
 @router.get("/clients/{client_id}")
 def client_detail(request: Request, client_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         client = get_client(conn, auth.tenant["id"], client_id)
@@ -319,7 +313,7 @@ def client_statement_page(request: Request, client_id: int):
     """A printable account statement — everything billed to the client and what's
     outstanding. Read-only; the studio shares or prints it for the client."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         client = get_client(conn, auth.tenant["id"], client_id)
@@ -339,7 +333,7 @@ def client_email_compose(request: Request, client_id: int, template: str = "inqu
     signature, and record all stay inside Hestia."""
     kind = template if messaging.is_general_template(template) else "inquiry_reply"
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         client = get_client(conn, auth.tenant["id"], client_id)
@@ -359,7 +353,7 @@ def client_email_send(request: Request, client_id: int,
                       subject: str = Form(""), body: str = Form("")):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         client = get_client(conn, auth.tenant["id"], client_id)
@@ -378,7 +372,7 @@ def client_email_send(request: Request, client_id: int,
 @router.post("/clients/{client_id}/tags")
 def client_add_tag(request: Request, client_id: int, tag: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         add_client_tag(conn, auth.tenant["id"], client_id, tag)
@@ -388,7 +382,7 @@ def client_add_tag(request: Request, client_id: int, tag: str = Form("")):
 @router.post("/clients/{client_id}/tags/delete")
 def client_remove_tag(request: Request, client_id: int, tag: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         remove_client_tag(conn, auth.tenant["id"], client_id, tag)
@@ -398,7 +392,7 @@ def client_remove_tag(request: Request, client_id: int, tag: str = Form("")):
 @router.post("/clients/{client_id}/portal")
 def client_portal_enable(request: Request, client_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         token = enable_portal(conn, auth.tenant["id"], client_id)
@@ -411,7 +405,7 @@ def client_portal_enable(request: Request, client_id: int):
 @router.post("/clients/{client_id}/portal/regenerate")
 def client_portal_regenerate(request: Request, client_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         token = regenerate_portal_token(conn, auth.tenant["id"], client_id)
@@ -424,7 +418,7 @@ def client_portal_regenerate(request: Request, client_id: int):
 @router.post("/clients/{client_id}/credits/{credit_id}/redeem")
 def client_credit_redeem(request: Request, client_id: int, credit_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         if redeem_credit(conn, auth.tenant["id"], credit_id):
@@ -439,7 +433,7 @@ def client_credit_redeem(request: Request, client_id: int, credit_id: int):
 @router.get("/projects")
 def projects_list(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         projects = list_projects(conn, auth.tenant["id"])
@@ -450,7 +444,7 @@ def projects_list(request: Request):
 @router.get("/pipeline")
 def pipeline(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         stages = project_pipeline(conn, auth.tenant["id"])
@@ -460,7 +454,7 @@ def pipeline(request: Request):
 @router.get("/projects/new")
 def project_new(request: Request, client_id: int | None = None):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         clients = list_clients(conn, auth.tenant["id"])
@@ -473,7 +467,7 @@ def project_create(request: Request, name: str = Form(...), client_id: str = For
                    shoot_type: str = Form("other"), status: str = Form("lead"),
                    event_date: str = Form(""), notes: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         cid = int(client_id) if client_id.strip().isdigit() else None
@@ -486,7 +480,7 @@ def project_create(request: Request, name: str = Form(...), client_id: str = For
 @router.get("/projects/{project_id}")
 def project_detail(request: Request, project_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         project = get_project(conn, auth.tenant["id"], project_id)
@@ -516,7 +510,7 @@ def project_detail(request: Request, project_id: int):
 @router.post("/projects/{project_id}/status")
 def project_status(request: Request, project_id: int, status: str = Form(...)):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_project_status(conn, auth.tenant["id"], project_id, status)
@@ -526,7 +520,7 @@ def project_status(request: Request, project_id: int, status: str = Form(...)):
 @router.post("/projects/{project_id}/tasks")
 def project_task_add(request: Request, project_id: int, label: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         if get_project(conn, auth.tenant["id"], project_id):   # only on a project you own
@@ -537,7 +531,7 @@ def project_task_add(request: Request, project_id: int, label: str = Form("")):
 @router.post("/projects/{project_id}/tasks/{task_id}/toggle")
 def project_task_toggle(request: Request, project_id: int, task_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         toggle_task(conn, auth.tenant["id"], task_id, project_id=project_id)
@@ -547,7 +541,7 @@ def project_task_toggle(request: Request, project_id: int, task_id: int):
 @router.post("/projects/{project_id}/tasks/{task_id}/delete")
 def project_task_delete(request: Request, project_id: int, task_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_task(conn, auth.tenant["id"], task_id, project_id=project_id)
@@ -559,7 +553,7 @@ async def project_file_upload(request: Request, project_id: int, file: UploadFil
     """Attach a reference file to a project (owner-only)."""
     storage = storage_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         if file.filename:
@@ -575,7 +569,7 @@ def project_file_download(request: Request, project_id: int, file_id: int):
     origin), and only one this studio owns."""
     storage = storage_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         f = get_project_file(conn, auth.tenant["id"], file_id)
@@ -595,7 +589,7 @@ def project_file_download(request: Request, project_id: int, file_id: int):
 def project_file_delete(request: Request, project_id: int, file_id: int):
     storage = storage_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_project_file(conn, storage, auth.tenant["id"], file_id, project_id=project_id)
@@ -607,7 +601,7 @@ def project_apply_checklist(request: Request, project_id: int):
     """Copy the studio's checklist template for this project's shoot type onto its tasks.
     Idempotent — tasks already present are skipped."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         if get_project(conn, auth.tenant["id"], project_id):   # only on a project you own

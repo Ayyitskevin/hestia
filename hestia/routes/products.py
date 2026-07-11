@@ -5,26 +5,20 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..galleries import get_gallery, get_image
 from ..products import generate_product_set, get_product_set
 from ..tenants import get_tenant
-from .deps import db_conn, render, settings_of, storage_of
+from .deps import db_conn, render, settings_of, storage_of, tenant_user
 
 router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 @router.post("/galleries/{gallery_id}/products")
 def products_generate(request: Request, gallery_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         gallery = get_gallery(conn, auth.tenant["id"], gallery_id)
@@ -43,7 +37,7 @@ def products_generate(request: Request, gallery_id: int):
 def products_view(request: Request, set_id: int):
     storage = storage_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         pset = get_product_set(conn, auth.tenant["id"], set_id)

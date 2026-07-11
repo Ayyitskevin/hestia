@@ -8,7 +8,6 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from .. import messaging
-from ..auth import context_from_session
 from ..booking import list_booking_types
 from ..dashboard import set_digest_enabled
 from ..db import list_audit
@@ -29,16 +28,11 @@ from ..tenants import (
     set_vision_style,
 )
 from ..testimonials import featured_testimonials
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _studio_inbox(conn, tenant_id: str, profile: dict) -> str:
@@ -136,7 +130,7 @@ def public_inquire(request: Request, slug: str, name: str = Form(...), email: st
 @router.get("/settings/site")
 def site_settings(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
@@ -149,7 +143,7 @@ def site_settings(request: Request):
 @router.post("/settings/vision-style")
 def vision_style_save(request: Request, vision_style: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
@@ -162,7 +156,7 @@ def vision_style_save(request: Request, vision_style: str = Form("")):
 def site_settings_save(request: Request, headline: str = Form(""), about: str = Form(""),
                        contact_email: str = Form(""), published: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         upsert_profile(conn, tenant_id=auth.tenant["id"], headline=headline, about=about,
@@ -174,7 +168,7 @@ def site_settings_save(request: Request, headline: str = Form(""), about: str = 
 def digest_settings_save(request: Request, digest_enabled: str = Form("")):
     """Toggle the weekly owner digest. An unchecked box submits nothing → disabled."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_digest_enabled(conn, auth.tenant["id"], bool(digest_enabled))
@@ -184,7 +178,7 @@ def digest_settings_save(request: Request, digest_enabled: str = Form("")):
 @router.post("/settings/tax")
 def tax_settings_save(request: Request, tax_rate: str = Form("0")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         try:
@@ -199,7 +193,7 @@ def tax_settings_save(request: Request, tax_rate: str = Form("0")):
 @router.post("/settings/signature")
 def signature_save(request: Request, email_signature: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_email_signature(conn, auth.tenant["id"], email_signature)
@@ -209,7 +203,7 @@ def signature_save(request: Request, email_signature: str = Form("")):
 @router.get("/settings/integrity")
 def integrity_settings(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         report = integrity_report(conn, auth.tenant["id"])
@@ -219,7 +213,7 @@ def integrity_settings(request: Request):
 @router.post("/settings/integrity/repair")
 def integrity_repair(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         result = repair_integrity(conn, auth.tenant["id"])
@@ -229,7 +223,7 @@ def integrity_repair(request: Request):
 @router.get("/settings/messages")
 def message_templates(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         templates = messaging.list_templates(conn, auth.tenant["id"],
@@ -242,7 +236,7 @@ def message_template_save(request: Request, kind: str, subject: str = Form(""),
                           body: str = Form("")):
     """Save a studio's custom email template; blanking both fields resets to default."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         messaging.set_template(conn, auth.tenant["id"], kind, subject=subject, body=body)
@@ -253,7 +247,7 @@ def message_template_save(request: Request, kind: str, subject: str = Form(""),
 def outbox(request: Request):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         emails = list_emails(conn, auth.tenant["id"])
@@ -264,7 +258,7 @@ def outbox(request: Request):
 @router.get("/settings/activity")
 def activity(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         events = list_audit(conn, auth.tenant["id"])

@@ -5,7 +5,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..contracts import contract_public_url
 from ..crm import get_client, get_project, list_clients, list_projects
 from ..db import audit
@@ -28,17 +27,12 @@ from ..proposals import (
 )
 from ..ratelimit import enforce
 from ..tenants import get_tenant
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter(prefix="/proposals")
 public_router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _optional_int(raw: str) -> int | None:
@@ -58,7 +52,7 @@ def _link_context(request: Request, proposal: dict) -> dict:
 @router.get("")
 def proposals_list(request: Request, status: str = ""):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         proposals = list_proposals(conn, auth.tenant["id"], status=status or None)
@@ -71,7 +65,7 @@ def proposals_list(request: Request, status: str = ""):
 def proposal_new(request: Request, package_id: int | None = None, client_id: int | None = None,
                  project_id: int | None = None):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tid = auth.tenant["id"]
@@ -90,7 +84,7 @@ def proposal_create(request: Request, package_id: str = Form(""), title: str = F
                     signer_name: str = Form(""), signer_email: str = Form(""),
                     client_id: str = Form(""), project_id: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tid = auth.tenant["id"]
@@ -125,7 +119,7 @@ def proposal_create(request: Request, package_id: str = Form(""), title: str = F
 @router.get("/{proposal_id}")
 def proposal_detail(request: Request, proposal_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         proposal = get_proposal(conn, auth.tenant["id"], proposal_id)
@@ -139,7 +133,7 @@ def proposal_detail(request: Request, proposal_id: int):
 def proposal_send(request: Request, proposal_id: int):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         proposal = send_proposal(conn, auth.tenant["id"], proposal_id)
@@ -165,7 +159,7 @@ def proposal_send(request: Request, proposal_id: int):
 def proposal_remind(request: Request, proposal_id: int):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tid = auth.tenant["id"]
@@ -181,7 +175,7 @@ def proposal_remind(request: Request, proposal_id: int):
 @router.post("/{proposal_id}/void")
 def proposal_void(request: Request, proposal_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         void_proposal(conn, auth.tenant["id"], proposal_id)

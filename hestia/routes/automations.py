@@ -5,7 +5,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..automations import (
     ACTIONS,
     RETENTION_RECIPES,
@@ -19,22 +18,17 @@ from ..automations import (
     set_automation_enabled,
 )
 from ..db import audit
-from .deps import db_conn, render
+from .deps import db_conn, render, tenant_user
 
 router = APIRouter(prefix="/automations")
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 @router.get("")
 def automations_list(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         automations = list_automations(conn, auth.tenant["id"])
@@ -46,7 +40,7 @@ def automations_list(request: Request):
 @router.get("/new")
 def automation_new(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
     return render(request, "automations/automation_new.html", auth=auth,
@@ -58,7 +52,7 @@ def automation_create(request: Request, name: str = Form(...), trigger: str = Fo
                       subject: str = Form(""), body: str = Form(""),
                       action: str = Form("email_client"), delay_days: str = Form("0")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         try:
@@ -77,7 +71,7 @@ def automation_create(request: Request, name: str = Form(...), trigger: str = Fo
 def automation_recipe(request: Request, key: str = Form(...)):
     """One-click create a retention automation from a preset recipe."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         auto = create_from_recipe(conn, auth.tenant["id"], key)
@@ -90,7 +84,7 @@ def automation_recipe(request: Request, key: str = Form(...)):
 @router.post("/{automation_id}/toggle")
 def automation_toggle(request: Request, automation_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         auto = get_automation(conn, auth.tenant["id"], automation_id)
@@ -103,7 +97,7 @@ def automation_toggle(request: Request, automation_id: int):
 @router.post("/{automation_id}/delete")
 def automation_delete(request: Request, automation_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_automation(conn, auth.tenant["id"], automation_id)

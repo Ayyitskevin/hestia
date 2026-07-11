@@ -4,8 +4,8 @@ A pluggable provider, same shape as the vision and storage seams:
 
 - ``mock``   — simulates a successful checkout with no keys. The default, so the
   whole invoice → pay → paid flow is testable in CI and demos.
-- ``stripe`` — creates a real Stripe Checkout Session (test or live keys). The
-  call is implemented; a webhook marks the invoice paid (Phase: wire the webhook).
+- ``stripe`` — creates a real Stripe Checkout Session (test or live keys). A
+  webhook (:mod:`hestia.routes.webhooks`) marks the invoice paid on settlement.
 
 Honesty: ``mock`` clearly labels payments as simulated; nothing is charged.
 """

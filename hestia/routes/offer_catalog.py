@@ -7,23 +7,17 @@ import math
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..sales import (
     CATALOG_SKUS,
     DEFAULT_CATALOG,
     get_tenant_catalog,
     set_tenant_catalog,
 )
-from .deps import db_conn, render
+from .deps import db_conn, render, tenant_user
 
 router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _to_cents(raw: str) -> int:
@@ -37,7 +31,7 @@ def _to_cents(raw: str) -> int:
 @router.get("/settings/offers")
 def offer_catalog_settings(request: Request, saved: str = ""):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         catalog = get_tenant_catalog(conn, auth.tenant["id"])
@@ -88,7 +82,7 @@ def offer_catalog_save(
     gift_box_enabled: str = Form(""),
 ):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         items = {

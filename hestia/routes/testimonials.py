@@ -11,7 +11,6 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from .. import messaging
-from ..auth import context_from_session
 from ..crm import get_client, list_clients
 from ..email import notify
 from ..growth import growth_opportunities, send_growth_ask
@@ -25,16 +24,11 @@ from ..testimonials import (
     submit_testimonial,
     testimonial_public_url,
 )
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 # ── Owner hub ───────────────────────────────────────────────────────────────
@@ -44,7 +38,7 @@ def _user(request: Request, conn):
 def manage(request: Request, growth: str = ""):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         items = list_testimonials(conn, auth.tenant["id"])
@@ -67,7 +61,7 @@ def manage(request: Request, growth: str = ""):
 def request_one(request: Request, client_id: str = Form(""), author_name: str = Form("")):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         raw = int(client_id) if client_id.strip().isdigit() else None
@@ -89,7 +83,7 @@ def request_one(request: Request, client_id: str = Form(""), author_name: str = 
 def growth_ask(request: Request, client_id: int):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         result = send_growth_ask(conn, settings, tenant_id=auth.tenant["id"], client_id=client_id)
@@ -104,7 +98,7 @@ def growth_ask(request: Request, client_id: int):
 @router.post("/testimonials/{testimonial_id}/feature")
 def feature(request: Request, testimonial_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_status(conn, auth.tenant["id"], testimonial_id, "featured")
@@ -114,7 +108,7 @@ def feature(request: Request, testimonial_id: int):
 @router.post("/testimonials/{testimonial_id}/hide")
 def hide(request: Request, testimonial_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_status(conn, auth.tenant["id"], testimonial_id, "hidden")

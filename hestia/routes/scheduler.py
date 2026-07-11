@@ -5,7 +5,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
-from ..auth import context_from_session
 from ..crm import list_clients, list_projects
 from ..scheduler import (
     APPOINTMENT_KINDS,
@@ -26,22 +25,17 @@ from ..scheduler import (
     regenerate_calendar_token,
     schedule_ics,
 )
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter(prefix="/schedule")
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 @router.get("")
 def schedule_list(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         appointments = list_appointments(conn, auth.tenant["id"])
@@ -55,7 +49,7 @@ def schedule_list(request: Request):
 @router.post("/calendar/regenerate")     # literal path before /{appt_id} so it wins
 def schedule_calendar_regenerate(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         regenerate_calendar_token(conn, auth.tenant["id"])
@@ -65,7 +59,7 @@ def schedule_calendar_regenerate(request: Request):
 @router.get("/block")                     # literal path before /{appt_id}
 def block_new(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
     return render(request, "scheduler/block_new.html", auth=auth)
@@ -75,7 +69,7 @@ def block_new(request: Request):
 def block_create(request: Request, title: str = Form(""), starts_at: str = Form(""),
                  duration_minutes: str = Form("60"), notes: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         if starts_at.strip():             # nothing to place on the calendar without a time
@@ -88,7 +82,7 @@ def block_create(request: Request, title: str = Form(""), starts_at: str = Form(
 @router.get("/new")
 def appointment_new(request: Request, project_id: int | None = None, client_id: int | None = None):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         clients = list_clients(conn, auth.tenant["id"])
@@ -104,7 +98,7 @@ def appointment_create(request: Request, title: str = Form(...), kind: str = For
                        duration_minutes: str = Form("60"), notes: str = Form(""),
                        client_id: str = Form(""), project_id: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         option_list = [line for line in options.splitlines() if line.strip()]
@@ -125,7 +119,7 @@ def appointment_create(request: Request, title: str = Form(...), kind: str = For
 def schedule_calendar(request: Request):
     """Subscribe-able .ics feed of the studio's confirmed sessions."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         ics = schedule_ics(conn, auth.tenant["id"])
@@ -136,7 +130,7 @@ def schedule_calendar(request: Request):
 @router.get("/{appt_id}")
 def appointment_detail(request: Request, appt_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         appt = get_appointment(conn, auth.tenant["id"], appt_id)
@@ -151,7 +145,7 @@ def appointment_detail(request: Request, appt_id: int):
 def appointment_calendar(request: Request, appt_id: int):
     """Download the confirmed session as an .ics for the owner's own calendar."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         appt = get_appointment(conn, auth.tenant["id"], appt_id)
@@ -165,7 +159,7 @@ def appointment_calendar(request: Request, appt_id: int):
 @router.post("/{appt_id}/confirm")
 def appointment_confirm(request: Request, appt_id: int, starts_at: str = Form(...)):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         confirm_appointment(conn, auth.tenant["id"], appt_id, starts_at)
@@ -175,7 +169,7 @@ def appointment_confirm(request: Request, appt_id: int, starts_at: str = Form(..
 @router.post("/{appt_id}/cancel")
 def appointment_cancel(request: Request, appt_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         cancel_appointment(conn, auth.tenant["id"], appt_id)
@@ -185,7 +179,7 @@ def appointment_cancel(request: Request, appt_id: int):
 @router.post("/{appt_id}/complete")
 def appointment_complete(request: Request, appt_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         complete_appointment(conn, auth.tenant["id"], appt_id)
@@ -195,7 +189,7 @@ def appointment_complete(request: Request, appt_id: int):
 @router.post("/{appt_id}/no-show")
 def appointment_no_show(request: Request, appt_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         mark_no_show(conn, auth.tenant["id"], appt_id)

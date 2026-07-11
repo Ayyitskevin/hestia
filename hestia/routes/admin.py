@@ -451,7 +451,7 @@ def _render_tenant_detail(request: Request, tenant_id: str, *,
         if not tenant:
             return RedirectResponse("/admin/tenants", status_code=303)
         flags = tenant_flags(tenant)
-        plan = plan_status(tenant)
+        plan = plan_status(tenant, subscription_backend=settings.subscription_backend)
         conversion = trial_conversion_for_tenant(conn, tenant, settings)
         conversion_timeline = beta_conversion_timeline(
             conn,

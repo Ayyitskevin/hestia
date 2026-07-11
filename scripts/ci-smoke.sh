@@ -12,7 +12,11 @@ python -m pytest -q
 echo "== healthz boot =="
 export HESTIA_DATA_DIR="$(mktemp -d)"
 export HESTIA_VISION_BACKEND=mock
+export HESTIA_API_TOKEN="ci-admin"
+export HESTIA_TENANT_KEY_PEPPER="ci-pepper"
+export HESTIA_SESSION_SECRET="ci-secret"
 PORT=8599
+export HESTIA_PUBLIC_URL="http://127.0.0.1:$PORT"
 uvicorn hestia.main:app --port "$PORT" >/tmp/hestia-ci.log 2>&1 &
 PID=$!
 trap 'kill $PID 2>/dev/null || true; rm -rf "$HESTIA_DATA_DIR"' EXIT
@@ -46,5 +50,9 @@ if curl -sf "http://127.0.0.1:$PORT/" | grep -q 'name="robots" content="noindex"
   echo "FAIL: landing page is noindexed — marketing must stay indexable" >&2; exit 1
 fi
 echo "privacy invariants OK"
+
+echo "== dogfood (magic moment) =="
+python scripts/dogfood_hestia.py "http://127.0.0.1:$PORT"
+echo "dogfood OK"
 
 echo "== ci-smoke OK =="

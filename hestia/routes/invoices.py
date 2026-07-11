@@ -8,7 +8,6 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from .. import messaging
-from ..auth import context_from_session
 from ..crm import get_client, get_project, list_clients, list_projects
 from ..db import audit
 from ..email import notify
@@ -31,16 +30,11 @@ from ..invoices import (
     void_invoice,
 )
 from ..packages import get_package, list_packages
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter(prefix="/invoices")
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _to_cents(raw: str) -> int:
@@ -71,7 +65,7 @@ def _parse_line_items(raw: str) -> list[tuple[str, int]]:
 @router.get("")
 def invoices_list(request: Request, status: str = ""):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         # Plan installments live under their payment plan, not the flat list.
@@ -85,7 +79,7 @@ def invoices_list(request: Request, status: str = ""):
 def invoice_new(request: Request, project_id: int | None = None, client_id: int | None = None,
                 package_id: int | None = None):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tid = auth.tenant["id"]
@@ -116,7 +110,7 @@ def invoice_create(request: Request, title: str = Form(...), amount: str = Form(
                    items: str = Form(""), client_id: str = Form(""),
                    project_id: str = Form(""), note: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tid = auth.tenant["id"]
@@ -145,7 +139,7 @@ def invoice_create(request: Request, title: str = Form(...), amount: str = Form(
 def invoice_note(request: Request, invoice_id: int, note: str = Form("")):
     """Add or edit the invoice's personal note (thank-you, payment instructions)."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_invoice_note(conn, auth.tenant["id"], invoice_id, note)
@@ -155,7 +149,7 @@ def invoice_note(request: Request, invoice_id: int, note: str = Form("")):
 @router.get("/{invoice_id}")
 def invoice_detail(request: Request, invoice_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         invoice = get_invoice(conn, auth.tenant["id"], invoice_id)
@@ -171,7 +165,7 @@ def invoice_detail(request: Request, invoice_id: int):
 def invoice_send(request: Request, invoice_id: int):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         send_invoice(conn, auth.tenant["id"], invoice_id)
@@ -199,7 +193,7 @@ def invoice_send(request: Request, invoice_id: int):
 @router.post("/{invoice_id}/void")
 def invoice_void(request: Request, invoice_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         invoice = get_invoice(conn, auth.tenant["id"], invoice_id)
@@ -215,7 +209,7 @@ def invoice_record_payment(request: Request, invoice_id: int, method: str = Form
     """Mark an invoice paid for money taken outside the pay link (cash, check, transfer).
     Idempotent — a double submit settles once."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         record_offline_payment(conn, auth.tenant["id"], invoice_id, method=method)
@@ -226,7 +220,7 @@ def invoice_record_payment(request: Request, invoice_id: int, method: str = Form
 def invoice_duplicate(request: Request, invoice_id: int):
     """Clone an invoice into a new draft (for repeat/retainer billing)."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         new = duplicate_invoice(conn, settings_of(request), auth.tenant["id"], invoice_id)
@@ -240,7 +234,7 @@ def invoice_receipt(request: Request, invoice_id: int):
     however it was paid (online or recorded offline); a no-op if unpaid or no email."""
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         invoice = get_invoice(conn, auth.tenant["id"], invoice_id)
@@ -267,7 +261,7 @@ def invoice_remind(request: Request, invoice_id: int):
     explicitly clicked), but still only nudges a 'sent', unpaid invoice."""
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tid = auth.tenant["id"]

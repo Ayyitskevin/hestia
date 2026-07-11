@@ -6,7 +6,6 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from .. import messaging
-from ..auth import context_from_session
 from ..contracts import (
     contract_public_url,
     create_contract,
@@ -22,22 +21,17 @@ from ..contracts import (
 from ..crm import list_clients, list_projects
 from ..db import audit
 from ..email import notify
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter(prefix="/contracts")
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 @router.get("")
 def contracts_list(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         contracts = list_contracts(conn, auth.tenant["id"])
@@ -48,7 +42,7 @@ def contracts_list(request: Request):
 def contract_new(request: Request, project_id: int | None = None, client_id: int | None = None,
                  template_id: int | None = None):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         clients = list_clients(conn, auth.tenant["id"])
@@ -69,7 +63,7 @@ def contract_new(request: Request, project_id: int | None = None, client_id: int
 @router.get("/templates")
 def contract_templates_page(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         templates = list_contract_templates(conn, auth.tenant["id"])
@@ -79,7 +73,7 @@ def contract_templates_page(request: Request):
 @router.post("/templates")
 def contract_template_create(request: Request, name: str = Form(""), body: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         save_contract_template(conn, tenant_id=auth.tenant["id"], name=name, body=body)
@@ -89,7 +83,7 @@ def contract_template_create(request: Request, name: str = Form(""), body: str =
 @router.post("/templates/{template_id}/delete")
 def contract_template_delete(request: Request, template_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_contract_template(conn, auth.tenant["id"], template_id)
@@ -101,7 +95,7 @@ def contract_create(request: Request, title: str = Form(...), body: str = Form("
                     signer_name: str = Form(""), signer_email: str = Form(""),
                     client_id: str = Form(""), project_id: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         contract = create_contract(
@@ -118,7 +112,7 @@ def contract_create(request: Request, title: str = Form(...), body: str = Form("
 @router.get("/{contract_id}")
 def contract_detail(request: Request, contract_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         contract = get_contract(conn, auth.tenant["id"], contract_id)
@@ -133,7 +127,7 @@ def contract_detail(request: Request, contract_id: int):
 def contract_send(request: Request, contract_id: int):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         send_contract(conn, auth.tenant["id"], contract_id)
@@ -160,7 +154,7 @@ def contract_send(request: Request, contract_id: int):
 @router.post("/{contract_id}/void")
 def contract_void(request: Request, contract_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         contract = get_contract(conn, auth.tenant["id"], contract_id)
@@ -175,7 +169,7 @@ def contract_void(request: Request, contract_id: int):
 def contract_save_as_template(request: Request, contract_id: int):
     """Save this contract's title + terms as a reusable template, then show the library."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         contract = get_contract(conn, auth.tenant["id"], contract_id)

@@ -5,7 +5,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..billing import PLANS, plan_status
 from ..domains import custom_domain_summary, set_custom_domain
 from ..subscriptions import (
@@ -15,16 +14,11 @@ from ..subscriptions import (
     get_subscription,
 )
 from ..tenants import get_tenant
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _owner_email(conn, tenant_id: str) -> str:
@@ -46,7 +40,7 @@ def _hosted_url(settings, tenant: dict) -> str:
 def account(request: Request):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
@@ -59,7 +53,7 @@ def account(request: Request):
         "account.html",
         auth=auth,
         tenant=tenant,
-        plan=plan_status(tenant),
+        plan=plan_status(tenant, subscription_backend=settings.subscription_backend),
         subscription=sub,
         backend=settings.subscription_backend,
         owner_email=owner_email,
@@ -74,7 +68,7 @@ def account(request: Request):
 def account_domain(request: Request, custom_domain: str = Form("")):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         try:
@@ -94,7 +88,7 @@ def account_domain(request: Request, custom_domain: str = Form("")):
                 "account.html",
                 auth=auth,
                 tenant=tenant,
-                plan=plan_status(tenant),
+                plan=plan_status(tenant, subscription_backend=settings.subscription_backend),
                 subscription=sub,
                 backend=settings.subscription_backend,
                 owner_email=owner_email,
@@ -111,12 +105,12 @@ def account_domain(request: Request, custom_domain: str = Form("")):
 def billing(request: Request):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
         sub = get_subscription(conn, tenant["id"])
-    return render(request, "billing.html", auth=auth, tenant=tenant, plan=plan_status(tenant),
+    return render(request, "billing.html", auth=auth, tenant=tenant, plan=plan_status(tenant, subscription_backend=settings.subscription_backend),
                   plans=PLANS, subscription=sub, backend=settings.subscription_backend)
 
 
@@ -124,7 +118,7 @@ def billing(request: Request):
 def subscribe(request: Request, plan: str = Form(...)):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         if plan != "studio" or plan not in PLANS:
@@ -148,7 +142,7 @@ def billing_portal(request: Request):
     settings = settings_of(request)
     return_url = f"{settings.public_url.rstrip('/')}/settings/account"
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
@@ -165,7 +159,7 @@ def billing_portal(request: Request):
 def cancel(request: Request):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         # Nothing to cancel on the free plan — a no-op keeps repeat POSTs from writing

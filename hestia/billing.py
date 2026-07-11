@@ -31,12 +31,13 @@ class PlanStatus:
     name: str
     price: str
     blurb: str
-    live: bool = False  # Stripe wired? Phase 1.
+    live: bool = False  # True when a real subscription backend (Stripe) is wired
 
 
-def plan_status(tenant: dict) -> PlanStatus:
+def plan_status(tenant: dict, *, subscription_backend: str | None = None) -> PlanStatus:
     plan = tenant.get("plan", "beta")
     if plan == "studio_pro":  # legacy tenants from the old catalog keep full access
         plan = "studio"
     meta = PLANS.get(plan, PLANS["beta"])
-    return PlanStatus(plan=plan, name=meta["name"], price=meta["price"], blurb=meta["blurb"], live=False)
+    live = (subscription_backend or "").strip().lower() == "stripe"
+    return PlanStatus(plan=plan, name=meta["name"], price=meta["price"], blurb=meta["blurb"], live=live)

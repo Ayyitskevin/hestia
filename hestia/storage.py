@@ -3,7 +3,7 @@
 The research showed the suite couples on a *shared local disk* keyed by Mise's
 gallery id — a homelab assumption that breaks across cloud hosts. A multi-tenant
 SaaS needs real object storage. This module is that seam: a tiny interface with a
-local-filesystem backend today and an S3/R2 backend in Phase 1. Keys are always
+local-filesystem backend today and an S3/R2 backend behind env. Keys are always
 tenant-scoped (``<tenant_id>/<gallery_id>/<image_id>.<ext>``) so nothing leaks
 across studios.
 """
@@ -16,7 +16,7 @@ from typing import BinaryIO, Protocol
 
 
 class Storage(Protocol):
-    """Minimal blob store. Backends: local now, S3/R2 in Phase 1."""
+    """Minimal blob store. Backends: local filesystem, S3/R2 behind env."""
 
     def put(self, key: str, data: BinaryIO, content_type: str = "application/octet-stream") -> str:
         ...

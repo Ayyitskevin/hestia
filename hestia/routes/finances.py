@@ -9,7 +9,6 @@ import math
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..crm import get_project, list_projects
 from ..csv_export import csv_response
 from ..db import audit
@@ -34,7 +33,7 @@ from ..reports import (
     tax_collected,
     top_clients,
 )
-from .deps import db_conn, render
+from .deps import db_conn, render, tenant_user
 
 router = APIRouter()
 
@@ -43,11 +42,6 @@ def _dollars(cents: int) -> str:
     return f"{cents / 100:.2f}"
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _to_cents(raw: str) -> int:
@@ -113,7 +107,7 @@ def _parse_expense_csv(text: str) -> list[dict]:
 @router.get("/finances/import")
 def expenses_import_form(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
     return render(request, "finances_import.html", auth=auth, summary=None, error=None)
@@ -124,7 +118,7 @@ async def expenses_import(request: Request, file: UploadFile = File(...)):
     # authenticate BEFORE reading the body — a cookieless POST is CSRF-exempt, so reading
     # first would let an anonymous caller force an unbounded read
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         raw = await file.read()
@@ -154,7 +148,7 @@ async def expenses_import(request: Request, file: UploadFile = File(...)):
 @router.get("/finances")
 def finances(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tid = auth.tenant["id"]
@@ -169,7 +163,7 @@ def finances(request: Request):
 @router.get("/finances/reports")
 def finances_reports(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tid = auth.tenant["id"]
@@ -191,7 +185,7 @@ def finances_reports(request: Request):
 def add_expense(request: Request, amount: str = Form(""), category: str = Form("other"),
                 description: str = Form(""), project_id: str = Form(""), incurred_on: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         try:
@@ -214,7 +208,7 @@ def add_expense(request: Request, amount: str = Form(""), category: str = Form("
 @router.post("/finances/expenses/{expense_id}/delete")
 def remove_expense(request: Request, expense_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_expense(conn, auth.tenant["id"], expense_id)
@@ -224,7 +218,7 @@ def remove_expense(request: Request, expense_id: int):
 @router.get("/finances/export/expenses.csv")
 def export_expenses(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         expenses = list_expenses(conn, auth.tenant["id"], limit=100000)
@@ -236,7 +230,7 @@ def export_expenses(request: Request):
 @router.get("/finances/export/income.csv")
 def export_income(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         income = income_rows(conn, auth.tenant["id"])
@@ -249,7 +243,7 @@ def export_income(request: Request):
 def export_tax(request: Request):
     """Sales tax collected per month — the file an accountant remits from."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         periods = tax_by_period(conn, auth.tenant["id"], months=24)

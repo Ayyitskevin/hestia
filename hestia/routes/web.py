@@ -556,6 +556,7 @@ def logout(request: Request):
 
 @router.get("/dashboard")
 def dashboard(request: Request):
+    settings = settings_of(request)
     with db_conn(request) as conn:
         auth = context_from_session(conn, request)
         if not auth or auth.is_admin or not auth.tenant:
@@ -564,7 +565,7 @@ def dashboard(request: Request):
         flags = tenant_flags(tenant)
         galleries = list_galleries(conn, tenant["id"])[:6]
         runs = list_runs(conn, tenant["id"], limit=6)
-        plan = plan_status(tenant)
+        plan = plan_status(tenant, subscription_backend=settings.subscription_backend)
         unpaid = conn.execute(
             # plan installments are tracked under their plan, not the flat invoice list
             "SELECT COUNT(*) AS n FROM invoices "

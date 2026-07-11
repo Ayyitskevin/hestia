@@ -13,7 +13,6 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from .. import messaging
-from ..auth import context_from_session
 from ..crm import list_clients, list_projects
 from ..db import audit
 from ..email import notify
@@ -26,16 +25,11 @@ from ..payment_plans import (
     list_payment_plans,
     void_payment_plan,
 )
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter(prefix="/payment-plans")
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _to_cents(raw: str) -> int:
@@ -51,7 +45,7 @@ def _to_cents(raw: str) -> int:
 @router.get("")
 def plans_list(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         plans = list_payment_plans(conn, auth.tenant["id"])
@@ -62,7 +56,7 @@ def plans_list(request: Request):
 def plan_new(request: Request, project_id: int | None = None, client_id: int | None = None,
              package_id: int | None = None):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         tid = auth.tenant["id"]
@@ -92,7 +86,7 @@ def plan_create(request: Request, title: str = Form(...), total: str = Form("0")
                 deposit: str = Form("0"), balance_due_date: str = Form(""),
                 client_id: str = Form(""), project_id: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         installments = deposit_balance_installments(
@@ -111,7 +105,7 @@ def plan_create(request: Request, title: str = Form(...), total: str = Form("0")
 @router.get("/{plan_id}")
 def plan_detail(request: Request, plan_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         plan = get_payment_plan(conn, auth.tenant["id"], plan_id)
@@ -126,7 +120,7 @@ def plan_detail(request: Request, plan_id: int):
 def plan_send(request: Request, plan_id: int):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         plan = get_payment_plan(conn, auth.tenant["id"], plan_id)
@@ -160,7 +154,7 @@ def plan_send(request: Request, plan_id: int):
 @router.post("/{plan_id}/void")
 def plan_void(request: Request, plan_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         void_payment_plan(conn, auth.tenant["id"], plan_id)

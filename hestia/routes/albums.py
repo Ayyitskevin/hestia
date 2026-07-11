@@ -15,25 +15,19 @@ from ..albums import (
     move_spread,
     set_spread_hero,
 )
-from ..auth import context_from_session
 from ..galleries import get_gallery
 from ..tenants import get_tenant
-from .deps import db_conn, render, settings_of, storage_of
+from .deps import db_conn, render, settings_of, storage_of, tenant_user
 
 router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 @router.post("/galleries/{gallery_id}/album")
 def album_generate(request: Request, gallery_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         gallery = get_gallery(conn, auth.tenant["id"], gallery_id)
@@ -51,7 +45,7 @@ def album_generate(request: Request, gallery_id: int):
 def album_spread_hero(request: Request, album_id: int, position: int, image_id: int):
     """Override which frame leads a spread — the photographer's pick over the AI's."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_spread_hero(conn, auth.tenant["id"], album_id, position, image_id)
@@ -62,7 +56,7 @@ def album_spread_hero(request: Request, album_id: int, position: int, image_id: 
 def album_move_spread(request: Request, album_id: int, position: int, direction: str):
     """Reorder a spread one step up or down — the photographer's sequencing."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         move_spread(conn, auth.tenant["id"], album_id, position, direction)
@@ -73,7 +67,7 @@ def album_move_spread(request: Request, album_id: int, position: int, direction:
 def album_share(request: Request, album_id: int):
     """Mint (idempotently) the album's client review link, then return to the album."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         enable_album_review(conn, auth.tenant["id"], album_id)
@@ -84,7 +78,7 @@ def album_share(request: Request, album_id: int):
 def album_view(request: Request, album_id: int):
     storage = storage_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         album = get_album(conn, auth.tenant["id"], album_id)

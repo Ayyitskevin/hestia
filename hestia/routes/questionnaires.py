@@ -6,7 +6,6 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from .. import messaging
-from ..auth import context_from_session
 from ..crm import list_clients, list_projects
 from ..db import audit
 from ..email import notify
@@ -22,22 +21,17 @@ from ..questionnaires import (
     send_questionnaire,
     void_questionnaire,
 )
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter(prefix="/questionnaires")
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 @router.get("")
 def questionnaires_list(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         questionnaires = list_questionnaires(conn, auth.tenant["id"])
@@ -49,7 +43,7 @@ def questionnaires_list(request: Request):
 def questionnaire_new(request: Request, project_id: int | None = None,
                       client_id: int | None = None, template_id: int | None = None):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         clients = list_clients(conn, auth.tenant["id"])
@@ -70,7 +64,7 @@ def questionnaire_new(request: Request, project_id: int | None = None,
 @router.get("/templates")
 def questionnaire_templates_page(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         templates = list_questionnaire_templates(conn, auth.tenant["id"])
@@ -81,7 +75,7 @@ def questionnaire_templates_page(request: Request):
 @router.post("/templates")
 def questionnaire_template_create(request: Request, name: str = Form(""), prompts: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         save_questionnaire_template(conn, tenant_id=auth.tenant["id"], name=name, prompts=prompts)
@@ -91,7 +85,7 @@ def questionnaire_template_create(request: Request, name: str = Form(""), prompt
 @router.post("/templates/{template_id}/delete")
 def questionnaire_template_delete(request: Request, template_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_questionnaire_template(conn, auth.tenant["id"], template_id)
@@ -102,7 +96,7 @@ def questionnaire_template_delete(request: Request, template_id: int):
 def questionnaire_create(request: Request, title: str = Form(...), prompts: str = Form(""),
                          client_id: str = Form(""), project_id: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         prompt_list = [line for line in prompts.splitlines() if line.strip()]
@@ -119,7 +113,7 @@ def questionnaire_create(request: Request, title: str = Form(...), prompts: str 
 @router.get("/{qid}")
 def questionnaire_detail(request: Request, qid: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         q = get_questionnaire(conn, auth.tenant["id"], qid)
@@ -134,7 +128,7 @@ def questionnaire_detail(request: Request, qid: int):
 def questionnaire_send(request: Request, qid: int):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         send_questionnaire(conn, auth.tenant["id"], qid)
@@ -160,7 +154,7 @@ def questionnaire_send(request: Request, qid: int):
 @router.post("/{qid}/void")
 def questionnaire_void(request: Request, qid: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         q = get_questionnaire(conn, auth.tenant["id"], qid)
@@ -175,7 +169,7 @@ def questionnaire_void(request: Request, qid: int):
 def questionnaire_save_as_template(request: Request, qid: int):
     """Save this questionnaire's title + question set as a reusable template."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         q = get_questionnaire(conn, auth.tenant["id"], qid)

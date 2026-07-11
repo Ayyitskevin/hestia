@@ -7,7 +7,6 @@ import math
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..dashboard import owner_digest_recipient
 from ..email import notify
 from ..mini_sessions import (
@@ -26,16 +25,11 @@ from ..ratelimit import enforce
 from ..scheduler import appointment_ics_url
 from ..studio import get_profile
 from ..tenants import get_tenant_by_slug
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _to_cents(raw: str) -> int:
@@ -58,7 +52,7 @@ def _published_tenant(conn, slug: str):
 def mini_sessions_list(request: Request):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         drops = hydrate_mini_session_displays(
@@ -79,7 +73,7 @@ def mini_session_create(
     deposit: str = Form("0"),
 ):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         duration = int(duration_minutes) if duration_minutes.strip().isdigit() else 20
@@ -99,7 +93,7 @@ def mini_session_create(
 def mini_session_detail(request: Request, session_id: int):
     settings = settings_of(request)
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         drop = get_mini_session(conn, auth.tenant["id"], session_id)
@@ -113,7 +107,7 @@ def mini_session_detail(request: Request, session_id: int):
 @router.post("/mini-sessions/{session_id}/slots")
 def mini_session_add_slots(request: Request, session_id: int, starts_at: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         add_mini_session_slots(conn, auth.tenant["id"], session_id, starts_at)
@@ -123,7 +117,7 @@ def mini_session_add_slots(request: Request, session_id: int, starts_at: str = F
 @router.post("/mini-sessions/{session_id}/publish")
 def mini_session_publish(request: Request, session_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_mini_session_status(conn, auth.tenant["id"], session_id, "published")
@@ -133,7 +127,7 @@ def mini_session_publish(request: Request, session_id: int):
 @router.post("/mini-sessions/{session_id}/unpublish")
 def mini_session_unpublish(request: Request, session_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_mini_session_status(conn, auth.tenant["id"], session_id, "draft")
@@ -143,7 +137,7 @@ def mini_session_unpublish(request: Request, session_id: int):
 @router.post("/mini-sessions/{session_id}/archive")
 def mini_session_archive(request: Request, session_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_mini_session_status(conn, auth.tenant["id"], session_id, "archived")
@@ -153,7 +147,7 @@ def mini_session_archive(request: Request, session_id: int):
 @router.post("/mini-sessions/{session_id}/slots/{slot_id}/delete")
 def mini_session_delete_slot(request: Request, session_id: int, slot_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_open_slot(conn, auth.tenant["id"], slot_id)

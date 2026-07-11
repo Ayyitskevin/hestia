@@ -13,7 +13,6 @@ import math
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..availability import (
     WEEKDAYS,
     add_window,
@@ -38,16 +37,11 @@ from ..ratelimit import enforce
 from ..scheduler import APPOINTMENT_KINDS, KIND_LABELS, appointment_ics_url
 from ..studio import get_profile
 from ..tenants import get_tenant, get_tenant_by_slug, set_booking_rules
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _to_cents(raw: str) -> int:
@@ -68,7 +62,7 @@ def _kind_choices() -> list[dict]:
 @router.get("/settings/booking-types")
 def booking_types_list(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         currency = settings_of(request).currency
@@ -93,7 +87,7 @@ def booking_type_create(request: Request, title: str = Form(...), description: s
                         kind: str = Form("consultation"), duration_minutes: str = Form("60"),
                         price: str = Form("0"), deposit: str = Form("0")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         dur = int(duration_minutes) if duration_minutes.strip().isdigit() else 60
@@ -106,7 +100,7 @@ def booking_type_create(request: Request, title: str = Form(...), description: s
 @router.post("/settings/booking-types/{type_id}/toggle")
 def booking_type_toggle(request: Request, type_id: int, active: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_booking_type_active(conn, auth.tenant["id"], type_id, bool(active.strip()))
@@ -116,7 +110,7 @@ def booking_type_toggle(request: Request, type_id: int, active: str = Form("")):
 @router.post("/settings/booking-types/{type_id}/delete")
 def booking_type_delete(request: Request, type_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_booking_type(conn, auth.tenant["id"], type_id)
@@ -129,7 +123,7 @@ def availability_add(request: Request, weekday: str = Form(""), start: str = For
     """Add a weekly open-hours window. A malformed weekday/time is a no-op (add_window
     validates), so a bad submit just redirects back without a row."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         wd = int(weekday) if weekday.strip().isdigit() else -1
@@ -143,7 +137,7 @@ def availability_add(request: Request, weekday: str = Form(""), start: str = For
 @router.post("/settings/availability/{window_id}/delete")
 def availability_delete(request: Request, window_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_window(conn, auth.tenant["id"], window_id)
@@ -155,7 +149,7 @@ def booking_rules_save(request: Request, min_notice_hours: str = Form("0"),
                        buffer_minutes: str = Form("0")):
     """Save the booking guardrails (minimum notice + buffer). Non-numeric input → 0."""
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         notice = int(min_notice_hours) if min_notice_hours.strip().isdigit() else 0

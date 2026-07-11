@@ -10,19 +10,13 @@ import math
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..discounts import create_discount, delete_discount, list_discounts, set_discount_active
 from ..invoices import money
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _to_cents(raw: str) -> int:
@@ -40,7 +34,7 @@ def _describe(d: dict, currency: str) -> str:
 @router.get("/settings/discounts")
 def discounts_list(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         currency = settings_of(request).currency
@@ -56,7 +50,7 @@ def discounts_list(request: Request):
 def discount_create(request: Request, code: str = Form(...), kind: str = Form("percent"),
                     value: str = Form("0"), max_uses: str = Form("0"), expires_on: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         # percent → a plain integer (20 = 20%); fixed → a money amount in dollars → cents
@@ -71,7 +65,7 @@ def discount_create(request: Request, code: str = Form(...), kind: str = Form("p
 @router.post("/settings/discounts/{discount_id}/toggle")
 def discount_toggle(request: Request, discount_id: int, active: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_discount_active(conn, auth.tenant["id"], discount_id, bool(active.strip()))
@@ -81,7 +75,7 @@ def discount_toggle(request: Request, discount_id: int, active: str = Form("")):
 @router.post("/settings/discounts/{discount_id}/delete")
 def discount_delete(request: Request, discount_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_discount(conn, auth.tenant["id"], discount_id)

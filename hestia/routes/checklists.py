@@ -9,25 +9,19 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..checklists import ANY, add_template_task, delete_template_task, list_template_tasks
 from ..features import SHOOT_TYPE_LABELS, SHOOT_TYPES
-from .deps import db_conn, render
+from .deps import db_conn, render, tenant_user
 
 router = APIRouter(prefix="/checklists")
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 @router.get("")
 def checklists_page(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         templates = list_template_tasks(conn, auth.tenant["id"])
@@ -43,7 +37,7 @@ def checklists_page(request: Request):
 @router.post("")
 def checklist_add(request: Request, shoot_type: str = Form("any"), label: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         add_template_task(conn, tenant_id=auth.tenant["id"], shoot_type=shoot_type, label=label)
@@ -53,7 +47,7 @@ def checklist_add(request: Request, shoot_type: str = Form("any"), label: str = 
 @router.post("/{template_id}/delete")
 def checklist_delete(request: Request, template_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         delete_template_task(conn, auth.tenant["id"], template_id)

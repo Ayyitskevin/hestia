@@ -7,7 +7,6 @@ import math
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..invoices import money
 from ..packages import (
     create_package,
@@ -16,16 +15,11 @@ from ..packages import (
     set_package_active,
     update_package,
 )
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter(prefix="/packages")
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _to_cents(raw: str) -> int:
@@ -48,7 +42,7 @@ def _hydrate(packages: list[dict], currency: str) -> list[dict]:
 @router.get("")
 def packages_list(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         packages = _hydrate(list_packages(conn, auth.tenant["id"]), settings_of(request).currency)
@@ -59,7 +53,7 @@ def packages_list(request: Request):
 def package_create(request: Request, name: str = Form(...), description: str = Form(""),
                    price: str = Form("0"), deposit: str = Form("0")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         create_package(conn, tenant_id=auth.tenant["id"], name=name, description=description,
@@ -70,7 +64,7 @@ def package_create(request: Request, name: str = Form(...), description: str = F
 @router.get("/{package_id}")
 def package_edit(request: Request, package_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         pkg = get_package(conn, auth.tenant["id"], package_id)
@@ -83,7 +77,7 @@ def package_edit(request: Request, package_id: int):
 def package_update(request: Request, package_id: int, name: str = Form(...),
                    description: str = Form(""), price: str = Form("0"), deposit: str = Form("0")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         update_package(conn, auth.tenant["id"], package_id, name=name, description=description,
@@ -94,7 +88,7 @@ def package_update(request: Request, package_id: int, name: str = Form(...),
 @router.post("/{package_id}/archive")
 def package_archive(request: Request, package_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_package_active(conn, auth.tenant["id"], package_id, False)
@@ -104,7 +98,7 @@ def package_archive(request: Request, package_id: int):
 @router.post("/{package_id}/restore")
 def package_restore(request: Request, package_id: int):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_package_active(conn, auth.tenant["id"], package_id, True)

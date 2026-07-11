@@ -11,7 +11,6 @@ import math
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from ..auth import context_from_session
 from ..giftcards import (
     create_gift_card,
     create_purchase,
@@ -23,18 +22,13 @@ from ..invoices import create_invoice, money
 from ..ratelimit import enforce
 from ..studio import get_profile
 from ..tenants import get_tenant_by_slug
-from .deps import db_conn, render, settings_of
+from .deps import db_conn, render, settings_of, tenant_user
 
 _MAX_GIFT_CENTS = 1_000_000   # $10k cap on a single gift-card purchase
 
 router = APIRouter()
 
 
-def _user(request: Request, conn):
-    auth = context_from_session(conn, request)
-    if not auth or not auth.tenant:
-        return None
-    return auth
 
 
 def _to_cents(raw: str) -> int:
@@ -48,7 +42,7 @@ def _to_cents(raw: str) -> int:
 @router.get("/settings/giftcards")
 def giftcards_list(request: Request):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         currency = settings_of(request).currency
@@ -63,7 +57,7 @@ def giftcards_list(request: Request):
 def giftcard_create(request: Request, amount: str = Form("0"), code: str = Form(""),
                     expires_on: str = Form(""), note: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         create_gift_card(conn, tenant_id=auth.tenant["id"], initial_cents=_to_cents(amount),
@@ -75,7 +69,7 @@ def giftcard_create(request: Request, amount: str = Form("0"), code: str = Form(
 @router.post("/settings/giftcards/{card_id}/toggle")
 def giftcard_toggle(request: Request, card_id: int, active: str = Form("")):
     with db_conn(request) as conn:
-        auth = _user(request, conn)
+        auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
         set_gift_card_active(conn, auth.tenant["id"], card_id, bool(active.strip()))
