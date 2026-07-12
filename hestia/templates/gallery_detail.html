@@ -288,7 +288,7 @@
             or (qfilter == 'hidden' and img.hidden) %}
           {% if show %}
           <figure class="thumb{{ ' is-fav' if img.id in favorites else '' }}{{ ' is-culled' if cull and img.id in cull.culled_ids else '' }}{{ ' is-hidden' if img.hidden else '' }}{{ ' is-cover' if img.id == cover_id else '' }}">
-            <img src="{{ storage.public_path(img.storage_key) }}" alt="{{ img.filename }}" loading="lazy">
+            <img src="{{ storage.thumb_url(img) }}" alt="{{ img.filename }}" loading="lazy">
             {% if img.id in favorites %}<span class="fav-badge" title="Client favorite">♥</span>{% endif %}
             {% if img.hidden %}<span class="cull-badge" title="Hidden from client">🚫</span>
             {% elif cull and img.id in cull.blink_ids %}<span class="cull-badge" title="Likely blink">👁</span>

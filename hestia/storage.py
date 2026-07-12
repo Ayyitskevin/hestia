@@ -41,6 +41,20 @@ class Storage(Protocol):
         image shown to a client — the raw ``public_path(storage_key)`` is owner-only."""
         ...
 
+    def thumb_url(self, image: dict) -> str:
+        """A client-facing URL for the image's downscaled *browse thumbnail*, or the
+        full-image URL when the row has no thumbnail (pre-migration uploads, or a frame
+        whose thumbnailing failed). Use this for grids and proofing — where a client
+        loads many frames at once — and reserve :meth:`image_url` / full downloads for
+        the single large view. Same access control as the full image."""
+        ...
+
+    def file_path(self, key: str) -> str | None:
+        """Local filesystem path for a key, so the app can stream it from disk with a
+        ``FileResponse`` instead of reading the whole blob into memory. Returns ``None``
+        for remote backends (S3), which must be proxied or redirected instead."""
+        ...
+
 
 class LocalStorage:
     """Filesystem backend rooted at ``media_dir``. Serves via the /media route."""
@@ -84,6 +98,17 @@ class LocalStorage:
         # (which enforces published/not-hidden), not the owner-only storage-key path.
         token = image["access_token"] if "access_token" in image.keys() else ""
         return f"/media/{token}" if token else f"/media/{image['storage_key']}"
+
+    def thumb_url(self, image: dict) -> str:
+        # The thumbnail is served through the same token route (same access control),
+        # tagged ?s=t so serve_media returns the small JPEG. No thumbnail → full image.
+        keys = image.keys()
+        token = image["access_token"] if "access_token" in keys else ""
+        has_thumb = "thumb_key" in keys and image["thumb_key"]
+        return f"/media/{token}?s=t" if (token and has_thumb) else self.image_url(image)
+
+    def file_path(self, key: str) -> str | None:
+        return str(self._full(key))
 
 
 class S3Storage:
@@ -143,6 +168,15 @@ class S3Storage:
         # Presigned URLs are short-lived and the bucket is private, so knowing an
         # enumerable storage key never grants permanent public access.
         return self.public_path(image["storage_key"])
+
+    def thumb_url(self, image: dict) -> str:
+        # Offload thumbnail delivery to S3 too (presigned), falling back to the full
+        # image when there's no thumbnail. Client browsers hit S3 directly, not the app.
+        thumb = image["thumb_key"] if "thumb_key" in image.keys() else None
+        return self.public_path(thumb) if thumb else self.image_url(image)
+
+    def file_path(self, key: str) -> str | None:
+        return None  # remote object store — no local file to stream
 
 
 def build_storage(settings) -> Storage:

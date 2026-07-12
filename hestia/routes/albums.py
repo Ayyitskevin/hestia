@@ -85,9 +85,9 @@ def album_view(request: Request, album_id: int):
         if not album:
             return RedirectResponse("/galleries", status_code=303)
         gallery = get_gallery(conn, auth.tenant["id"], album["gallery_id"])
-        # Owner view serves frames through the authorized /media path.
+        # Owner view serves frames through the authorized /media path (browse thumbnails).
         spreads = album_spreads_display(conn, album,
-                                        lambda img: storage.public_path(img["storage_key"]))
+                                        lambda img: storage.thumb_url(img))
     review_url = (album_review_url(settings_of(request), album["review_token"])
                   if album.get("review_token") else None)
     return render(request, "albums/album.html", auth=auth, album=album, gallery=gallery,

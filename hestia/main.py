@@ -205,8 +205,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if _sensitive_response(request, resp):
             # Authenticated pages and capability URLs can carry client PII, media,
             # signatures, invoices, or session cookies. Never let a browser or
-            # intermediary retain them after access is revoked.
-            resp.headers["Cache-Control"] = "no-store"
+            # intermediary retain them after access is revoked. setdefault so a route
+            # that has deliberately chosen a revocation-safe policy (the image routes
+            # use `private, no-cache` — revalidate-before-use, so a rotated link can't
+            # show a stale frame) keeps it; everything else locks to no-store.
+            resp.headers.setdefault("Cache-Control", "no-store")
             resp.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
         return resp
 

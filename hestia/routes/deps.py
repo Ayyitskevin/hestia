@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 
 from fastapi import Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from ..auth import OWNER, AuthContext, context_from_session, resolve_context
@@ -14,6 +15,40 @@ from ..config import Settings
 from ..csrf import csrf_token_for
 from ..db import get_db
 from ..storage import Storage
+
+# Media is revocable client content: a client-token or delivery link can be rotated
+# or expire, so we must NOT let a browser display a stale copy afterwards. `no-cache`
+# (store, but revalidate before every use) gets us cheap 304 revalidation while keeping
+# revocation instant — the caller re-runs access control on each request, so a revoked
+# link returns 403 on revalidation, never a 304. `private` keeps shared proxies out.
+_MEDIA_CACHE = "private, no-cache"
+
+
+def image_response(request: Request, storage: Storage, key: str, *, media_type: str):
+    """Serve a stored image key with the right performance + caching for the backend.
+
+    Local storage streams straight from disk via ``FileResponse`` (no full-file read
+    into the app's memory — the OOM/bandwidth cliff for big galleries — with HTTP Range
+    handled for free). Remote backends proxy the bytes. The ETag is the content-addressed
+    key (a key's bytes never change), so a matching ``If-None-Match`` short-circuits to a
+    tiny 304 instead of re-sending the frame. Callers resolve access control BEFORE
+    calling this, so revalidation re-checks authorization and revocation stays instant."""
+    etag = f'"{key}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304,
+                        headers={"ETag": etag, "Cache-Control": _MEDIA_CACHE})
+    headers = {"Cache-Control": _MEDIA_CACHE, "ETag": etag}
+    path = storage.file_path(key)
+    if path is not None:
+        if not os.path.exists(path):
+            return Response(status_code=404)
+        # FileResponse setdefault()s its stat-based etag, so our key-based one wins.
+        return FileResponse(path, media_type=media_type, headers=headers)
+    try:
+        data = storage.open(key)
+    except FileNotFoundError:
+        return Response(status_code=404)
+    return Response(content=data, media_type=media_type, headers=headers)
 
 
 def settings_of(request: Request) -> Settings:
