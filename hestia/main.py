@@ -139,6 +139,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         init_db(settings.db_path)
         settings.media_dir.mkdir(parents=True, exist_ok=True)
+        # Fail closed: a hosted box must never serve with default secrets — CSRF tokens
+        # would be forgeable and Fernet-encrypted service tokens decryptable by anyone
+        # with the source. Preflight flags this before boot; this is the last-line refusal
+        # at startup (raising here aborts the ASGI lifespan, so the server won't serve).
+        if settings.saas_mode and settings.insecure_secrets:
+            raise RuntimeError(
+                "Refusing to start in SaaS mode with default secrets: "
+                + ", ".join(settings.insecure_secrets)
+                + " — set strong values (openssl rand -hex 32)."
+            )
         for warning in settings.config_warnings:
             log.warning("config: %s", warning)
         if settings.vision_backend == "mock":

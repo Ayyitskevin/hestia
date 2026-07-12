@@ -74,12 +74,21 @@ class RateLimiter:
             self._windows.clear()
 
 
-def client_ip(request: Request) -> str:
-    """Best-effort client IP — first X-Forwarded-For hop, else the peer."""
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+def client_ip(request: Request, *, trusted_proxies: int = 0) -> str:
+    """The identity to rate-limit on. ``X-Forwarded-For`` is set by the client, so a
+    naive "first hop" read lets an attacker rotate the header and dodge the login /
+    reset / checkout limits entirely. We only trust XFF when the app sits behind
+    ``trusted_proxies`` reverse proxies we control (``HESTIA_TRUSTED_PROXIES``), and then
+    read the hop our OUTERMOST trusted proxy recorded — the ``trusted_proxies``-th entry
+    from the RIGHT — so prepended fake hops on the left are ignored. With 0 (the default,
+    not behind a trusted proxy) XFF is discarded and the real peer address is used."""
+    peer = request.client.host if request.client else "unknown"
+    if trusted_proxies <= 0:
+        return peer
+    hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    if len(hops) >= trusted_proxies:
+        return hops[-trusted_proxies]
+    return peer   # fewer hops than expected → header is spoofed/absent, trust the peer
 
 
 def enforce(request: Request, bucket: str) -> None:
@@ -87,7 +96,9 @@ def enforce(request: Request, bucket: str) -> None:
     limiter: RateLimiter | None = getattr(request.app.state, "limiter", None)
     if limiter is None:
         return
+    settings = getattr(request.app.state, "settings", None)
+    trusted = getattr(settings, "trusted_proxies", 0) if settings is not None else 0
     limit, window = LIMITS.get(bucket, _DEFAULT)
-    if not limiter.check(bucket, client_ip(request), limit=limit, window=window):
+    if not limiter.check(bucket, client_ip(request, trusted_proxies=trusted), limit=limit, window=window):
         raise HTTPException(status_code=429,
                             detail="Too many requests — slow down and try again shortly.")

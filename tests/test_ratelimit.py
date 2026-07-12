@@ -47,9 +47,25 @@ class _Req:
         self.client = type("C", (), {"host": host})()
 
 
-def test_client_ip():
-    assert client_ip(_Req(xff="9.9.9.9, 10.0.0.1")) == "9.9.9.9"  # first hop
+def test_client_ip_ignores_forwarded_header_without_a_trusted_proxy():
+    # Default (no proxy): X-Forwarded-For is attacker-controlled, so it's discarded and
+    # the real peer address is used — otherwise the login/reset/checkout limits are moot.
+    assert client_ip(_Req(xff="9.9.9.9, 10.0.0.1", host="1.2.3.4")) == "1.2.3.4"
     assert client_ip(_Req(host="5.6.7.8")) == "5.6.7.8"
+
+
+def test_client_ip_reads_the_hop_the_trusted_proxy_recorded():
+    # Behind one trusted proxy, the real client is the LAST hop (added by our proxy).
+    assert client_ip(_Req(xff="9.9.9.9", host="10.0.0.1"), trusted_proxies=1) == "9.9.9.9"
+
+
+def test_client_ip_resists_forwarded_spoofing():
+    # An attacker prepends fake hops on the left; with one trusted proxy we take the
+    # rightmost (proxy-appended) hop, so the spoofed entries are ignored.
+    spoofed = _Req(xff="1.1.1.1, 2.2.2.2, 9.9.9.9", host="10.0.0.1")
+    assert client_ip(spoofed, trusted_proxies=1) == "9.9.9.9"       # not the spoofed 1.1.1.1
+    # Header absent while a proxy is expected → fall back to the peer, never guess.
+    assert client_ip(_Req(host="10.0.0.1"), trusted_proxies=1) == "10.0.0.1"
 
 
 def test_login_is_rate_limited(client):

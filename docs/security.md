@@ -60,8 +60,11 @@ only a **payment-mode** checkout settles an invoice. *Tests: `test_webhooks.py`,
 **Input is bounded & injection-safe.** Public free-text is length-capped at the data
 layer; CSV exports neutralize spreadsheet-formula injection; calendar output is
 RFC-5545 escaped; every template output is Jinja-autoescaped. Per-IP rate limits cover
-login, signup, reset, inquiry, booking, and checkout. Limiter identity state is capped
-and fails closed under a high-cardinality flood.
+login, signup, reset, inquiry, booking, and checkout. The limiter keys on the real
+client IP: `X-Forwarded-For` is only trusted `HESTIA_TRUSTED_PROXIES` hops deep (1 for
+the Caddy deploy, read from the right), so a spoofed header can't dodge the limits;
+without a trusted proxy the header is ignored entirely. Limiter identity state is capped
+and fails closed under a high-cardinality flood. *Tests: `test_ratelimit.py`.*
 
 **Defense-in-depth headers.** Every response carries `nosniff`, `X-Frame-Options`,
 `Referrer-Policy`, and a **Content-Security-Policy** with a per-request nonce —
@@ -77,7 +80,10 @@ and fails closed under a high-cardinality flood.
   `HESTIA_TENANT_KEY_PEPPER`, `HESTIA_SESSION_SECRET`. Never commit real values;
   `.env` is git-ignored — `chmod 600 .env`.
 - Live Stripe + SMTP credentials live only in `.env` on the box. See
-  `docs/deploy-wiring.md`. Preflight **fails** on default/placeholder secrets.
+  `docs/deploy-wiring.md`. Preflight **fails** on default/placeholder secrets, and in
+  SaaS mode the app itself **refuses to start** with any CHANGE_ME secret — a
+  misconfigured box fails closed at startup rather than serving forgeable CSRF tokens.
+  *Tests: `test_fail_closed.py`.*
 - Secrets appear only in outbound auth headers and crypto — never in a log line,
   template, error, or JSON response. `config_warnings` names a bad secret, never prints
   its value (`test_config.py`).
