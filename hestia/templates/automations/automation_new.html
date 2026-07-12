@@ -19,6 +19,11 @@
     <input type="text" id="delay_days" name="delay_days" value="0" style="max-width:120px">
 
     <input type="hidden" name="action" value="email_client">
+    <div class="automation-chain" style="margin:2px 0 4px">
+      <span class="chip-trigger">⚡ your trigger</span>
+      <span class="arrow">→</span>
+      <span class="chip-step">✉ email client</span>
+    </div>
 
     <label for="subject">Email subject</label>
     <input type="text" id="subject" name="subject" placeholder="Welcome to {studio_name}, {client_name}!" required>

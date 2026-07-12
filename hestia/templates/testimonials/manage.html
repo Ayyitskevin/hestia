@@ -79,7 +79,7 @@
         <div>
           <span class="stars" title="{{ t.rating }} / 5">{{ '★' * t.rating }}{{ '☆' * (5 - t.rating) }}</span>
           <strong>{{ t.author_name or 'Anonymous' }}</strong>
-          <span class="pill {{ 'on' if t.status == 'featured' else '' }}">{{ t.status }}</span>
+          <span class="pill {{ 'on' if t.status == 'featured' else ('off' if t.status == 'hidden' else '') }}">{{ t.status }}</span>
         </div>
         {% if t.status == 'requested' %}
           <p class="muted">Awaiting their reply · share link:

@@ -9,61 +9,75 @@
   </div>
 </div>
 
-<details class="card" style="margin-bottom:18px">
-  <summary style="cursor:pointer; font-weight:600">📅 Subscribe to your calendar</summary>
-  <div class="stack" style="margin-top:10px; gap:8px">
-    <p class="muted" style="margin:0">Add this private link in Google, Apple, or Outlook Calendar
-      (“Subscribe from URL”) to see your sessions appear and stay up to date automatically.</p>
-    <a class="offer-url" href="{{ feed_url }}">{{ feed_url }}</a>
-    <div style="display:flex; gap:8px; flex-wrap:wrap">
-      <a class="btn secondary" href="/schedule/calendar.ics">Download .ics</a>
-      <form method="post" action="/schedule/calendar/regenerate" style="margin:0"
-            data-confirm="Regenerate the link? Any calendar already subscribed will stop updating.">
-        {% include "_csrf.html" %}
-        <button class="btn ghost" type="submit">Regenerate link</button>
-      </form>
-    </div>
-  </div>
-</details>
-{% if agenda %}
-<div class="card stack" style="margin-bottom:18px">
-  <h3>Agenda · next 3 weeks</h3>
-  {% for g in agenda %}
-  <div class="stack" style="gap:4px">
-    <div class="label">{{ g.label }}</div>
-    {% for a in g.appointments %}
-    <div style="display:flex; gap:10px; align-items:baseline">
-      <span class="muted" style="min-width:48px">{{ a.at_time }}</span>
-      <a href="/schedule/{{ a.id }}">{{ a.title }}</a>
-      <span class="muted" style="font-size:.85rem">{{ a.kind_label }}{% if a.client_name %} · {{ a.client_name }}{% endif %}</span>
-    </div>
-    {% endfor %}
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
-{% if appointments %}
-<div class="card">
-  <table>
-    <thead><tr><th>Session</th><th>Client</th><th>Type</th><th>When</th><th>Status</th></tr></thead>
-    <tbody>
-      {% for a in appointments %}
-      <tr>
-        <td><a href="/schedule/{{ a.id }}">{{ a.title }}</a></td>
-        <td class="muted">{{ a.client_name or a.project_name or "—" }}</td>
-        <td class="muted">{{ a.kind_label }}</td>
-        <td class="muted">{{ a.starts_at or "—" }}</td>
-        <td><span class="pill {{ 'on' if a.status in ('confirmed', 'completed') else 'off' }}">{{ a.status_label }}</span></td>
-      </tr>
+<div class="record-grid" style="grid-template-columns:1fr 280px">
+  <div style="min-width:0">
+    <details class="card" style="margin-bottom:14px">
+      <summary style="cursor:pointer; font-weight:600">Subscribe to your calendar</summary>
+      <div class="stack" style="margin-top:10px; gap:8px">
+        <p class="muted" style="margin:0">Add this private link in Google, Apple, or Outlook Calendar
+          ("Subscribe from URL") to see your sessions appear and stay up to date automatically.</p>
+        <a class="offer-url" href="{{ feed_url }}">{{ feed_url }}</a>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <a class="btn secondary" href="/schedule/calendar.ics">Download .ics</a>
+          <form method="post" action="/schedule/calendar/regenerate" style="margin:0"
+                data-confirm="Regenerate the link? Any calendar already subscribed will stop updating.">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit">Regenerate link</button>
+          </form>
+        </div>
+      </div>
+    </details>
+    {% if agenda %}
+    <div class="card stack" style="margin-bottom:14px">
+      <h3 style="margin:0">Agenda <span class="muted" style="font-weight:normal; font-size:.85rem">· next 3 weeks</span></h3>
+      {% for g in agenda %}
+      <div>
+        <div class="label" style="margin-bottom:6px">{{ g.label }}</div>
+        {% for a in g.appointments %}
+        <div style="display:flex; gap:10px; align-items:baseline; padding:6px 0; border-bottom:1px solid var(--hairline-2)">
+          <span class="muted mono" style="min-width:48px; font-size:.78rem">{{ a.at_time }}</span>
+          <a href="/schedule/{{ a.id }}" style="font-size:.88rem">{{ a.title }}</a>
+          <span class="muted" style="font-size:.78rem">{{ a.kind_label }}{% if a.client_name %} · {{ a.client_name }}{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
       {% endfor %}
-    </tbody>
-  </table>
+    </div>
+    {% endif %}
+    {% if appointments %}
+    <div class="card" style="padding:0">
+      <table>
+        <thead><tr><th>Session</th><th>Client</th><th>Type</th><th>When</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for a in appointments %}
+          <tr>
+            <td><a href="/schedule/{{ a.id }}">{{ a.title }}</a></td>
+            <td class="muted">{{ a.client_name or a.project_name or "—" }}</td>
+            <td class="muted">{{ a.kind_label }}</td>
+            <td class="muted">{{ a.starts_at or "—" }}</td>
+            <td><span class="pill {{ 'on' if a.status in ('confirmed', 'completed') else 'off' }}">{{ a.status_label }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card stack">
+      <p class="muted">No sessions yet — propose a few times for a consultation or shoot and let the
+        client pick one. They'll get a confirmation and a reminder automatically.</p>
+      <a class="btn" href="/schedule/new">Schedule your first session</a>
+    </div>
+    {% endif %}
+  </div>
+  <div class="record-rail">
+    <div class="related-card">
+      <div class="related-head"><span class="label">BOOKING TYPES</span><a href="/settings/booking-types">Manage →</a></div>
+      <p class="muted" style="font-size:.78rem; margin:0">Session durations, deposits, and buffer time clients see on your public booking page.</p>
+    </div>
+    <div class="related-card">
+      <div class="related-head"><span class="label">MINI-SESSIONS</span><a href="/mini-sessions">Open →</a></div>
+      <p class="muted" style="font-size:.78rem; margin:0">Slot-based events with a shared date, location, and per-slot booking link.</p>
+    </div>
+  </div>
 </div>
-{% else %}
-<div class="card stack">
-  <p class="muted">No sessions yet — propose a few times for a consultation or shoot and let the
-    client pick one. They'll get a confirmation and a reminder automatically.</p>
-  <a class="btn" href="/schedule/new">Schedule your first session</a>
-</div>
-{% endif %}
 {% endblock %}

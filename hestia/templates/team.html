@@ -6,57 +6,68 @@
     <h1>Team</h1>
     <span class="muted">{{ tenant.name }} · owner-only</span>
   </div>
-  <a class="btn secondary" href="/settings/account">Account →</a>
 </div>
 
-{% if invited %}
-  <div class="alert success">Admin added. Give them their temporary password out-of-band —
-    they can sign in at /login with the email you used.</div>
-{% endif %}
-{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+<div class="settings-layout">
+  <nav class="settings-rail">
+    <a href="/settings/account" class="{{ 'active' if request.url.path.startswith('/settings/account') }}">Account</a>
+    <a href="/settings/billing" class="{{ 'active' if request.url.path.startswith('/settings/billing') }}">Billing</a>
+    <a href="/settings/team" class="{{ 'active' if request.url.path.startswith('/settings/team') }}">Team</a>
+    <a href="/settings/site" class="{{ 'active' if request.url.path.startswith('/settings/site') }}">Site</a>
+    <a href="/settings/integrity" class="{{ 'active' if request.url.path.startswith('/settings/integrity') }}">Integrity</a>
+  </nav>
 
-<div class="card stack">
-  <h3 style="margin:0">Members</h3>
-  <table class="table">
-    <thead><tr><th>Email</th><th>Role</th><th></th></tr></thead>
-    <tbody>
-      {% for u in users %}
-      <tr>
-        <td>{{ u.email }}</td>
-        <td>
-          {% if u.role == 'owner' %}Owner
-          {% elif u.role == 'admin' %}Admin
-          {% else %}{{ u.role }}{% endif %}
-        </td>
-        <td style="text-align:right">
-          {% if u.role == 'admin' %}
-            <form method="post" action="/settings/team/{{ u.id }}/remove" style="display:inline">
-              {% include "_csrf.html" %}
-              <button class="btn secondary" type="submit" data-confirm="Remove this admin? They'll lose access immediately.">Remove</button>
-            </form>
-          {% else %}
-            <span class="muted">—</span>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+  <div>
+    {% if invited %}
+      <div class="alert ok">Admin added. Give them their temporary password out-of-band —
+        they can sign in at /login with the email you used.</div>
+    {% endif %}
+    {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
 
-<div class="card stack" style="margin-top:18px">
-  <h3>Add a studio admin</h3>
-  <p class="muted">An admin can run the studio — galleries, clients, the AI pipeline, and site
-    settings — but can't change the plan, manage billing, or remove other admins. Only you
-    (the owner) can.</p>
-  <form method="post" action="/settings/team/invite">
-    {% include "_csrf.html" %}
-    <div class="label">Email</div>
-    <input type="email" name="email" required placeholder="shooter@studio.com">
-    <div class="label" style="margin-top:10px">Temporary password</div>
-    <input type="password" name="password" required minlength="8" autocomplete="new-password"
-      placeholder="at least 8 characters">
-    <div class="form-actions"><button class="btn" type="submit">Add admin</button></div>
-  </form>
+    <div class="card stack">
+      <h3 style="margin:0">Members</h3>
+      <table class="table">
+        <thead><tr><th>Email</th><th>Role</th><th></th></tr></thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td>{{ u.email }}</td>
+            <td>
+              {% if u.role == 'owner' %}Owner
+              {% elif u.role == 'admin' %}Admin
+              {% else %}{{ u.role }}{% endif %}
+            </td>
+            <td style="text-align:right">
+              {% if u.role == 'admin' %}
+                <form method="post" action="/settings/team/{{ u.id }}/remove" style="display:inline">
+                  {% include "_csrf.html" %}
+                  <button class="btn secondary" type="submit" data-confirm="Remove this admin? They'll lose access immediately.">Remove</button>
+                </form>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card stack" style="margin-top:18px">
+      <h3>Add a studio admin</h3>
+      <p class="muted">An admin can run the studio — galleries, clients, the AI pipeline, and site
+        settings — but can't change the plan, manage billing, or remove other admins. Only you
+        (the owner) can.</p>
+      <form method="post" action="/settings/team/invite">
+        {% include "_csrf.html" %}
+        <div class="label">Email</div>
+        <input type="email" name="email" required placeholder="shooter@studio.com">
+        <div class="label" style="margin-top:10px">Temporary password</div>
+        <input type="password" name="password" required minlength="8" autocomplete="new-password"
+          placeholder="at least 8 characters">
+        <div class="form-actions"><button class="btn" type="submit">Add admin</button></div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}

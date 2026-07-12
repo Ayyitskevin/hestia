@@ -7,6 +7,7 @@
     <span class="muted">Every notification Hestia sends — invoice links, lead alerts —
       via <span class="pill">{{ email_backend }}</span></span>
   </div>
+  <a class="btn secondary" href="/automations">← Automations</a>
 </div>
 
 {% if email_backend == 'mock' %}
@@ -23,9 +24,9 @@
       <span class="muted" style="font-size:.8rem; white-space:nowrap">{{ e.created_at }}</span>
     </div>
     <div class="muted" style="font-size:.85rem">
-      to {{ e.to_addr }} · <span class="pill">{{ e.status }}</span>
+      to {{ e.to_addr }} · <span class="pill {{ 'danger' if e.status.startswith('error') else 'on' }}">{{ e.status }}</span>
     </div>
-    <pre style="white-space:pre-wrap; margin:10px 0 0; font:inherit; color:var(--muted)">{{ e.body }}</pre>
+    <pre class="muted" style="white-space:pre-wrap; margin:10px 0 0; font:inherit">{{ e.body }}</pre>
   </div>
   {% endfor %}
 </div>

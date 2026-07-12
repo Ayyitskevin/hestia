@@ -10,7 +10,6 @@
       {% if invoice.project_id %} · <a href="/projects/{{ invoice.project_id }}">{{ invoice.project_name }}</a>{% endif %}
       · <span class="pill {{ 'on' if invoice.status == 'paid' else 'off' }}">{{ invoice.status }}</span>
     </span>
-    {% if invoice.tax_cents %}<div class="muted" style="font-size:.9em">+ {{ invoice.tax_display }} tax → client pays {{ invoice.total_display }}</div>{% endif %}
   </div>
   <div style="display:flex; gap:10px">
     {% if invoice.status == 'draft' %}
@@ -34,6 +33,13 @@
     <form method="post" action="/invoices/{{ invoice.id }}/duplicate" style="margin:0">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Duplicate</button></form>
   </div>
 </div>
+
+{% if invoice.tax_cents %}
+<div class="kpi-row" style="margin-bottom:14px">
+  <div class="kpi-card"><div class="kpi-label">Tax</div><div class="kpi-value">{{ invoice.tax_display }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Client pays</div><div class="kpi-value">{{ invoice.total_display }}</div></div>
+</div>
+{% endif %}
 
 {% if invoice.status == 'paid' %}
 <div class="alert ok" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">

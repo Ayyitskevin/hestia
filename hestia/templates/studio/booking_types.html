@@ -7,10 +7,8 @@
 </div>
 
 {% if not published %}
-<div class="card stack" style="border-color:#f0d9b4; background:#fff7ec">
-  <p style="margin:0">Your studio site isn't published yet, so the public booking page is hidden.
-    <a href="/settings/site">Publish your site</a> to share it.</p>
-</div>
+<div class="alert warn">Your studio site isn't published yet, so the public booking page is hidden.
+  <a href="/settings/site">Publish your site</a> to share it.</div>
 {% elif types|selectattr('active')|list %}
 <div class="card stack">
   <p style="margin:0">Share your booking link so clients can request a session:

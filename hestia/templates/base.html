@@ -30,16 +30,25 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>%F0%9F%94%A5</text></svg>">
   {% block head_extra %}{% endblock %}
 </head>
-<body>
-  <header class="site-header">
+{% set path = request.url.path %}
+{% set section = 'today' %}
+{% if path.startswith('/clients') or path.startswith('/projects') or path.startswith('/pipeline') or path.startswith('/schedule') or path.startswith('/mini-sessions') or path.startswith('/settings/booking-types') %}
+  {% set section = 'clients' %}
+{% elif path.startswith('/galleries') or path.startswith('/library') %}
+  {% set section = 'galleries' %}
+{% elif path.startswith('/contracts') or path.startswith('/proposals') or path.startswith('/questionnaires') or path.startswith('/packages') %}
+  {% set section = 'sales' %}
+{% elif path.startswith('/invoices') or path.startswith('/payment-plans') or path.startswith('/recurring') or path.startswith('/finances') %}
+  {% set section = 'money' %}
+{% elif path.startswith('/settings') or path.startswith('/automations') or path.startswith('/team') %}
+  {% set section = 'studio' %}
+{% endif %}
+{% set new_href_map = {'today': '/galleries/new', 'clients': '/clients/new', 'galleries': '/galleries/new', 'sales': '/contracts/new', 'money': '/invoices/new', 'studio': '/automations/new'} %}
+{% set new_label_map = {'today': '+ Gallery', 'clients': '+ Client', 'galleries': '+ Gallery', 'sales': '+ Contract', 'money': '+ Invoice', 'studio': '+ Automation'} %}
+<body{% if auth and auth.is_admin %} class="admin-scope"{% endif %}>
+  <header class="site-header{% if auth and auth.is_admin %} admin-header{% elif not (auth and auth.tenant) %} mkt-header{% endif %}">
     <div class="wrap">
-      <a class="brand" href="/">
-        <svg class="flame" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 2c1.5 3 5 5.2 5 9a5 5 0 1 1-10 0c0-1.6.7-2.8 1.5-3.7C9 9 9.5 10 10.5 10c.9 0 1-1 0-2.2C9.4 6.3 10 3.5 12 2z" fill="#c0552f"/>
-          <path d="M12 13c.9 1 1.6 1.8 1.6 2.9a1.6 1.6 0 1 1-3.2 0c0-.7.5-1.2 1-1.8.3.4.6.7 1 .7.3 0 .3-.4 0-.8-.3-.4-.6-.7-.4-1z" fill="#e0a458"/>
-        </svg>
-        Hestia <small>the studio</small>
-      </a>
+      <a class="brand" href="/"><span class="flame"></span>hestia</a>
       <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Toggle menu">
       <label for="nav-toggle" class="nav-burger" aria-hidden="true">☰</label>
       <nav class="nav">
@@ -51,47 +60,106 @@
           <a href="/admin/integrity">Integrity</a>
           <a href="/admin/logout">Sign out</a>
         {% elif auth and auth.tenant %}
-          <form method="get" action="/search" role="search" style="display:inline-flex; margin-right:4px">
-            <input type="search" name="q" placeholder="Search…" aria-label="Search clients and projects"
-                   style="width:130px; padding:4px 8px">
-          </form>
-          <a href="/dashboard">Dashboard</a>
-          <a href="/clients">Clients</a>
-          <a href="/projects">Projects</a>
-          <a href="/pipeline">Pipeline</a>
-          <a href="/schedule">Schedule</a>
-          <a href="/settings/booking-types">Booking</a>
-          <a href="/mini-sessions">Mini-sessions</a>
-          <a href="/galleries">Galleries</a>
-          <a href="/library">Library</a>
-          <a href="/contracts">Contracts</a>
-          <a href="/proposals">Proposals</a>
-          <a href="/questionnaires">Forms</a>
-          <a href="/invoices">Invoices</a>
-          <a href="/payment-plans">Plans</a>
-          <a href="/packages">Packages</a>
-          <a href="/settings/discounts">Discounts</a>
-          <a href="/settings/giftcards">Gift cards</a>
-          <a href="/settings/offers">Offers</a>
-          <a href="/finances">Finances</a>
-          <a href="/automations">Automations</a>
-          <a href="/settings/site">Site</a>
-          <a href="/settings/outbox">Outbox</a>
-          <a href="/settings/activity">Activity</a>
-          <a href="/settings/account">Account</a>
-          <a href="/settings/billing">Billing</a>
-          <span class="muted">{{ auth.tenant.name }}</span>
-          <a href="/logout">Sign out</a>
+          <div class="segnav">
+            <a href="/dashboard" class="{{ 'active' if section == 'today' }}">Today</a>
+            <a href="/clients" class="{{ 'active' if section == 'clients' }}">Clients</a>
+            <a href="/galleries" class="{{ 'active' if section == 'galleries' }}">Galleries</a>
+            <a href="/contracts" class="{{ 'active' if section == 'sales' }}">Sales</a>
+            <a href="/invoices" class="{{ 'active' if section == 'money' }}">Money</a>
+            <a href="/settings/account" class="{{ 'active' if section == 'studio' }}">Studio</a>
+          </div>
+          <div class="nav-secondary">
+            <span class="muted">{{ auth.tenant.name }}</span>
+            <a href="/settings/account">Account</a>
+            <a href="/logout">Sign out</a>
+          </div>
         {% else %}
+          <a href="/">Product</a>
           <a href="/demo">Demo</a>
           <a href="/pricing">Pricing</a>
           <a href="/beta">Beta access</a>
           <a href="/admin">Admin</a>
-          <a class="btn secondary" href="/login">Sign in</a>
         {% endif %}
       </nav>
+      {% if auth and auth.tenant %}
+      <div class="hdr-actions">
+        <button type="button" class="cmdk-chip" data-cmdk-open aria-haspopup="dialog">⌘K</button>
+        <a class="btn" href="{{ new_href_map[section] }}">{{ new_label_map[section] }}</a>
+        {% set _words = (auth.tenant.name or 'Studio').split() %}
+        <a class="avatar" href="/settings/account" title="{{ auth.tenant.name }}">{{ (_words[:2] | map('first') | join) | upper }}</a>
+      </div>
+      {% elif not (auth and auth.is_admin) %}
+      <div class="hdr-actions">
+        <a href="/login">Sign in</a>
+        {% if settings.signup_enabled %}
+          <a class="btn" href="/signup?source=nav&amp;path={{ path }}">Start free trial</a>
+        {% else %}
+          <a class="btn" href="/beta?source=nav&amp;path={{ path }}">Request beta access</a>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
   </header>
+
+  {% if auth and auth.tenant %}
+  <dialog class="cmdk" id="cmdk-dialog">
+    <button type="button" class="cmdk-close" data-cmdk-close aria-label="Close">✕</button>
+    <form class="cmdk-search" method="get" action="/search" role="search">
+      <input type="search" name="q" placeholder="Search clients, projects…" aria-label="Search clients and projects" autocomplete="off">
+    </form>
+    <div class="cmdk-groups">
+      <div class="cmdk-group-label">Clients</div>
+      <a class="cmdk-link" href="/clients">Clients</a>
+      <a class="cmdk-link" href="/projects">Projects</a>
+      <a class="cmdk-link" href="/pipeline">Pipeline</a>
+      <a class="cmdk-link" href="/schedule">Schedule</a>
+      <a class="cmdk-link" href="/settings/booking-types">Booking types</a>
+      <a class="cmdk-link" href="/mini-sessions">Mini-sessions</a>
+      <div class="cmdk-group-label">Galleries</div>
+      <a class="cmdk-link" href="/galleries">Galleries</a>
+      <a class="cmdk-link" href="/library">Library</a>
+      <div class="cmdk-group-label">Sales</div>
+      <a class="cmdk-link" href="/contracts">Contracts</a>
+      <a class="cmdk-link" href="/proposals">Proposals</a>
+      <a class="cmdk-link" href="/questionnaires">Forms</a>
+      <a class="cmdk-link" href="/packages">Packages</a>
+      <div class="cmdk-group-label">Money</div>
+      <a class="cmdk-link" href="/invoices">Invoices</a>
+      <a class="cmdk-link" href="/payment-plans">Plans</a>
+      <a class="cmdk-link" href="/recurring">Recurring</a>
+      <a class="cmdk-link" href="/finances">Finances</a>
+      <div class="cmdk-group-label">Studio</div>
+      <a class="cmdk-link" href="/automations">Automations</a>
+      <a class="cmdk-link" href="/settings/discounts">Discounts</a>
+      <a class="cmdk-link" href="/settings/giftcards">Gift cards</a>
+      <a class="cmdk-link" href="/settings/offers">Offers</a>
+      <a class="cmdk-link" href="/settings/site">Site</a>
+      <a class="cmdk-link" href="/settings/outbox">Outbox</a>
+      <a class="cmdk-link" href="/settings/activity">Activity</a>
+      <a class="cmdk-link" href="/settings/account">Account</a>
+      <a class="cmdk-link" href="/settings/billing">Billing</a>
+      <a class="cmdk-link" href="/team">Team</a>
+    </div>
+  </dialog>
+  <script nonce="{{ csp_nonce }}">
+  (function () {
+    var dlg = document.getElementById("cmdk-dialog");
+    if (!dlg) return;
+    document.querySelectorAll("[data-cmdk-open]").forEach(function (btn) {
+      btn.addEventListener("click", function () { dlg.showModal(); dlg.querySelector("input").focus(); });
+    });
+    dlg.querySelectorAll("[data-cmdk-close]").forEach(function (btn) {
+      btn.addEventListener("click", function () { dlg.close(); });
+    });
+    dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });
+    document.addEventListener("keydown", function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); dlg.showModal(); dlg.querySelector("input").focus(); }
+      else if (e.key === "Escape" && dlg.open) { dlg.close(); }
+    });
+  })();
+  </script>
+  {% endif %}
+
   <main>
     <div class="wrap {% block wrap_class %}{% endblock %}">
       {% block content %}{% endblock %}
@@ -99,7 +167,7 @@
   </main>
   <footer class="site-footer">
     <div class="wrap">
-      Hestia · the AI-native studio for photographers · v{{ app_version }}
+      hestia · the AI-native studio for photographers · v{{ app_version }}
     </div>
   </footer>
   {% block scripts %}{% endblock %}

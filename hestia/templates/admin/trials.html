@@ -9,14 +9,14 @@
   <a class="btn ghost" href="/admin/tenants">All studios</a>
 </div>
 
-<div class="grid cols-4" style="margin-top:18px">
-  <div class="card"><div class="label">Studios</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.total }}</div></div>
-  <div class="card"><div class="label">Trial ready</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.trial_ready }}</div></div>
-  <div class="card"><div class="label">Trialing</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.trialing }}</div></div>
-  <div class="card"><div class="label">Past due</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.past_due }}</div></div>
-  <div class="card"><div class="label">Stalled</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.stalled }}</div></div>
-  <div class="card"><div class="label">Pricing signups</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.pricing_signups }}</div></div>
-  <div class="card"><div class="label">Demo signups</div><div style="font-size:1.8rem;font-weight:800">{{ cockpit.summary.demo_signups }}</div></div>
+<div class="kpi-row" style="margin-top:18px">
+  <div class="kpi-card"><div class="kpi-label">Studios</div><div class="kpi-value">{{ cockpit.summary.total }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Trial ready</div><div class="kpi-value">{{ cockpit.summary.trial_ready }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Trialing</div><div class="kpi-value">{{ cockpit.summary.trialing }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Past due</div><div class="kpi-value">{{ cockpit.summary.past_due }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Stalled</div><div class="kpi-value">{{ cockpit.summary.stalled }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Pricing signups</div><div class="kpi-value">{{ cockpit.summary.pricing_signups }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Demo signups</div><div class="kpi-value">{{ cockpit.summary.demo_signups }}</div></div>
 </div>
 
 {% if cockpit.summary.source_breakdown %}

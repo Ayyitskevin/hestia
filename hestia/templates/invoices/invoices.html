@@ -1,46 +1,48 @@
 {% extends "base.html" %}
 {% block title %}Invoices — Hestia{% endblock %}
 {% block content %}
-<div class="page-title">
-  <h1>Invoices</h1>
-  <div style="display:flex; gap:10px">
-    <a class="btn secondary" href="/recurring">⟳ Recurring</a>
-    <a class="btn" href="/invoices/new">+ New invoice</a>
+{% set money_tab = 'invoices' %}
+<div class="hub-head">
+  <div>
+    <h1>Money</h1>
+    <div class="sub">Invoices, plans, and recurring in one ledger</div>
   </div>
+  {% include "_tabs_money.html" %}
+</div>
+<div class="page-title" style="margin-top:2px">
+  <div></div>
+  <a class="btn" href="/invoices/new">+ New invoice</a>
 </div>
 
 {% if ar and ar.outstanding_count %}
-<div class="health-strip" style="margin-bottom:18px">
-  <div class="health-item"><span class="svc">{{ ar.outstanding }}</span>
-    <span class="url">outstanding · {{ ar.outstanding_count }} unpaid</span></div>
+<div class="kpi-row" style="margin-bottom:14px">
+  <div class="kpi-card"><div class="kpi-label">outstanding</div><div class="kpi-value">{{ ar.outstanding }}</div><div class="kpi-delta">{{ ar.outstanding_count }} unpaid</div></div>
   {% if ar.overdue_count %}
-  <div class="health-item"><span class="svc">{{ ar.overdue }}</span>
-    <span class="url"><span class="pill off">{{ ar.overdue_count }} overdue</span></span></div>
+  <div class="kpi-card danger"><div class="kpi-label">overdue</div><div class="kpi-value" style="color:var(--danger)">{{ ar.overdue }}</div><div class="kpi-delta down">{{ ar.overdue_count }} invoice{{ '' if ar.overdue_count == 1 else 's' }}</div></div>
   {% endif %}
 </div>
 {% endif %}
 
-<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; align-items:center">
-  <span class="muted" style="font-size:.85rem">Filter:</span>
+<div class="filter-pills" style="margin-bottom:14px">
   {% for val, label in [('', 'All'), ('draft', 'Draft'), ('sent', 'Sent'), ('overdue', 'Overdue'), ('paid', 'Paid'), ('void', 'Void')] %}
-  <a class="pill {{ 'on' if active_status == val else '' }}"
+  <a class="{{ 'active' if active_status == val }}"
      href="/invoices{{ '?status=' ~ val if val else '' }}">{{ label }}</a>
   {% endfor %}
 </div>
 
 {% if invoices %}
-<div class="card">
+<div class="doc-list">
   <table>
-    <thead><tr><th>Invoice</th><th>Client</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Invoice</th><th>Client</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
     <tbody>
       {% for i in invoices %}
       <tr>
         <td><a href="/invoices/{{ i.id }}">{{ i.title }}</a></td>
         <td class="muted">{{ i.client_name or i.project_name or "—" }}</td>
-        <td>{{ i.amount_display }}</td>
+        <td class="num">{{ i.amount_display }}</td>
         <td>
           <span class="pill {{ 'on' if i.status == 'paid' else 'off' }}">{{ i.status }}</span>
-          {% if i.is_overdue %}<span class="pill off" title="{{ i.days_overdue }} day(s) past due">overdue{% if i.days_overdue %} · {{ i.days_overdue }}d{% endif %}</span>{% endif %}
+          {% if i.is_overdue %}<span class="pill danger" title="{{ i.days_overdue }} day(s) past due">overdue{% if i.days_overdue %} · {{ i.days_overdue }}d{% endif %}</span>{% endif %}
         </td>
         <td style="text-align:right">
           {% if i.status == 'sent' %}

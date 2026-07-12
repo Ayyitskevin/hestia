@@ -1,25 +1,30 @@
 {% extends "base.html" %}
 {% block title %}Contracts — Hestia{% endblock %}
 {% block content %}
-<div class="page-title">
-  <h1>Contracts</h1>
+{% set doc_tab = 'contracts' %}
+<div class="hub-head">
+  <div>
+    <h1>Documents</h1>
+    <div class="sub">Contracts, proposals, and forms — with templates and e-sign</div>
+  </div>
+  {% include "_tabs_documents.html" %}
+</div>
+<div class="page-title" style="margin-top:2px">
+  <div></div>
   <a class="btn" href="/contracts/new">+ New contract</a>
 </div>
 {% if contracts %}
-<div class="card">
-  <table>
-    <thead><tr><th>Contract</th><th>Client</th><th>Status</th><th>Signed</th></tr></thead>
-    <tbody>
-      {% for ct in contracts %}
-      <tr>
-        <td><a href="/contracts/{{ ct.id }}">{{ ct.title }}</a></td>
-        <td class="muted">{{ ct.client_name or ct.signer_name or ct.project_name or "—" }}</td>
-        <td><span class="pill {{ 'on' if ct.status == 'signed' else 'off' }}">{{ ct.status }}</span></td>
-        <td class="muted">{{ ct.signed_at or "—" }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="doc-list">
+  {% for ct in contracts %}
+  <a class="doc-row" href="/contracts/{{ ct.id }}">
+    <span class="doc-icon" style="background:var(--sign-tint); color:var(--sign)">✍</span>
+    <div class="doc-body">
+      <div class="doc-title">{{ ct.title }}</div>
+      <div class="doc-meta">Contract{% if ct.client_name or ct.signer_name or ct.project_name %} · {{ ct.client_name or ct.signer_name or ct.project_name }}{% endif %}{% if ct.signed_at %} · signed {{ ct.signed_at }}{% endif %}</div>
+    </div>
+    <span class="pill {{ 'on' if ct.status == 'signed' else 'off' }}">{{ ct.status }}</span>
+  </a>
+  {% endfor %}
 </div>
 {% else %}
 <div class="card stack">

@@ -4,12 +4,12 @@
 {% block content %}
 <div class="page-title"><h1>Import clients</h1></div>
 
-{% if error %}<div class="card stack"><p class="muted">⚠ {{ error }}</p>
+{% if error %}<div class="card stack"><div class="alert error">⚠ {{ error }}</div>
   <div class="form-actions"><a class="btn" href="/clients/import">Try again</a></div></div>
 {% elif summary %}
 <div class="card stack">
   <h3>Import complete</h3>
-  <p><strong>{{ summary.imported }}</strong> client{{ '' if summary.imported == 1 else 's' }} imported.</p>
+  <div class="alert ok"><strong>{{ summary.imported }}</strong> client{{ '' if summary.imported == 1 else 's' }} imported.</div>
   {% if summary.skipped_duplicate %}<p class="muted">{{ summary.skipped_duplicate }} skipped — already in your client book (matched by email).</p>{% endif %}
   {% if summary.skipped_blank %}<p class="muted">{{ summary.skipped_blank }} skipped — no name.</p>{% endif %}
   <div class="form-actions">

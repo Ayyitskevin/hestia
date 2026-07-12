@@ -30,7 +30,7 @@
 <div class="alert">Next action: {{ proposal.next_action }} · {{ proposal.next_action_detail }}{% if proposal.reminder_count %} · reminded {{ proposal.reminder_count }} time{{ '' if proposal.reminder_count == 1 else 's' }}{% endif %}</div>
 {% endif %}
 
-<div class="grid-2">
+<div class="grid cols-2">
   <div class="card stack">
     <h3>Proposal link</h3>
     {% if proposal.status in ('sent', 'accepted') %}
@@ -47,7 +47,7 @@
   </div>
 </div>
 
-<div class="grid-2" style="margin-top:18px">
+<div class="grid cols-2" style="margin-top:18px">
   <div class="card stack">
     <h3>Agreement</h3>
     <p>Status: <span class="pill {{ 'on' if proposal.contract_status == 'signed' else 'off' }}">{{ proposal.contract_status }}</span></p>

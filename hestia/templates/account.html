@@ -9,98 +9,108 @@
   <a class="btn secondary" href="/dashboard">Dashboard</a>
 </div>
 
-<div class="grid cols-2">
-  <div class="card stack">
-    <h3 style="margin:0">Studio</h3>
-    <div>
-      <div class="label">Owner</div>
-      <div>{{ owner_email or "Not set" }}</div>
-    </div>
-    <div>
-      <div class="label">Studio slug</div>
-      <div class="mono">{{ tenant.slug }}</div>
-    </div>
-    <div>
-      <div class="label">Public site</div>
-      <a href="{{ studio_url }}" target="_blank">{{ studio_url }}</a>
-    </div>
-    {% if hosted_url %}
-    <div>
-      <div class="label">Hosted subdomain</div>
-      <a href="{{ hosted_url }}" target="_blank">{{ hosted_url }}</a>
-    </div>
-    {% endif %}
-  </div>
+<div class="settings-layout">
+  <nav class="settings-rail">
+    <a href="/settings/account" class="{{ 'active' if request.url.path.startswith('/settings/account') }}">Account</a>
+    <a href="/settings/billing" class="{{ 'active' if request.url.path.startswith('/settings/billing') }}">Billing</a>
+    <a href="/settings/team" class="{{ 'active' if request.url.path.startswith('/settings/team') }}">Team</a>
+    <a href="/settings/site" class="{{ 'active' if request.url.path.startswith('/settings/site') }}">Site</a>
+    <a href="/settings/integrity" class="{{ 'active' if request.url.path.startswith('/settings/integrity') }}">Integrity</a>
+  </nav>
 
-  <div class="card stack">
-    <h3 style="margin:0">Custom domain</h3>
-    {% if dns_message %}
-      <div class="alert {{ 'success' if custom_domain.status == 'verified' else 'info' }}">{{ dns_message }}</div>
-    {% endif %}
-    {% if domain_error %}<div class="alert error">{{ domain_error }}</div>{% endif %}
-    <form method="post" action="/settings/account/domain" class="stack">
-      {% include "_csrf.html" %}
-      <label for="custom_domain">Domain</label>
-      <input type="text" id="custom_domain" name="custom_domain"
-             value="{{ custom_domain.domain }}" placeholder="photos.example.com">
-      <button class="btn" type="submit">Save domain</button>
-    </form>
-    {% if custom_domain.domain %}
+  <div class="grid cols-2">
+    <div class="card stack">
+      <h3 style="margin:0">Studio</h3>
       <div>
-        <div class="label">Status</div>
-        <span class="pill {{ 'on' if custom_domain.status == 'verified' else 'off' }}">{{ custom_domain.status }}</span>
+        <div class="label">Owner</div>
+        <div>{{ owner_email or "Not set" }}</div>
       </div>
       <div>
-        <div class="label">CNAME target</div>
-        <div class="mono">{{ custom_domain.target }}</div>
+        <div class="label">Studio slug</div>
+        <div class="mono">{{ tenant.slug }}</div>
       </div>
       <div>
-        <div class="label">TXT record</div>
-        <div class="mono">{{ custom_domain.dns_name }}</div>
-        <div class="mono">{{ custom_domain.token }}</div>
+        <div class="label">Public site</div>
+        <a href="{{ studio_url }}" target="_blank">{{ studio_url }}</a>
       </div>
-      {% if custom_domain.url %}
-      <a class="btn secondary" href="{{ custom_domain.url }}" target="_blank">Open custom domain</a>
+      {% if hosted_url %}
+      <div>
+        <div class="label">Hosted subdomain</div>
+        <a href="{{ hosted_url }}" target="_blank">{{ hosted_url }}</a>
+      </div>
       {% endif %}
-      {% if custom_domain.domain and custom_domain.status != 'verified' %}
-      <form method="post" action="/settings/account/domain/check">
-        {% include "_csrf.html" %}
-        <button class="btn" type="submit">Check DNS &amp; verify</button>
-      </form>
-      {% endif %}
-    {% else %}
-      <p class="hint">Leave blank to use the hosted Hestia subdomain.</p>
-    {% endif %}
-  </div>
-
-  <div class="card stack">
-    <h3 style="margin:0">Billing</h3>
-    <div>
-      <div class="label">Current plan</div>
-      <span class="pill on">{{ plan.name }} · {{ plan.price }}</span>
-      {% if subscription %}<span class="pill">{{ subscription.status }}</span>{% endif %}
     </div>
-    <p class="muted" style="margin:0">One hosted command center: 14-day trial, then $40/month.
-      No tiers, no setup, cancel anytime.</p>
-    {% if plan.plan == 'studio' %}
-      <form method="post" action="/settings/billing/portal">
+
+    <div class="card stack">
+      <h3 style="margin:0">Custom domain</h3>
+      {% if dns_message %}
+        <div class="alert {{ 'ok' if custom_domain.status == 'verified' else 'warn' }}">{{ dns_message }}</div>
+      {% endif %}
+      {% if domain_error %}<div class="alert error">{{ domain_error }}</div>{% endif %}
+      <form method="post" action="/settings/account/domain" class="stack">
         {% include "_csrf.html" %}
-        <button class="btn" type="submit">Manage billing</button>
+        <label for="custom_domain">Domain</label>
+        <input type="text" id="custom_domain" name="custom_domain"
+               value="{{ custom_domain.domain }}" placeholder="photos.example.com">
+        <button class="btn" type="submit">Save domain</button>
       </form>
-      <form method="post" action="/settings/billing/cancel">
-        {% include "_csrf.html" %}
-        <button class="btn secondary" type="submit">Cancel plan</button>
-      </form>
-    {% else %}
-      <form method="post" action="/settings/billing/subscribe">
-        {% include "_csrf.html" %}
-        <input type="hidden" name="plan" value="studio">
-        <button class="btn" type="submit">Start 14-day trial</button>
-      </form>
-    {% endif %}
-    {% if backend == 'mock' %}
-    <p class="hint">Test mode. Stripe portal opens when <span class="mono">HESTIA_SUBSCRIPTION_BACKEND=stripe</span> is configured.</p>
-    {% endif %}
+      {% if custom_domain.domain %}
+        <div>
+          <div class="label">Status</div>
+          <span class="pill {{ 'on' if custom_domain.status == 'verified' else 'off' }}">{{ custom_domain.status }}</span>
+        </div>
+        <div>
+          <div class="label">CNAME target</div>
+          <div class="mono">{{ custom_domain.target }}</div>
+        </div>
+        <div>
+          <div class="label">TXT record</div>
+          <div class="mono">{{ custom_domain.dns_name }}</div>
+          <div class="mono">{{ custom_domain.token }}</div>
+        </div>
+        {% if custom_domain.url %}
+        <a class="btn secondary" href="{{ custom_domain.url }}" target="_blank">Open custom domain</a>
+        {% endif %}
+        {% if custom_domain.domain and custom_domain.status != 'verified' %}
+        <form method="post" action="/settings/account/domain/check">
+          {% include "_csrf.html" %}
+          <button class="btn" type="submit">Check DNS &amp; verify</button>
+        </form>
+        {% endif %}
+      {% else %}
+        <p class="hint">Leave blank to use the hosted Hestia subdomain.</p>
+      {% endif %}
+    </div>
+
+    <div class="card stack">
+      <h3 style="margin:0">Billing</h3>
+      <div>
+        <div class="label">Current plan</div>
+        <span class="pill on">{{ plan.name }} · {{ plan.price }}</span>
+        {% if subscription %}<span class="pill">{{ subscription.status }}</span>{% endif %}
+      </div>
+      <p class="muted" style="margin:0">One hosted command center: 14-day trial, then $40/month.
+        No tiers, no setup, cancel anytime.</p>
+      {% if plan.plan == 'studio' %}
+        <form method="post" action="/settings/billing/portal">
+          {% include "_csrf.html" %}
+          <button class="btn" type="submit">Manage billing</button>
+        </form>
+        <form method="post" action="/settings/billing/cancel">
+          {% include "_csrf.html" %}
+          <button class="btn secondary" type="submit">Cancel plan</button>
+        </form>
+      {% else %}
+        <form method="post" action="/settings/billing/subscribe">
+          {% include "_csrf.html" %}
+          <input type="hidden" name="plan" value="studio">
+          <button class="btn" type="submit">Start 14-day trial</button>
+        </form>
+      {% endif %}
+      {% if backend == 'mock' %}
+      <p class="hint">Test mode. Stripe portal opens when <span class="mono">HESTIA_SUBSCRIPTION_BACKEND=stripe</span> is configured.</p>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

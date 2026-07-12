@@ -36,7 +36,7 @@
         <div class="card stack">
           <h3>About</h3>
           <p class="muted">{{ profile.about or "Hand-crafted photography, delivered with care." }}</p>
-          {% if profile.contact_email %}<p class="muted">📧 {{ profile.contact_email }}</p>{% endif %}
+          {% if profile.contact_email %}<p class="muted"><a href="mailto:{{ profile.contact_email }}">{{ profile.contact_email }}</a></p>{% endif %}
         </div>
         <div class="card stack">
           <h3>Inquire / book</h3>
@@ -48,7 +48,7 @@
           <p class="muted" style="margin:0">Limited dates open:
             <a href="#mini-sessions">Claim a mini-session spot →</a></p>
           {% endif %}
-          <p class="muted" style="margin:0">🎁 <a href="/studio/{{ tenant.slug }}/gift">Give a gift card</a></p>
+          <p class="muted" style="margin:0"><a href="/studio/{{ tenant.slug }}/gift">Give a gift card →</a></p>
           <form method="post" action="/studio/{{ tenant.slug }}/inquire">
             {% include "_csrf.html" %}
             {% if ref %}<input type="hidden" name="ref" value="{{ ref }}">{% endif %}

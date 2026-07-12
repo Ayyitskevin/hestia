@@ -21,7 +21,9 @@
     <label for="subject">Subject</label>
     <input type="text" id="subject" name="subject" value="{{ subject }}" required>
     <label for="body">Message <span class="muted">(use <span class="mono">{client}</span> for the first name)</span></label>
-    <textarea id="body" name="body" rows="12">{{ body }}</textarea>
+    <div class="composer-box">
+      <textarea id="body" name="body" rows="12">{{ body }}</textarea>
+    </div>
     <div class="form-actions">
       <button class="btn" type="submit">Send to {{ recipients|length }}</button>
       <a class="btn ghost" href="/clients?tag={{ tag|urlencode }}">Cancel</a>

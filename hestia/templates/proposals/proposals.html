@@ -1,35 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Proposals — Hestia{% endblock %}
 {% block content %}
-<div class="page-title">
+{% set doc_tab = 'proposals' %}
+<div class="hub-head">
   <div>
-    <h1>Proposals</h1>
-    <span class="muted">Send one client link for package, agreement, and booking invoice.</span>
+    <h1>Documents</h1>
+    <div class="sub">Send one client link for package, agreement, and booking invoice.</div>
   </div>
+  {% include "_tabs_documents.html" %}
+</div>
+<div class="page-title" style="margin-top:2px">
+  <div></div>
   <a class="btn" href="/proposals/new">New proposal</a>
 </div>
 
-<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px">
+<div class="filter-pills" style="margin-bottom:14px">
   {% for s in ["", "draft", "sent", "accepted", "void"] %}
-    <a class="pill {{ 'on' if active_status == s else 'off' }}" href="/proposals{% if s %}?status={{ s }}{% endif %}">{{ s or "all" }}</a>
+    <a class="{{ 'active' if active_status == s }}" href="/proposals{% if s %}?status={{ s }}{% endif %}">{{ s or "all" }}</a>
   {% endfor %}
 </div>
 
 {% if followups and followups.total %}
-<div class="health-strip" style="margin-bottom:18px">
-  <div class="health-item"><span class="svc">{{ followups.total }}</span>
-    <span class="url">proposal follow-up{{ '' if followups.total == 1 else 's' }}</span></div>
-  <div class="health-item"><span class="svc">{{ followups.awaiting_acceptance|length }}</span>
-    <span class="url">awaiting acceptance</span></div>
-  <div class="health-item"><span class="svc">{{ followups.finish_booking|length }}</span>
-    <span class="url">accepted, not booked</span></div>
-  <div class="health-item"><span class="svc">{{ followups.open_value }}</span>
-    <span class="url">booking invoices open</span></div>
+<div class="kpi-row" style="margin-bottom:14px">
+  <div class="kpi-card"><div class="kpi-label">Follow-ups</div><div class="kpi-value">{{ followups.total }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Awaiting acceptance</div><div class="kpi-value">{{ followups.awaiting_acceptance|length }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Accepted, not booked</div><div class="kpi-value">{{ followups.finish_booking|length }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Booking invoices open</div><div class="kpi-value">{{ followups.open_value }}</div></div>
 </div>
 {% endif %}
 
 {% if proposals %}
-<div class="card">
+<div class="card" style="padding:0">
   <table>
     <thead><tr><th>Proposal</th><th>Client</th><th>Package</th><th>Status</th><th>Due now</th><th>Follow-up</th><th></th></tr></thead>
     <tbody>

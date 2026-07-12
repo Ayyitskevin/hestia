@@ -32,7 +32,9 @@
     <label for="subject">Subject</label>
     <input type="text" id="subject" name="subject" value="{{ subject }}" required>
     <label for="body">Message</label>
-    <textarea id="body" name="body" rows="12">{{ body }}</textarea>
+    <div class="composer-box">
+      <textarea id="body" name="body" rows="12">{{ body }}</textarea>
+    </div>
     <div class="form-actions">
       <button class="btn" type="submit">Send email</button>
       <a class="btn ghost" href="/clients/{{ client.id }}">Cancel</a>

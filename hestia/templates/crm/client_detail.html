@@ -1,120 +1,147 @@
 {% extends "base.html" %}
 {% block title %}{{ client.name }} — Hestia{% endblock %}
 {% block content %}
-<div class="page-title">
-  <div>
-    <h1>{{ client.name }}</h1>
-    <span class="muted">
-      {{ client.email or "no email" }}{% if client.phone %} · {{ client.phone }}{% endif %}
-    </span>
-  </div>
-  <div style="display:flex; gap:8px">
-    <a class="btn secondary" href="/clients/{{ client.id }}/statement">📄 Statement</a>
-    {% if client.email %}<a class="btn secondary" href="/clients/{{ client.id }}/email">✉ Email client</a>{% endif %}
+{% set _cw = (client.name or '?').split() %}
+<div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; font-size:.72rem; color:var(--ink-3)">
+  <a href="/clients" style="color:var(--ink-2)">Clients</a><span>/</span><span style="color:var(--ink); font-weight:600">{{ client.name }}</span>
+  <div style="margin-left:auto; display:flex; gap:8px">
+    <a class="btn secondary" href="/clients/{{ client.id }}/statement">Statement</a>
+    {% if client.email %}<a class="btn secondary" href="/clients/{{ client.id }}/email">Email client</a>{% endif %}
     <a class="btn" href="/projects/new?client_id={{ client.id }}">+ New project</a>
   </div>
 </div>
 
-{% if client.notes %}<div class="card" style="margin-bottom:18px"><p class="muted">{{ client.notes }}</p></div>{% endif %}
+{% if client.notes %}<div class="card" style="margin-bottom:14px"><p class="muted" style="margin:0">{{ client.notes }}</p></div>{% endif %}
 
-<div class="card stack" style="margin-bottom:18px">
-  <h3>Tags</h3>
-  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center">
-    {% for t in tags %}
-    <span class="pill on" style="display:inline-flex; align-items:center; gap:6px">
-      <a href="/clients?tag={{ t|urlencode }}" style="color:inherit; text-decoration:none">{{ t }}</a>
-      <form method="post" action="/clients/{{ client.id }}/tags/delete" style="margin:0; display:inline">
+<div class="record-grid" style="margin-bottom:14px">
+  <!-- left: profile -->
+  <div class="record-rail">
+    <div class="card profile-card">
+      <span class="avatar lg">{{ (_cw[:2] | map('first') | join) | upper }}</span>
+      <div>
+        <div class="profile-name">{{ client.name }}</div>
+        <div class="profile-sub">{{ client.email or "no email" }}{% if client.phone %} · {{ client.phone }}{% endif %}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:12px">Tags</div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center">
+        {% for t in tags %}
+        <span class="pill on" style="display:inline-flex; align-items:center; gap:6px">
+          <a href="/clients?tag={{ t|urlencode }}" style="color:inherit; text-decoration:none">{{ t }}</a>
+          <form method="post" action="/clients/{{ client.id }}/tags/delete" style="margin:0; display:inline">
+            {% include "_csrf.html" %}
+            <input type="hidden" name="tag" value="{{ t }}">
+            <button type="submit" title="Remove" style="background:none; border:none; cursor:pointer; color:inherit; padding:0; font-weight:bold">×</button>
+          </form>
+        </span>
+        {% else %}<span class="muted" style="font-size:.8rem">No tags yet — segment this client (VIP, repeat, 2026-wedding).</span>{% endfor %}
+      </div>
+      <form method="post" action="/clients/{{ client.id }}/tags" style="margin-top:10px; display:flex; gap:6px">
         {% include "_csrf.html" %}
-        <input type="hidden" name="tag" value="{{ t }}">
-        <button type="submit" title="Remove" style="background:none; border:none; cursor:pointer; color:inherit; padding:0; font-weight:bold">×</button>
+        <input type="text" name="tag" placeholder="add tag" style="width:130px" maxlength="40">
+        <button class="btn ghost" type="submit">+ Tag</button>
       </form>
-    </span>
-    {% else %}<span class="muted">No tags yet — segment this client (VIP, repeat, 2026-wedding).</span>{% endfor %}
-    <form method="post" action="/clients/{{ client.id }}/tags" style="margin:0; display:inline-flex; gap:6px">
-      {% include "_csrf.html" %}
-      <input type="text" name="tag" placeholder="add tag" style="width:130px" maxlength="40">
-      <button class="btn ghost" type="submit">+ Tag</button>
-    </form>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:10px">Client portal</div>
+      {% if portal_link %}
+        <p class="muted" style="font-size:.78rem; margin:0 0 8px">One branded link where {{ client.name }} sees their projects, contracts, payment schedule, and galleries.</p>
+        <a class="offer-url" href="{{ portal_link }}" target="_blank" style="font-size:.8rem; word-break:break-all">{{ portal_link }}</a>
+        <form method="post" action="/clients/{{ client.id }}/portal/regenerate" style="margin-top:10px"
+              data-confirm="Regenerate the portal link? The current link will stop working.">
+          {% include "_csrf.html" %}
+          <button class="btn ghost" type="submit" style="padding-left:0">Regenerate link</button>
+        </form>
+      {% else %}
+        <p class="muted" style="font-size:.78rem; margin:0 0 8px">Give {{ client.name }} a single private link to everything — contracts to sign, payments to make, galleries to view.</p>
+        <form method="post" action="/clients/{{ client.id }}/portal">
+          {% include "_csrf.html" %}
+          <button class="btn secondary" type="submit">Enable client portal</button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:10px">Refer a friend</div>
+      <p class="muted" style="font-size:.78rem; margin:0 0 8px">{{ client.name }}'s personal link. Any inquiry that comes through it is tagged back to them in your CRM.</p>
+      <a class="offer-url" href="{{ refer_link }}" target="_blank" style="font-size:.8rem; word-break:break-all">{{ refer_link }}</a>
+    </div>
   </div>
-</div>
 
-<div class="card stack" style="margin-bottom:18px">
-  <h3>Client portal</h3>
-  {% if portal_link %}
-    <p class="muted">One branded link where {{ client.name }} sees their projects, contracts,
-      payment schedule, and galleries.</p>
-    <a class="offer-url" href="{{ portal_link }}" target="_blank">{{ portal_link }}</a>
-    <form method="post" action="/clients/{{ client.id }}/portal/regenerate" style="margin-top:6px"
-          data-confirm="Regenerate the portal link? The current link will stop working.">
-      {% include "_csrf.html" %}
-      <button class="btn ghost" type="submit">Regenerate link</button>
-    </form>
-  {% else %}
-    <p class="muted">Give {{ client.name }} a single private link to everything — contracts to sign,
-      payments to make, galleries to view.</p>
-    <form method="post" action="/clients/{{ client.id }}/portal">
-      {% include "_csrf.html" %}
-      <button class="btn" type="submit">Enable client portal</button>
-    </form>
-  {% endif %}
-</div>
+  <!-- center: activity -->
+  <div class="record-main">
+    <div class="record-tabs">
+      <span class="active">Activity</span>
+    </div>
+    {% if client.email %}
+    <a href="/clients/{{ client.id }}/email" class="composer" style="display:block; color:inherit">
+      <div class="composer-box">
+        <div class="composer-hint">Write an email to {{ client.name }}… <span class="sub">(AI can draft it for you)</span></div>
+      </div>
+    </a>
+    {% endif %}
+    <div class="timeline">
+      {% if timeline %}
+      {% for e in timeline %}
+      <div class="timeline-item">
+        <span class="timeline-icon" style="background:var(--fill); color:var(--ink-2)">{{ e.icon }}</span>
+        <div class="timeline-body">
+          <div class="headline">{% if e.url %}<a href="{{ e.url }}">{{ e.label }}</a>{% else %}{{ e.label }}{% endif %} <span class="when">· {{ e.date[:10] }}</span></div>
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="muted">No activity yet — it fills in as you book, bill, shoot, and deliver.</p>
+      {% endif %}
+    </div>
+  </div>
 
-<div class="card stack" style="margin-bottom:18px">
-  <h3>Refer a friend</h3>
-  <p class="muted">{{ client.name }}'s personal link. Any inquiry that comes through it is
-    tagged back to them in your CRM — so you can see who sends you business.</p>
-  <a class="offer-url" href="{{ refer_link }}" target="_blank">{{ refer_link }}</a>
-</div>
-
-{% if credits %}
-<div class="card stack" style="margin-bottom:18px">
-  <h3>Referral credit
-    {% if credit_balance %}<span class="pill on">{{ credit_balance_display }} available</span>{% endif %}</h3>
-  <p class="muted">Earned when {{ client.name }}'s referrals book. Apply a credit to their next
-    order or invoice, then mark it redeemed here.</p>
-  <table>
-    <thead><tr><th>Reward</th><th>Status</th><th></th></tr></thead>
-    <tbody>
-      {% for c in credits %}
-      <tr>
-        <td>{{ c.amount_display }}</td>
-        <td><span class="pill {{ 'on' if c.status == 'earned' else 'off' }}">{{ c.status }}</span></td>
-        <td style="text-align:right">
+  <!-- right: related -->
+  <div class="record-rail">
+    {% if credits %}
+    <div class="related-card">
+      <div class="related-head">
+        <span class="label">Referral credit</span>
+        {% if credit_balance %}<span class="pill on">{{ credit_balance_display }}</span>{% endif %}
+      </div>
+      <div class="related-rows">
+        {% for c in credits %}
+        <div class="related-row">
+          <span class="name">{{ c.amount_display }}</span>
+          <span class="pill {{ 'on' if c.status == 'earned' else 'off' }}">{{ c.status }}</span>
           {% if c.status == 'earned' %}
           <form method="post" action="/clients/{{ client.id }}/credits/{{ c.id }}/redeem" style="margin:0">
             {% include "_csrf.html" %}
-            <button class="btn secondary" type="submit">Mark redeemed</button>
+            <button class="btn ghost" type="submit" style="padding:0; font-size:.68rem">Redeem</button>
           </form>
-          {% else %}<span class="muted">—</span>{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
 
-{% if messages %}
-<div class="card stack" style="margin-bottom:18px">
-  <h3>Messages</h3>
-  <p class="muted" style="font-size:.85rem">Emails Hestia has sent {{ client.name }}.</p>
-  <table>
-    <thead><tr><th>Subject</th><th>Sent</th><th>Status</th></tr></thead>
-    <tbody>
-      {% for m in messages %}
-      <tr>
-        <td>{{ m.subject or "—" }}</td>
-        <td class="muted">{{ m.created_at }}</td>
-        <td><span class="pill {{ 'on' if m.status in ('sent', 'recorded') else 'off' }}">{{ m.status }}</span></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+    {% if messages %}
+    <div class="related-card">
+      <div class="related-head"><span class="label">Messages</span></div>
+      <div class="related-rows">
+        {% for m in messages %}
+        <div class="related-row">
+          <span class="name">{{ m.subject or "—" }}</span>
+          <span class="pill {{ 'on' if m.status in ('sent', 'recorded') else 'off' }}">{{ m.status }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
 </div>
-{% endif %}
 
 <div class="card stack">
-  <h3>Projects</h3>
+  <h3 style="margin:0">Projects</h3>
   {% if projects %}
   <table>
     <thead><tr><th>Project</th><th>Shoot type</th><th>Status</th><th>Galleries</th></tr></thead>
@@ -132,25 +159,6 @@
   {% else %}
   <p class="muted">No projects for this client yet.</p>
   <a class="btn" href="/projects/new?client_id={{ client.id }}">Create a project</a>
-  {% endif %}
-</div>
-
-<div class="card stack" style="margin-top:18px">
-  <h3>Activity</h3>
-  {% if timeline %}
-  <div class="stack" style="gap:10px">
-    {% for e in timeline %}
-    <div style="display:flex; gap:10px; align-items:baseline">
-      <span style="font-size:1.1em">{{ e.icon }}</span>
-      <div style="flex:1">
-        {% if e.url %}<a href="{{ e.url }}">{{ e.label }}</a>{% else %}{{ e.label }}{% endif %}
-      </div>
-      <span class="muted" style="font-size:.85em; white-space:nowrap">{{ e.date[:10] }}</span>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="muted">No activity yet — it fills in as you book, bill, shoot, and deliver.</p>
   {% endif %}
 </div>
 {% endblock %}

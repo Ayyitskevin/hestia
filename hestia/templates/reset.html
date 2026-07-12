@@ -2,23 +2,25 @@
 {% block title %}Set a new password — Hestia{% endblock %}
 {% block wrap_class %}narrow{% endblock %}
 {% block content %}
-<div class="card stack">
-  <h1>Set a new password</h1>
-  {% if not valid %}
-    <div class="alert error">This reset link is invalid or has expired.</div>
-    <p class="hint"><a href="/forgot">Request a new link</a></p>
-  {% else %}
-    {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
-    <form method="post" action="/reset/{{ token }}">
-      {% include "_csrf.html" %}
-      <label for="password">New password</label>
-      <input type="password" id="password" name="password" required autofocus minlength="8">
-      <label for="confirm">Confirm password</label>
-      <input type="password" id="confirm" name="confirm" required minlength="8">
-      <div class="form-actions">
-        <button class="btn" type="submit">Update password</button>
-      </div>
-    </form>
-  {% endif %}
+<div class="auth-wrap">
+  <div class="auth-card stack">
+    <h1>Set a new password</h1>
+    {% if not valid %}
+      <div class="alert error">This reset link is invalid or has expired.</div>
+      <p class="auth-foot"><a href="/forgot">Request a new link</a></p>
+    {% else %}
+      {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+      <form method="post" action="/reset/{{ token }}">
+        {% include "_csrf.html" %}
+        <label for="password">New password</label>
+        <input type="password" id="password" name="password" required autofocus minlength="8">
+        <label for="confirm">Confirm password</label>
+        <input type="password" id="confirm" name="confirm" required minlength="8">
+        <div class="form-actions">
+          <button class="btn" type="submit">Update password</button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

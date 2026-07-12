@@ -19,7 +19,7 @@
 </div>
 
 <p class="muted" style="margin-bottom:18px">Every frame placed exactly once — the model proposes the
-  order, the code guarantees the layout. The ⭐ frame leads each spread.</p>
+  order, the code guarantees the layout. The ★ frame leads each spread.</p>
 
 <div class="card" style="margin-bottom:18px">
   <h3>Client review</h3>
@@ -72,7 +72,7 @@
       {% for p in spread.photos %}
         <figure class="thumb {{ 'hero' if p.is_hero else '' }}">
           <img src="{{ p.url }}" alt="{{ p.filename }}" loading="lazy">
-          <figcaption>{{ '⭐ ' if p.is_hero else '' }}{{ p.filename }}</figcaption>
+          <figcaption>{{ '★ ' if p.is_hero else '' }}{{ p.filename }}</figcaption>
           {% if not p.is_hero and not album.approved_at %}
           <form method="post" action="/albums/{{ album.id }}/spreads/{{ spread.position }}/hero/{{ p.id }}">
             {% include "_csrf.html" %}

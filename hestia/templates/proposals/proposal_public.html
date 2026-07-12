@@ -14,7 +14,7 @@
 
   {% if proposal.status == 'accepted' %}
     <div class="alert ok">Proposal accepted{% if proposal.accepted_name %} by {{ proposal.accepted_name }}{% endif %}.</div>
-    <div class="grid-2">
+    <div class="grid cols-2">
       <a class="btn" href="{{ sign_url }}">Sign agreement</a>
       <a class="btn secondary" href="{{ pay_url }}">Pay booking invoice</a>
     </div>
