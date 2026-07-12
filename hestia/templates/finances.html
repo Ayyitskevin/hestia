@@ -1,19 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Finances — Hestia{% endblock %}
 {% block content %}
-<div class="page-title">
+{% set money_tab = 'expenses' %}
+<div class="hub-head">
   <div>
-    <h1>Finances</h1>
-    <span class="muted">Collected revenue minus what you spend — your real profit, per shoot and overall.</span>
+    <h1>Money</h1>
+    <div class="sub">Collected revenue minus what you spend — your real profit, per shoot and overall.</div>
   </div>
-  <a class="btn secondary" href="/finances/reports">📊 Reports</a>
+  {% include "_tabs_money.html" %}
+</div>
+<div class="page-title" style="margin-top:2px">
+  <div></div>
+  <a class="btn secondary" href="/finances/reports">Reports</a>
 </div>
 
-<div class="health-strip" style="margin-bottom:18px">
-  <div class="health-item"><span class="svc">{{ summary.revenue }}</span> <span class="url">revenue collected</span></div>
-  <div class="health-item"><span class="svc">{{ summary.expenses }}</span> <span class="url">expenses</span></div>
-  <div class="health-item"><span class="svc">{{ summary.profit }}</span>
-    <span class="url"><span class="pill {{ 'on' if summary.profit_cents >= 0 else 'off' }}">{{ summary.margin }}% margin</span></span></div>
+<div class="kpi-row" style="margin-bottom:14px">
+  <div class="kpi-card"><div class="kpi-label">Revenue collected</div><div class="kpi-value">{{ summary.revenue }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Expenses</div><div class="kpi-value">{{ summary.expenses }}</div></div>
+  <div class="kpi-card {{ '' if summary.profit_cents >= 0 else 'danger' }}"><div class="kpi-label">Profit</div><div class="kpi-value">{{ summary.profit }}</div><div class="kpi-delta {{ 'up' if summary.profit_cents >= 0 else 'down' }}">{{ summary.margin }}% margin</div></div>
 </div>
 
 <div class="card stack">
@@ -21,13 +25,13 @@
   <p class="muted">Download your numbers as CSV — income (paid invoices + orders) and expenses,
     ready for the books or tax time.</p>
   <div style="display:flex; gap:10px; flex-wrap:wrap">
-    <a class="btn secondary" href="/finances/export/income.csv">⬇ Income (.csv)</a>
-    <a class="btn secondary" href="/finances/export/expenses.csv">⬇ Expenses (.csv)</a>
-    <a class="btn secondary" href="/finances/import">⬆ Import expenses (.csv)</a>
+    <a class="btn secondary" href="/finances/export/income.csv">Income (.csv)</a>
+    <a class="btn secondary" href="/finances/export/expenses.csv">Expenses (.csv)</a>
+    <a class="btn secondary" href="/finances/import">Import expenses (.csv)</a>
   </div>
 </div>
 
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Add an expense</h3>
   <form method="post" action="/finances/expenses" class="inline-grid-form">
     {% include "_csrf.html" %}
@@ -52,17 +56,17 @@
 </div>
 
 {% if by_project %}
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>By project</h3>
   <p class="muted">Invoiced revenue minus tagged expenses — a money-losing shoot sorts to the top.</p>
   <table>
-    <thead><tr><th>Project</th><th>Revenue</th><th>Expenses</th><th>Profit</th></tr></thead>
+    <thead><tr><th>Project</th><th class="num">Revenue</th><th class="num">Expenses</th><th>Profit</th></tr></thead>
     <tbody>
       {% for r in by_project %}
       <tr>
         <td><a href="/projects/{{ r.id }}">{{ r.name }}</a></td>
-        <td class="muted">{{ r.revenue }}</td>
-        <td class="muted">{{ r.expenses }}</td>
+        <td class="num muted">{{ r.revenue }}</td>
+        <td class="num muted">{{ r.expenses }}</td>
         <td><span class="pill {{ 'on' if r.profit_cents >= 0 else 'off' }}">{{ r.profit }}</span></td>
       </tr>
       {% endfor %}
@@ -71,7 +75,7 @@
 </div>
 {% endif %}
 
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Expenses · {{ expenses|length }}</h3>
   {% if expenses %}
   <table>

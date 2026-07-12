@@ -10,42 +10,54 @@
   </div>
 </div>
 
-{% if backend == 'mock' %}
-<div class="alert warn">Test mode — starting the trial activates instantly with no charge.
-  Set <span class="mono">HESTIA_SUBSCRIPTION_BACKEND=stripe</span> for real billing.</div>
-{% endif %}
+<div class="settings-layout">
+  <nav class="settings-rail">
+    <a href="/settings/account" class="{{ 'active' if request.url.path.startswith('/settings/account') }}">Account</a>
+    <a href="/settings/billing" class="{{ 'active' if request.url.path.startswith('/settings/billing') }}">Billing</a>
+    <a href="/settings/team" class="{{ 'active' if request.url.path.startswith('/settings/team') }}">Team</a>
+    <a href="/settings/site" class="{{ 'active' if request.url.path.startswith('/settings/site') }}">Site</a>
+    <a href="/settings/integrity" class="{{ 'active' if request.url.path.startswith('/settings/integrity') }}">Integrity</a>
+  </nav>
 
-<div class="card stack">
-  <h2 style="margin:0">Hestia Studio</h2>
-  <div style="font-weight:700; font-size:2rem">$40/month</div>
-  <p class="muted">14-day free trial. Cancel anytime. One hosted command center for
-    booking, CRM, contracts, galleries, AI offers, invoices, payments, and retention.
-    No tiers. No setup. Maintained for you.</p>
-  <div class="health-strip">
-    <span class="health-item"><span class="svc">∞</span> <span class="url">galleries</span></span>
-    <span class="health-item"><span class="svc">AI</span> <span class="url">offers</span></span>
-    <span class="health-item"><span class="svc">$40</span> <span class="url">flat</span></span>
+  <div>
+    {% if backend == 'mock' %}
+    <div class="alert warn">Test mode — starting the trial activates instantly with no charge.
+      Set <span class="mono">HESTIA_SUBSCRIPTION_BACKEND=stripe</span> for real billing.</div>
+    {% endif %}
+
+    <div class="card stack">
+      <h2 style="margin:0">Hestia Studio</h2>
+      <div style="font-weight:700; font-size:2rem">$40/month</div>
+      <p class="muted">14-day free trial. Cancel anytime. One hosted command center for
+        booking, CRM, contracts, galleries, AI offers, invoices, payments, and retention.
+        No tiers. No setup. Maintained for you.</p>
+      <div class="health-strip">
+        <span class="health-item"><span class="svc">∞</span> <span class="url">galleries</span></span>
+        <span class="health-item"><span class="svc">AI</span> <span class="url">offers</span></span>
+        <span class="health-item"><span class="svc">$40</span> <span class="url">flat</span></span>
+      </div>
+      {% if plan.plan == 'studio' %}
+        <form method="post" action="/settings/billing/portal">
+          {% include "_csrf.html" %}
+          <button class="btn" type="submit">Manage billing</button>
+        </form>
+      {% else %}
+        <form method="post" action="/settings/billing/subscribe">
+          {% include "_csrf.html" %}
+          <input type="hidden" name="plan" value="studio">
+          <button class="btn" type="submit">Start 14-day trial</button>
+        </form>
+      {% endif %}
+    </div>
+
+    {% if plan.plan != 'beta' %}
+    <div class="card" style="margin-top:18px">
+      <form method="post" action="/settings/billing/cancel">
+        {% include "_csrf.html" %}
+        <button class="btn secondary" type="submit">Cancel — downgrade to Beta</button>
+      </form>
+    </div>
+    {% endif %}
   </div>
-  {% if plan.plan == 'studio' %}
-    <form method="post" action="/settings/billing/portal">
-      {% include "_csrf.html" %}
-      <button class="btn" type="submit">Manage billing</button>
-    </form>
-  {% else %}
-    <form method="post" action="/settings/billing/subscribe">
-      {% include "_csrf.html" %}
-      <input type="hidden" name="plan" value="studio">
-      <button class="btn" type="submit">Start 14-day trial</button>
-    </form>
-  {% endif %}
 </div>
-
-{% if plan.plan != 'beta' %}
-<div class="card" style="margin-top:18px">
-  <form method="post" action="/settings/billing/cancel">
-    {% include "_csrf.html" %}
-    <button class="btn secondary" type="submit">Cancel — downgrade to Beta</button>
-  </form>
-</div>
-{% endif %}
 {% endblock %}

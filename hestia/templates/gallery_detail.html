@@ -4,40 +4,42 @@
 {% if too_large %}
   <div class="alert">{{ too_large }} file{{ '' if too_large == 1 else 's' }} weren't uploaded — each image must be under 75&nbsp;MB. Export a smaller version and try again.</div>
 {% endif %}
-<div class="page-title">
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap">
   <div>
-    <h1>{{ gallery.title }}</h1>
-    <span class="muted">
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+      <span style="font-size:1.05rem; font-weight:600; letter-spacing:-.01em">{{ gallery.title }}</span>
+      <span class="pill {{ 'on' if gallery.status == 'published' else 'off' }}">{{ gallery.status }}</span>
+    </div>
+    <div class="muted" style="font-size:.72rem; margin-top:2px">
       {% if project %}<a href="/projects/{{ project.id }}">{{ project.name }}</a> · {% endif %}
       {{ gallery.client_name or "No client set" }} ·
-      <span class="pill {{ 'on' if gallery.status == 'published' else 'off' }}">{{ gallery.status }}</span> ·
       {{ images|length }} image{{ '' if images|length == 1 else 's' }}
       {% if gallery.pin %} · 🔒 PIN set{% endif %}
-    </span>
+    </div>
   </div>
-  <div style="display:flex; gap:10px">
+  <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap">
     {% if images %}
       <form method="post" action="/galleries/{{ gallery.id }}/process">
         {% include "_csrf.html" %}
-        <button class="btn" type="submit">⚡ Process — vision → offer</button>
+        <button class="btn ai" type="submit">⚡ Process — vision → offer</button>
       </form>
       {% if album %}
-        <a class="btn secondary" href="/albums/{{ album.id }}">📖 Album ({{ album.spreads|length }} spreads)</a>
+        <a class="btn secondary" href="/albums/{{ album.id }}">Album ({{ album.spreads|length }} spreads)</a>
         {% if album.approved_at %}<span class="pill on" title="Client approved the album">approved ✓</span>
         {% elif album.change_request %}<span class="pill off" title="Client requested album changes">changes requested</span>
         {% elif album.review_token %}<span class="pill" title="Shared for client review">in review</span>{% endif %}
       {% else %}
         <form method="post" action="/galleries/{{ gallery.id }}/album">
           {% include "_csrf.html" %}
-          <button class="btn secondary" type="submit">📖 Draft album</button>
+          <button class="btn secondary" type="submit">Draft album</button>
         </form>
       {% endif %}
       {% if product_set %}
-        <a class="btn secondary" href="/products/{{ product_set.id }}">🛍 Variants ({{ product_set.variant_count }})</a>
+        <a class="btn secondary" href="/products/{{ product_set.id }}">Variants ({{ product_set.variant_count }})</a>
       {% else %}
         <form method="post" action="/galleries/{{ gallery.id }}/products">
           {% include "_csrf.html" %}
-          <button class="btn secondary" type="submit">🛍 Product variants</button>
+          <button class="btn secondary" type="submit">Product variants</button>
         </form>
       {% endif %}
     {% endif %}
@@ -63,7 +65,7 @@
   {% endif %}
 </div>
 
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Sale</h3>
   {% if campaign %}
     <p class="muted">Running: <strong>{{ campaign.headline or 'Sale' }}</strong> ·
@@ -94,7 +96,7 @@
 </div>
 {% endif %}
 
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Digital delivery</h3>
   {% if delivery_link %}
     <p class="muted">Your client's private download link — every high-res original,
@@ -124,7 +126,7 @@
   {% endif %}
 </div>
 
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Engagement</h3>
   <p class="muted">Whether your client has opened and downloaded their gallery.</p>
   <div class="health-strip">
@@ -139,7 +141,7 @@
 </div>
 
 {% if orders %}
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Orders · {{ orders|length }}</h3>
   <table>
     <thead><tr><th>Item</th><th>Amount</th><th>Order</th><th>Fulfillment</th></tr></thead>
@@ -166,18 +168,18 @@
 {% endif %}
 
 {% if selection_packet and (selection_packet.favorite_count or selection_packet.comment_count or selection_packet.submitted_at) %}
-<div class="card stack" style="margin-top:18px">
-  <h3>Client proofing · {{ selection_packet.favorite_count }} favorite{{ '' if selection_packet.favorite_count == 1 else 's' }}</h3>
+<div class="card stack" style="margin-top:14px">
+  <h3>Client proofing</h3>
   <p class="muted">
     <span class="pill {{ 'on' if selection_packet.status == 'submitted' else 'off' }}">{{ selection_packet.status_label }}</span>
     {{ selection_packet.comment_count }} note{{ '' if selection_packet.comment_count == 1 else 's' }}
     across {{ selection_packet.commented_frame_count }} frame{{ '' if selection_packet.commented_frame_count == 1 else 's' }} ·
     {{ selection_packet.next_action }}
   </p>
-  <div class="grid cols-3">
-    <div><div class="label">Favorites</div><div style="font-size:1.35rem">{{ selection_packet.favorite_count }}</div></div>
-    <div><div class="label">Notes</div><div style="font-size:1.35rem">{{ selection_packet.comment_count }}</div></div>
-    <div><div class="label">Status</div><div style="font-size:1.05rem">{{ selection_packet.status_label }}</div></div>
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-label">Favorites</div><div class="kpi-value">{{ selection_packet.favorite_count }}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Notes</div><div class="kpi-value">{{ selection_packet.comment_count }}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Status</div><div class="kpi-value" style="font-size:.95rem">{{ selection_packet.status_label }}</div></div>
   </div>
   <div style="display:flex; gap:10px; flex-wrap:wrap">
     <a class="btn secondary" href="/galleries/{{ gallery.id }}/selection-packet.txt">Download selection packet (.txt)</a>
@@ -202,7 +204,7 @@
 </div>
 {% endif %}
 
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Upload images</h3>
   <form method="post" action="/galleries/{{ gallery.id }}/images" enctype="multipart/form-data">
     {% include "_csrf.html" %}
@@ -215,80 +217,162 @@
 </div>
 
 {% if images %}
-<div class="card" style="margin-top:18px">
-  <h3>Frames</h3>
-  {% if cull and cull.culled_ids %}
-  <p class="muted">🤖 AI culling flagged {{ cull.duplicate_ids|length }} duplicate{{ '' if cull.duplicate_ids|length == 1 else 's' }}
-    · {{ cull.blink_ids|length }} likely blink{{ '' if cull.blink_ids|length == 1 else 's' }} —
-    excluded from hero &amp; offer picks (your originals are kept).</p>
-  {% if cull_pending %}
-  <form method="post" action="/galleries/{{ gallery.id }}/cull/apply" style="margin:8px 0"
-        data-confirm="Hide {{ cull_pending }} flagged frame(s) from the client gallery and delivery? You can restore any frame later.">
-    {% include "_csrf.html" %}
-    <button type="submit">
-      Hide {{ cull_pending }} flagged frame{{ '' if cull_pending == 1 else 's' }}
-    </button>
-  </form>
-  {% endif %}
-  {% endif %}
-  {% if flagged_pending %}
-  <form method="post" action="/galleries/{{ gallery.id }}/quality-cull/apply" style="margin:8px 0"
-        data-confirm="Hide {{ flagged_pending }} frame(s) the AI flagged as soft or poorly exposed? You can restore any frame later.">
-    {% include "_csrf.html" %}
-    <button type="submit" class="btn secondary">
-      ⚠ Hide {{ flagged_pending }} flagged reject{{ '' if flagged_pending == 1 else 's' }}
-    </button>
-  </form>
-  {% endif %}
-  {% if hidden_count %}
-  <p class="muted">{{ hidden_count }} frame{{ '' if hidden_count == 1 else 's' }} hidden — excluded from the client gallery &amp; delivery. Restore any below.</p>
-  {% endif %}
-  {% if hero_ids and hero_ids[0] != cover_id %}
-  <form method="post" action="/galleries/{{ gallery.id }}/cover/{{ hero_ids[0] }}" style="margin:8px 0">
-    {% include "_csrf.html" %}
-    <button type="submit" class="btn secondary" title="The AI's highest-scored cover candidate">⭐ Use the AI's top pick as the cover</button>
-  </form>
-  {% endif %}
-  <div class="thumb-grid">
+{#  Real, backend-free filtering: the whole frame set already renders server-side,
+    so a query param picks which subset to show — no JS or new route required. #}
+{% set qfilter = request.query_params.get('filter', 'all') %}
+{% set ns = namespace(keepers=0, flagged=0, hidden=0, kws=[]) %}
+{% for img in images %}
+  {% set a = analysis.get(img.id) %}
+  {% if a and a.keeper %}{% set ns.keepers = ns.keepers + 1 %}{% endif %}
+  {% if a and a.flags %}{% set ns.flagged = ns.flagged + 1 %}{% endif %}
+  {% if img.hidden %}{% set ns.hidden = ns.hidden + 1 %}{% endif %}
+  {% if a and a.shot_type and a.shot_type not in ns.kws and ns.kws|length < 8 %}{% set ns.kws = ns.kws + [a.shot_type] %}{% endif %}
+{% endfor %}
+{% set dupe_count = cull.duplicate_ids|length if cull else 0 %}
+
+<div class="card" style="margin-top:14px; padding:0">
+  <div class="workspace" style="margin:0; border-top:none">
+    <aside class="filter-rail">
+      <a class="filter-item {{ 'active' if qfilter == 'all' }}" href="?filter=all">All frames <span class="n">{{ images|length }}</span></a>
+      <a class="filter-item {{ 'active' if qfilter == 'keepers' }}" href="?filter=keepers">★ AI keepers <span class="n">{{ ns.keepers }}</span></a>
+      <a class="filter-item {{ 'active' if qfilter == 'favorites' }}" href="?filter=favorites">♥ Client favorites <span class="n">{{ favorites|length }}</span></a>
+      <a class="filter-item {{ 'active' if qfilter == 'flagged' }}" href="?filter=flagged">⚠ Flagged <span class="n">{{ ns.flagged }}</span></a>
+      <a class="filter-item {{ 'active' if qfilter == 'duplicates' }}" href="?filter=duplicates">⧉ Duplicates <span class="n">{{ dupe_count }}</span></a>
+      <a class="filter-item {{ 'active' if qfilter == 'hidden' }}" href="?filter=hidden">Hidden <span class="n">{{ ns.hidden }}</span></a>
+      {% if ns.kws %}
+      <div class="filter-rule"></div>
+      <div class="filter-group-label">AI KEYWORDS</div>
+      <div class="keyword-chips">
+        {% for kw in ns.kws %}<a class="keyword-chip" href="/library?shot={{ kw|urlencode }}">{{ kw }}</a>{% endfor %}
+      </div>
+      {% endif %}
+      {% if cull_pending or flagged_pending %}
+      <div class="filter-callout">
+        {% if cull_pending %}
+        <div class="t">{{ cull_pending }} flagged frame{{ '' if cull_pending == 1 else 's' }}</div>
+        <div class="d">AI culling flagged {{ cull.duplicate_ids|length }} duplicate{{ '' if cull.duplicate_ids|length == 1 else 's' }} · {{ cull.blink_ids|length }} likely blink{{ '' if cull.blink_ids|length == 1 else 's' }}. Hide from the client gallery?</div>
+        <form method="post" action="/galleries/{{ gallery.id }}/cull/apply"
+              data-confirm="Hide {{ cull_pending }} flagged frame(s) from the client gallery and delivery? You can restore any frame later.">
+          {% include "_csrf.html" %}
+          <button class="btn secondary" type="submit">Hide {{ cull_pending }} flagged frame{{ '' if cull_pending == 1 else 's' }}</button>
+        </form>
+        {% endif %}
+        {% if flagged_pending %}
+        <div class="d" style="margin-top:{{ '10px' if cull_pending else '0' }}">{{ flagged_pending }} soft or poorly exposed reject{{ '' if flagged_pending == 1 else 's' }}.</div>
+        <form method="post" action="/galleries/{{ gallery.id }}/quality-cull/apply" style="margin-top:8px"
+              data-confirm="Hide {{ flagged_pending }} frame(s) the AI flagged as soft or poorly exposed? You can restore any frame later.">
+          {% include "_csrf.html" %}
+          <button type="submit" class="btn secondary">⚠ Hide {{ flagged_pending }} flagged reject{{ '' if flagged_pending == 1 else 's' }}</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% if hero_ids and hero_ids[0] != cover_id %}
+      <form method="post" action="/galleries/{{ gallery.id }}/cover/{{ hero_ids[0] }}" style="margin-top:10px">
+        {% include "_csrf.html" %}
+        <button type="submit" class="btn secondary" style="width:100%; font-size:.68rem" title="The AI's highest-scored cover candidate">Use the AI's top pick as the cover</button>
+      </form>
+      {% endif %}
+    </aside>
+
+    <main class="workspace-main">
+      {% if hidden_count %}<p class="muted" style="font-size:.78rem; margin:0 0 10px">{{ hidden_count }} frame{{ '' if hidden_count == 1 else 's' }} hidden — excluded from the client gallery &amp; delivery.</p>{% endif %}
+      <div class="thumb-grid">
+        {% for img in images %}
+          {% set a = analysis.get(img.id) %}
+          {% set show = (qfilter == 'all')
+            or (qfilter == 'keepers' and a and a.keeper)
+            or (qfilter == 'favorites' and img.id in favorites)
+            or (qfilter == 'flagged' and a and a.flags)
+            or (qfilter == 'duplicates' and cull and img.id in cull.duplicate_ids)
+            or (qfilter == 'hidden' and img.hidden) %}
+          {% if show %}
+          <figure class="thumb{{ ' is-fav' if img.id in favorites else '' }}{{ ' is-culled' if cull and img.id in cull.culled_ids else '' }}{{ ' is-hidden' if img.hidden else '' }}{{ ' is-cover' if img.id == cover_id else '' }}">
+            <img src="{{ storage.public_path(img.storage_key) }}" alt="{{ img.filename }}" loading="lazy">
+            {% if img.id in favorites %}<span class="fav-badge" title="Client favorite">♥</span>{% endif %}
+            {% if img.hidden %}<span class="cull-badge" title="Hidden from client">🚫</span>
+            {% elif cull and img.id in cull.blink_ids %}<span class="cull-badge" title="Likely blink">👁</span>
+            {% elif cull and img.id in cull.duplicate_ids %}<span class="cull-badge" title="Duplicate frame">⧉</span>{% endif %}
+            <figcaption>{% if img.id == cover_id %}<span title="Gallery cover">★</span> {% endif %}{{ img.filename }}</figcaption>
+            {% if a %}
+            <div class="thumb-meta" title="What the AI saw">
+              {% if a.keeper %}<span class="meta-keeper" title="Strong keeper">★</span>{% endif %}
+              {% if a.shot_type %}<a class="meta-tag" href="/library?shot={{ a.shot_type | urlencode }}">{{ a.shot_type }}</a>{% endif %}
+              {% for kw in a.keywords[:3] %}<a class="meta-tag" href="/library?q={{ kw | urlencode }}">{{ kw }}</a>{% endfor %}
+              {% for fl in a.flags %}<span class="meta-flag" title="AI flagged a likely technical issue">⚠ {{ fl }}</span>{% endfor %}
+            </div>
+            {% endif %}
+            {% if img.hidden %}
+            <form method="post" action="/galleries/{{ gallery.id }}/images/{{ img.id }}/unhide">
+              {% include "_csrf.html" %}
+              <button type="submit" class="thumb-action">Restore</button>
+            </form>
+            {% else %}
+            <form method="post" action="/galleries/{{ gallery.id }}/images/{{ img.id }}/hide">
+              {% include "_csrf.html" %}
+              <button type="submit" class="thumb-action">Hide</button>
+            </form>
+            {% endif %}
+            {% if not img.hidden and img.id != cover_id %}
+            <form method="post" action="/galleries/{{ gallery.id }}/cover/{{ img.id }}">
+              {% include "_csrf.html" %}
+              <button type="submit" class="thumb-action">{% if img.id in hero_ids %}★ {% endif %}Set as cover</button>
+            </form>
+            {% endif %}
+          </figure>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </main>
+
+    {% set subj_ns = namespace(img=None) %}
     {% for img in images %}
-      <figure class="thumb{{ ' is-fav' if img.id in favorites else '' }}{{ ' is-culled' if cull and img.id in cull.culled_ids else '' }}{{ ' is-hidden' if img.hidden else '' }}{{ ' is-cover' if img.id == cover_id else '' }}">
-        <img src="{{ storage.public_path(img.storage_key) }}" alt="{{ img.filename }}" loading="lazy">
-        {% if img.id in favorites %}<span class="fav-badge" title="Client favorite">♥</span>{% endif %}
-        {% if img.hidden %}<span class="cull-badge" title="Hidden from client">🚫</span>
-        {% elif cull and img.id in cull.blink_ids %}<span class="cull-badge" title="Likely blink">👁</span>
-        {% elif cull and img.id in cull.duplicate_ids %}<span class="cull-badge" title="Duplicate frame">⧉</span>{% endif %}
-        <figcaption>{% if img.id == cover_id %}<span title="Gallery cover">★</span> {% endif %}{{ img.filename }}</figcaption>
-        {% set a = analysis.get(img.id) %}
-        {% if a %}
-        <div class="thumb-meta" title="What the AI saw">
-          {% if a.keeper %}<span class="meta-keeper" title="Strong keeper">★</span>{% endif %}
-          {% if a.shot_type %}<a class="meta-tag" href="/library?shot={{ a.shot_type | urlencode }}">{{ a.shot_type }}</a>{% endif %}
-          {% for kw in a.keywords[:3] %}<a class="meta-tag" href="/library?q={{ kw | urlencode }}">{{ kw }}</a>{% endfor %}
-          {% for fl in a.flags %}<span class="meta-flag" title="AI flagged a likely technical issue">⚠ {{ fl }}</span>{% endfor %}
+      {% if img.id == cover_id and not subj_ns.img %}{% set subj_ns.img = img %}{% endif %}
+    {% endfor %}
+    {% if not subj_ns.img and hero_ids %}
+      {% for img in images %}
+        {% if img.id == hero_ids[0] and not subj_ns.img %}{% set subj_ns.img = img %}{% endif %}
+      {% endfor %}
+    {% endif %}
+    {% set subject = subj_ns.img or images[0] %}
+    {% set sa = analysis.get(subject.id) %}
+    <aside class="inspector">
+      <div class="inspector-photo"><img src="{{ storage.public_path(subject.storage_key) }}" alt="{{ subject.filename }}" loading="lazy"></div>
+      <div>
+        <div class="inspector-title"><span class="name">{{ subject.filename }}</span>{% if subject.id == cover_id %}<span class="pill ember">cover</span>{% endif %}</div>
+      </div>
+      {% if sa %}
+      <div class="ai-read-card">
+        <div class="ai-read-head"><span class="label">AI READ</span>{% if sa.keeper %}<span class="score">KEEPER</span>{% endif %}</div>
+        <div class="ai-read-body">
+          {% if sa.shot_type %}{{ sa.shot_type }}. {% endif %}
+          {% if sa.keywords %}{{ sa.keywords|join(', ') }}.{% endif %}
+          {% if sa.flags %}Flags: {% for fl in sa.flags %}{{ fl }}{% if not loop.last %}, {% endif %}{% endfor %}.{% endif %}
+        </div>
+      </div>
+      {% endif %}
+      {% for c in (comments or []) %}
+        {% if c.filename == subject.filename %}
+        <div class="ai-read-card">
+          <div class="ai-read-head"><span class="label">CLIENT NOTE</span></div>
+          <div class="ai-read-body">"{{ c.body }}" <span style="color:var(--ink-3)">· {{ c.author_name or 'Client' }}</span></div>
         </div>
         {% endif %}
-        {% if img.hidden %}
-        <form method="post" action="/galleries/{{ gallery.id }}/images/{{ img.id }}/unhide">
-          {% include "_csrf.html" %}
-          <button type="submit" class="thumb-action">Restore</button>
-        </form>
+      {% endfor %}
+      <div class="inspector-actions">
+        {% if subject.hidden %}
+        <form method="post" action="/galleries/{{ gallery.id }}/images/{{ subject.id }}/unhide" style="flex:1"><button type="submit" class="btn secondary" style="width:100%">Restore</button>{% include "_csrf.html" %}</form>
         {% else %}
-        <form method="post" action="/galleries/{{ gallery.id }}/images/{{ img.id }}/hide">
-          {% include "_csrf.html" %}
-          <button type="submit" class="thumb-action">Hide</button>
-        </form>
+        <form method="post" action="/galleries/{{ gallery.id }}/images/{{ subject.id }}/hide" style="flex:1"><button type="submit" class="btn secondary" style="width:100%">Hide</button>{% include "_csrf.html" %}</form>
         {% endif %}
-        {% if not img.hidden and img.id != cover_id %}
-        <form method="post" action="/galleries/{{ gallery.id }}/cover/{{ img.id }}">
-          {% include "_csrf.html" %}
-          <button type="submit" class="thumb-action">{% if img.id in hero_ids %}⭐ {% endif %}Set as cover</button>
-        </form>
+        {% if subject.id != cover_id %}
+        <form method="post" action="/galleries/{{ gallery.id }}/cover/{{ subject.id }}" style="flex:1"><button type="submit" class="btn" style="width:100%">Set cover</button>{% include "_csrf.html" %}</form>
         {% endif %}
-      </figure>
-    {% endfor %}
+      </div>
+    </aside>
   </div>
 </div>
 {% else %}
-<p class="muted" style="margin-top:18px">No frames yet — upload a few to enable processing.</p>
+<p class="muted" style="margin-top:14px">No frames yet — upload a few to enable processing.</p>
 {% endif %}
 {% endblock %}

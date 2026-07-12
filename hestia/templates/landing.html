@@ -3,8 +3,8 @@
 {% block meta_description %}Run a professional photography studio from gallery to paid in one hosted command center: AI-powered galleries, offers, payments, and follow-up for $40/month.{% endblock %}
 {% block content %}
 <section class="hero">
-  <div class="eyebrow">One home for your studio</div>
-  <h1>Gallery to paid, in one app.</h1>
+  <div class="eyebrow">The studio OS for photographers</div>
+  <h1>Gallery to paid,<br>in one place.</h1>
   <p class="lead">
     Hestia is the AI-native studio for photographers: deliver galleries, let AI
     understand every frame, and turn each gallery into print &amp; album revenue —
@@ -16,7 +16,7 @@
     <strong>Print &amp; album offer</strong> <span class="arrow">→</span>
     <strong>Client buys</strong>
   </div>
-  <p style="margin-top:28px" class="form-actions">
+  <p class="form-actions">
     {% if auth and auth.tenant %}
       <a class="btn" href="/dashboard">Go to your dashboard →</a>
     {% else %}
@@ -29,28 +29,65 @@
       <a class="btn ghost" href="/pricing">See pricing</a>
     {% endif %}
   </p>
+  <div class="hero-note">$40/month after trial · every module included · cancel anytime</div>
+
+  <div class="product-frame">
+    <div class="product-frame-dots"><span></span><span></span><span></span></div>
+    <div class="product-frame-body">
+      <div class="pf-row">
+        <div class="pf-card spot">
+          <div class="k">NEXT BEST MOVE</div>
+          <div class="v">A $4,800 wedding lead just landed.</div>
+          <span class="cta">Send proposal</span>
+        </div>
+        <div class="pf-card side">
+          <div class="k">JULY</div>
+          <div class="v">$8,420 <span style="color:var(--ok); font-size:.6rem">▲18%</span></div>
+          <div class="sub">$5,960 profit · $2,630 open</div>
+        </div>
+      </div>
+      <div class="pf-row tight">
+        <div class="pf-card third"><div class="k" style="color:var(--danger)">OVERDUE 6D</div><div class="v" style="font-size:.72rem; margin-top:5px">Remind Grace Chen · $450</div></div>
+        <div class="pf-card third"><div class="k" style="color:var(--ok)">SALE READY</div><div class="v" style="font-size:.72rem; margin-top:5px">Nguyen gallery · ~$600</div></div>
+        <div class="pf-card third"><div class="k" style="color:var(--info)">DELIVER</div><div class="v" style="font-size:.72rem; margin-top:5px">Chen — Golden Hour · 214f</div></div>
+      </div>
+    </div>
+  </div>
 </section>
 
-<section class="grid cols-2" style="margin-top:24px">
-  <div class="card stack">
-    <h3>👁 Understand every image</h3>
-    <p class="muted">AI culls keepers, picks heroes, and keywords your whole gallery
-      the moment you upload — no separate cataloguing pass.</p>
+<div class="feature-trio">
+  <div class="card"><div class="t">Book</div><p>Public booking site, lead scoring, proposals, e-sign contracts, deposits — inquiry to booked without email ping-pong.</p></div>
+  <div class="card"><div class="t">Deliver</div><p>AI culls blinks and dupes, picks heroes, keywords every frame. Proofing, favorites, and delivery links your clients love.</p></div>
+  <div class="card"><div class="t">Sell</div><p>Every gallery auto-builds a print &amp; album offer. Timed sales, payment plans, and reminders that recover real money.</p></div>
+</div>
+
+<div class="value-band">
+  <div>
+    <h2>One flat plan.<br>Every module. No tiers.</h2>
+    <p>The incumbents charge $36–129/month and gate automations behind upgrades. Hestia is one price, everything on.</p>
+    <div class="checklist">
+      <div><span class="ok">✓</span>Booking, CRM, pipeline, scheduler</div>
+      <div><span class="ok">✓</span>Galleries, AI culling, proofing, delivery</div>
+      <div><span class="ok">✓</span>Contracts, invoices, payment plans, automations</div>
+      <div><span class="ok">✓</span>Client portal + print &amp; album sales</div>
+    </div>
   </div>
-  <div class="card stack">
-    <h3>💳 Sell while it's warm</h3>
-    <p class="muted">Every gallery auto-builds a print &amp; album collection with one
-      shareable client link. Idempotent — re-run all you like, one link.</p>
+  <div class="price-card">
+    <div class="plan-name">HESTIA STUDIO</div>
+    <div class="price">$40<span class="period">/month</span></div>
+    <p>14-day free trial · no card required</p>
+    {% if settings.signup_enabled %}
+      <a class="btn" style="width:100%; justify-content:center" href="/signup?source=landing-price&amp;path=/">Start free trial</a>
+    {% else %}
+      <a class="btn" style="width:100%; justify-content:center" href="/beta?source=landing-price&amp;path=/">Request beta access</a>
+    {% endif %}
+    <div class="inline-auth">
+      <div class="lbl">Or sign in to your studio</div>
+      <div class="inline-auth-row">
+        <span>you@studio.com</span>
+        <a class="btn secondary" href="/login">Sign in</a>
+      </div>
+    </div>
   </div>
-  <div class="card stack">
-    <h3>🤝 One login, one bill</h3>
-    <p class="muted">Studios, galleries, vision, and sales live in one place. No fleet
-      of services, no five dashboards.</p>
-  </div>
-  <div class="card stack">
-    <h3>🔥 Built for every studio</h3>
-    <p class="muted">Wedding, portrait, food, and real-estate presets tune your booking,
-      packages, and offers — the same warm home for each.</p>
-  </div>
-</section>
+</div>
 {% endblock %}

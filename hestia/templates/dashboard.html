@@ -17,7 +17,7 @@
   </div>
 </div>
 
-<div class="card stack" style="margin-bottom:18px">
+<div class="card stack" style="margin-bottom:14px">
   <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-start; flex-wrap:wrap">
     <div style="flex:1 1 360px">
       <h3 style="margin-bottom:4px">Hosted studio cockpit <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ trial.title }}</span></h3>
@@ -37,7 +37,7 @@
 </div>
 
 {% if not setup.complete %}
-<div class="card stack" style="margin-bottom:18px">
+<div class="card stack" style="margin-bottom:14px">
   <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap">
     <div>
       <h3 style="margin-bottom:4px">Launch path <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ setup.done }}/{{ setup.total }} live</span></h3>
@@ -52,7 +52,7 @@
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
       <span class="label" style="min-width:72px">{{ s.stage }}</span>
       <span style="flex:1 1 190px">
-        <span style="{{ 'color:var(--accent, #2a7)' if s.done else '' }}">{{ '✓' if s.done else '○' }}</span>
+        <span class="{{ 'dot ok' if s.done else 'dot' }}" style="display:inline-block; margin-right:4px"></span>
         {% if s.done %}<span class="muted" style="text-decoration:line-through">{{ s.label }}</span>
         {% else %}<a href="{{ s.href }}">{{ s.label }}</a>{% endif %}
       </span>
@@ -63,7 +63,7 @@
 </div>
 {% endif %}
 
-<div class="health-strip" style="margin-bottom:18px">
+<div class="health-strip" style="margin-bottom:14px">
   <a class="health-item" href="/clients"><span class="svc">{{ counts.clients }}</span> <span class="url">clients</span></a>
   <a class="health-item" href="/projects"><span class="svc">{{ counts.projects }}</span> <span class="url">projects</span></a>
   <a class="health-item" href="/galleries"><span class="svc">{{ counts.galleries }}</span> <span class="url">galleries</span></a>
@@ -71,104 +71,128 @@
   <a class="health-item" href="/studio/{{ tenant.slug }}" target="_blank"><span class="svc">↗</span> <span class="url">public site</span></a>
 </div>
 
-<div class="card" style="margin-bottom:18px">
-  <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px">
-    <h3 style="margin:0">Money</h3>
-    <a class="muted" href="/finances" style="font-size:.85rem">Finances →</a>
-  </div>
-  <div style="display:flex; gap:32px; flex-wrap:wrap">
-    <div><div class="label">Revenue · this month</div><div style="font-size:1.35rem">{{ snapshot.month.revenue }}</div></div>
-    <div><div class="label">Profit · this month</div><div style="font-size:1.35rem">{{ snapshot.month.profit }}</div></div>
-    <div><div class="label">Outstanding</div><div style="font-size:1.35rem">{{ snapshot.ar.outstanding }}{% if snapshot.ar.overdue_cents %} <span class="pill off" style="font-size:.62rem; vertical-align:middle">{{ snapshot.ar.overdue }} overdue</span>{% endif %}</div></div>
-  </div>
-</div>
+{% set top_lead = lead_intelligence[0] if lead_intelligence else None %}
+{% set top_sale = gallery_sales[0] if (not top_lead and gallery_sales) else None %}
+{% set spotlight_item = top_lead or top_sale %}
 
-{% if proposal_stats.show %}
-<div class="card" style="margin-bottom:18px">
-  <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px">
-    <h3 style="margin:0">Proposal conversion <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ proposal_stats.window_label }}</span></h3>
-    <a class="muted" href="/proposals" style="font-size:.85rem">Proposals -></a>
-  </div>
-  <div style="display:flex; gap:28px; flex-wrap:wrap">
-    <div><div class="label">Sent</div><div style="font-size:1.35rem">{{ proposal_stats.sent_count }}</div></div>
-    <div><div class="label">Accepted</div><div style="font-size:1.35rem">{{ proposal_stats.accepted_count }} <span class="pill {{ 'on' if proposal_stats.sent_to_accepted_pct >= 50 else 'off' }}" style="font-size:.62rem; vertical-align:middle">{{ proposal_stats.sent_to_accepted }}</span></div></div>
-    <div><div class="label">Paid</div><div style="font-size:1.35rem">{{ proposal_stats.booked_count }} <span class="pill {{ 'on' if proposal_stats.accepted_to_paid_pct >= 50 else 'off' }}" style="font-size:.62rem; vertical-align:middle">{{ proposal_stats.accepted_to_paid }}</span></div></div>
-    <div><div class="label">Avg time to book</div><div style="font-size:1.35rem">{{ proposal_stats.avg_time_to_book }}</div></div>
-    <div><div class="label">Money stuck</div><div style="font-size:1.35rem">{{ proposal_stats.stuck_value }}{% if proposal_stats.stuck_count %} <span class="pill off" style="font-size:.62rem; vertical-align:middle">{{ proposal_stats.stuck_count }} open</span>{% endif %}</div></div>
-  </div>
-</div>
-{% endif %}
-
-{% if lead_intelligence %}
-<div class="card stack" style="margin-bottom:18px">
-  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap">
-    <h3 style="margin:0">Lead intelligence <span class="muted" style="font-weight:normal; font-size:.85rem">· fastest follow-up first</span></h3>
-    <a class="muted" href="/projects" style="font-size:.85rem">Projects -></a>
-  </div>
-  <div class="stack" style="gap:10px">
-    {% for lead in lead_intelligence %}
-    <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-start; flex-wrap:wrap; padding-bottom:10px; border-bottom:1px solid var(--line)">
-      <div style="flex:1 1 280px">
-        <div>
-          <a href="{{ lead.href }}"><strong>{{ lead.name }}</strong></a>
-          <span class="pill {{ lead.priority_class }}">{{ lead.priority }} · {{ lead.score }}</span>
-        </div>
-        <div class="muted" style="font-size:.9rem">
-          {% if lead.client_name %}{% if lead.client_href %}<a href="{{ lead.client_href }}">{{ lead.client_name }}</a>{% else %}{{ lead.client_name }}{% endif %} · {% endif %}
-          {{ lead.next_action }} · {{ lead.reason_line }}
-        </div>
-      </div>
-      <div style="text-align:right; min-width:130px">
-        {% if lead.intent_cents %}<div><strong>{{ lead.intent_value }}</strong></div><div class="muted" style="font-size:.8rem">open intent</div>{% endif %}
-        <a class="btn ghost" href="{{ lead.href }}">Open</a>
-      </div>
+<div class="{{ 'spotlight-row' if spotlight_item else '' }}" style="margin-bottom:14px">
+  {% if spotlight_item %}
+  <div class="spotlight">
+    <div class="spotlight-label">NEXT BEST MOVE · {{ 'HIGHEST VALUE OPEN LEAD' if top_lead else 'SALE READY' }}</div>
+    {% if top_lead %}
+    <div class="spotlight-title"><a href="{{ top_lead.href }}" style="color:inherit; text-decoration:none">{{ top_lead.name }}</a>{% if top_lead.client_name %} <span class="muted" style="font-size:.85rem; font-weight:normal">· {{ top_lead.client_name }}</span>{% endif %}{% if top_lead.intent_value %} — <span class="accent">{{ top_lead.intent_value }} open intent</span>{% endif %}</div>
+    <div class="spotlight-sub">{{ top_lead.priority }} · score {{ top_lead.score }} — {{ top_lead.reason_line }}. Next: {{ top_lead.next_action }}.</div>
+    <div class="spotlight-actions">
+      <a class="btn" href="{{ top_lead.href }}">{{ top_lead.next_action }}</a>
+      <a class="btn secondary" href="{{ top_lead.href }}">View lead</a>
     </div>
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
-
-{% if gallery_sales %}
-<div class="card stack" style="margin-bottom:18px">
-  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap">
-    <h3 style="margin:0">Gallery sales <span class="muted" style="font-weight:normal; font-size:.85rem">· ready to monetize</span></h3>
-    <a class="muted" href="/galleries" style="font-size:.85rem">Galleries -></a>
-  </div>
-  <div class="stack" style="gap:10px">
-    {% for sale in gallery_sales %}
-    <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-start; flex-wrap:wrap; padding-bottom:10px; border-bottom:1px solid var(--line)">
-      <div style="flex:1 1 280px">
-        <div>
-          <a href="{{ sale.href }}"><strong>{{ sale.title }}</strong></a>
-          <span class="pill on">{{ sale.status_label }} · {{ sale.score }}</span>
-        </div>
-        <div class="muted" style="font-size:.9rem">
-          {% if sale.client_name %}{{ sale.client_name }} · {% endif %}{{ sale.reason_line }} · {{ sale.next_action }}
-        </div>
-      </div>
-      <form method="post" action="/galleries/{{ sale.id }}/campaign" style="margin:0">
+    {% else %}
+    <div class="spotlight-title">{{ top_sale.title }} is ready to sell<span class="accent">{% if top_sale.client_name %} — {{ top_sale.client_name }}{% endif %}</span></div>
+    <div class="spotlight-sub">{{ top_sale.reason_line }} · {{ top_sale.next_action }}</div>
+    <div class="spotlight-actions">
+      <form method="post" action="/galleries/{{ top_sale.id }}/campaign" style="margin:0">
         {% include "_csrf.html" %}
         <input type="hidden" name="headline" value="Your gallery print sale">
         <input type="hidden" name="discount_pct" value="15">
         <input type="hidden" name="days" value="7">
         <button class="btn" type="submit">Launch 15% sale</button>
       </form>
+      <a class="btn secondary" href="{{ top_sale.href }}">View gallery</a>
     </div>
-    {% endfor %}
+    {% endif %}
+  </div>
+  {% endif %}
+  <div class="glance-card">
+    <div class="glance-label">THIS MONTH AT A GLANCE</div>
+    <div class="glance-list">
+      <div class="glance-row"><span class="k">Revenue</span><span class="v">{{ snapshot.month.revenue }}</span></div>
+      <div class="glance-row"><span class="k">Profit</span><span class="v">{{ snapshot.month.profit }}</span></div>
+      <div class="glance-row"><span class="k">Outstanding</span><span class="v">{{ snapshot.ar.outstanding }}{% if snapshot.ar.overdue_cents %} <span class="delta" style="color:var(--danger)">{{ snapshot.ar.overdue }} late</span>{% endif %}</span></div>
+    </div>
+    <a class="glance-foot" href="/finances">Open Finances →</a>
+  </div>
+</div>
+
+{% if proposal_stats.show %}
+<div class="card stack" style="margin-bottom:14px">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px">
+    <h3 style="margin:0">Proposal conversion <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ proposal_stats.window_label }}</span></h3>
+    <a class="muted" href="/proposals" style="font-size:.85rem">Proposals →</a>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-label">Sent</div><div class="kpi-value">{{ proposal_stats.sent_count }}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Accepted</div><div class="kpi-value">{{ proposal_stats.accepted_count }}</div><div class="kpi-delta {{ 'up' if proposal_stats.sent_to_accepted_pct >= 50 else '' }}">{{ proposal_stats.sent_to_accepted }}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Paid</div><div class="kpi-value">{{ proposal_stats.booked_count }}</div><div class="kpi-delta {{ 'up' if proposal_stats.accepted_to_paid_pct >= 50 else '' }}">{{ proposal_stats.accepted_to_paid }}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Avg time to book</div><div class="kpi-value">{{ proposal_stats.avg_time_to_book }}</div></div>
+    <div class="kpi-card {{ 'danger' if proposal_stats.stuck_count else '' }}"><div class="kpi-label">Money stuck</div><div class="kpi-value">{{ proposal_stats.stuck_value }}</div>{% if proposal_stats.stuck_count %}<div class="kpi-delta down">{{ proposal_stats.stuck_count }} open</div>{% endif %}</div>
   </div>
 </div>
 {% endif %}
 
-<div class="card stack" style="margin-bottom:18px">
+{% if lead_intelligence %}
+<div class="section-head">
+  <span class="title">Lead intelligence</span>
+  <span class="count">fastest follow-up first</span>
+  <a class="more" href="/projects">Projects →</a>
+</div>
+{% set rest_leads = lead_intelligence[1:] if top_lead else lead_intelligence %}
+{% if rest_leads %}
+<div class="queue-grid" style="margin-bottom:14px">
+  {% for lead in rest_leads %}
+  <div class="queue-card">
+    <div class="queue-head">
+      <span class="queue-tag {{ lead.priority_class }}">{{ lead.priority }} · {{ lead.score }}</span>
+      {% if lead.intent_cents %}<span class="queue-amount">{{ lead.intent_value }}</span>{% endif %}
+    </div>
+    <div class="queue-title"><a href="{{ lead.href }}" style="color:inherit">{{ lead.name }}</a></div>
+    <div class="queue-meta">{% if lead.client_name %}{{ lead.client_name }} · {% endif %}{{ lead.next_action }} · {{ lead.reason_line }}</div>
+    <a class="btn secondary" href="{{ lead.href }}">Open</a>
+  </div>
+  {% endfor %}
+</div>
+{% elif not top_lead %}
+{% endif %}
+{% endif %}
+
+{% if gallery_sales %}
+<div class="section-head">
+  <span class="title">Gallery sales</span>
+  <span class="count">ready to monetize</span>
+  <a class="more" href="/galleries">Galleries →</a>
+</div>
+{% set rest_sales = gallery_sales[1:] if top_sale else gallery_sales %}
+{% if rest_sales %}
+<div class="queue-grid" style="margin-bottom:14px">
+  {% for sale in rest_sales %}
+  <div class="queue-card">
+    <div class="queue-head">
+      <span class="queue-tag ok">{{ sale.status_label }} · {{ sale.score }}</span>
+    </div>
+    <div class="queue-title"><a href="{{ sale.href }}" style="color:inherit">{{ sale.title }}</a></div>
+    <div class="queue-meta">{% if sale.client_name %}{{ sale.client_name }} · {% endif %}{{ sale.reason_line }} · {{ sale.next_action }}</div>
+    <form method="post" action="/galleries/{{ sale.id }}/campaign" style="margin:0">
+      {% include "_csrf.html" %}
+      <input type="hidden" name="headline" value="Your gallery print sale">
+      <input type="hidden" name="discount_pct" value="15">
+      <input type="hidden" name="days" value="7">
+      <button class="btn secondary" type="submit">Launch 15% sale</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+
+<div class="card stack" style="margin-bottom:14px">
   <h3>Needs attention{% if attention.total %} · {{ attention.total }}{% endif %}</h3>
   {% if attention.total == 0 %}
     <p class="muted">You're all caught up — no leads waiting, invoices outstanding, sessions
-      imminent, or galleries undelivered. 🎉</p>
+      imminent, or galleries undelivered.</p>
   {% else %}
     <div class="grid cols-2">
       {% if attention.leads %}
       <div class="stack" style="gap:6px">
-        <div class="label">📥 New leads · {{ attention.leads|length }}</div>
+        <div class="label"><span class="dot ember" style="margin-right:5px"></span>New leads · {{ attention.leads|length }}</div>
         {% for l in attention.leads %}
         <div><a href="/projects/{{ l.id }}">{{ l.name }}</a>{% if l.client_name %} <span class="muted">· {{ l.client_name }}</span>{% endif %}</div>
         {% endfor %}
@@ -176,15 +200,15 @@
       {% endif %}
       {% if attention.unpaid %}
       <div class="stack" style="gap:6px">
-        <div class="label">💸 Unpaid invoices · {{ attention.unpaid|length }}</div>
+        <div class="label"><span class="dot down" style="margin-right:5px"></span>Unpaid invoices · {{ attention.unpaid|length }}</div>
         {% for i in attention.unpaid %}
-        <div><a href="/invoices/{{ i.id }}">{{ i.title }}</a> <span class="muted">· {{ i.amount_display }} · {{ i.status }}</span>{% if i.is_overdue %} <span class="pill off">overdue</span>{% endif %}</div>
+        <div><a href="/invoices/{{ i.id }}">{{ i.title }}</a> <span class="muted">· {{ i.amount_display }} · {{ i.status }}</span>{% if i.is_overdue %} <span class="pill danger">overdue</span>{% endif %}</div>
         {% endfor %}
       </div>
       {% endif %}
       {% if attention.upcoming %}
       <div class="stack" style="gap:6px">
-        <div class="label">📅 Upcoming sessions · {{ attention.upcoming|length }}</div>
+        <div class="label"><span class="dot info" style="margin-right:5px"></span>Upcoming sessions · {{ attention.upcoming|length }}</div>
         {% for a in attention.upcoming %}
         <div><a href="/schedule/{{ a.id }}">{{ a.title }}</a> <span class="muted">· {{ a.starts_at }}</span></div>
         {% endfor %}
@@ -192,7 +216,7 @@
       {% endif %}
       {% if attention.to_confirm %}
       <div class="stack" style="gap:6px">
-        <div class="label">⏳ Awaiting a confirmed time · {{ attention.to_confirm|length }}</div>
+        <div class="label"><span class="dot warn" style="margin-right:5px"></span>Awaiting a confirmed time · {{ attention.to_confirm|length }}</div>
         {% for a in attention.to_confirm %}
         <div><a href="/schedule/{{ a.id }}">{{ a.title }}</a>{% if a.client_name %} <span class="muted">· {{ a.client_name }}</span>{% endif %}</div>
         {% endfor %}
@@ -200,15 +224,15 @@
       {% endif %}
       {% if attention.album_changes %}
       <div class="stack" style="gap:6px">
-        <div class="label">📖 Album change requests · {{ attention.album_changes|length }}</div>
+        <div class="label"><span class="dot warn" style="margin-right:5px"></span>Album change requests · {{ attention.album_changes|length }}</div>
         {% for al in attention.album_changes %}
-        <div><a href="/albums/{{ al.id }}">{{ al.gallery_title }}</a> <span class="muted">· “{{ al.change_request }}”</span></div>
+        <div><a href="/albums/{{ al.id }}">{{ al.gallery_title }}</a> <span class="muted">· "{{ al.change_request }}"</span></div>
         {% endfor %}
       </div>
       {% endif %}
       {% if attention.to_deliver %}
       <div class="stack" style="gap:6px">
-        <div class="label">📦 Ready to deliver · {{ attention.to_deliver|length }}</div>
+        <div class="label"><span class="dot info" style="margin-right:5px"></span>Ready to deliver · {{ attention.to_deliver|length }}</div>
         {% for g in attention.to_deliver %}
         <div><a href="/galleries/{{ g.id }}">{{ g.title }}</a> <span class="muted">· enable download</span></div>
         {% endfor %}
@@ -216,7 +240,7 @@
       {% endif %}
       {% if attention.awaiting_contract %}
       <div class="stack" style="gap:6px">
-        <div class="label">✍️ Awaiting signature · {{ attention.awaiting_contract|length }}</div>
+        <div class="label"><span class="dot sign" style="margin-right:5px"></span>Awaiting signature · {{ attention.awaiting_contract|length }}</div>
         {% for ct in attention.awaiting_contract %}
         <div><a href="/contracts/{{ ct.id }}">{{ ct.title }}</a>{% if ct.client_name %} <span class="muted">· {{ ct.client_name }}</span>{% endif %}</div>
         {% endfor %}
@@ -224,7 +248,7 @@
       {% endif %}
       {% if attention.proposal_acceptance %}
       <div class="stack" style="gap:6px">
-        <div class="label">Proposal follow-up · {{ attention.proposal_acceptance|length }}</div>
+        <div class="label"><span class="dot ember" style="margin-right:5px"></span>Proposal follow-up · {{ attention.proposal_acceptance|length }}</div>
         {% for p in attention.proposal_acceptance %}
         <div><a href="/proposals/{{ p.id }}">{{ p.title }}</a>{% if p.client_name %} <span class="muted">· {{ p.client_name }}</span>{% endif %} <span class="muted">· {{ p.next_action }} · {{ p.invoice_amount_display }}</span></div>
         {% endfor %}
@@ -232,7 +256,7 @@
       {% endif %}
       {% if attention.proposal_booking %}
       <div class="stack" style="gap:6px">
-        <div class="label">Finish booking · {{ attention.proposal_booking|length }}</div>
+        <div class="label"><span class="dot ember" style="margin-right:5px"></span>Finish booking · {{ attention.proposal_booking|length }}</div>
         {% for p in attention.proposal_booking %}
         <div><a href="/proposals/{{ p.id }}">{{ p.title }}</a> <span class="muted">· {{ p.next_action }} · {{ p.followup_label }}</span></div>
         {% endfor %}
@@ -240,7 +264,7 @@
       {% endif %}
       {% if attention.awaiting_questionnaire %}
       <div class="stack" style="gap:6px">
-        <div class="label">📋 Awaiting response · {{ attention.awaiting_questionnaire|length }}</div>
+        <div class="label"><span class="dot info" style="margin-right:5px"></span>Awaiting response · {{ attention.awaiting_questionnaire|length }}</div>
         {% for q in attention.awaiting_questionnaire %}
         <div><a href="/questionnaires/{{ q.id }}">{{ q.title }}</a>{% if q.client_name %} <span class="muted">· {{ q.client_name }}</span>{% endif %}</div>
         {% endfor %}
@@ -251,14 +275,14 @@
 </div>
 
 {% if reconnect %}
-<div class="card stack" style="margin-bottom:18px">
+<div class="card stack" style="margin-bottom:14px">
   <h3>Reconnect <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ reconnect|length }}</span></h3>
   <p class="muted">Past clients you haven't booked in a while. A quick hello keeps you top of mind
     — and ahead of the next time they need a photographer.</p>
   <div class="stack" style="gap:6px">
     {% for c in reconnect %}
     <div style="display:flex; align-items:center; gap:10px; justify-content:space-between">
-      <span>🤝 <a href="/clients/{{ c.id }}">{{ c.name }}</a>
+      <span><a href="/clients/{{ c.id }}">{{ c.name }}</a>
         <span class="muted">· last booked {{ c.last_seen[:10] }}</span></span>
       <a class="btn ghost" href="/clients/{{ c.id }}/email">✉ Email</a>
     </div>

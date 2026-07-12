@@ -2,36 +2,38 @@
 {% block title %}Start your hosted studio — Hestia{% endblock %}
 {% block wrap_class %}narrow{% endblock %}
 {% block content %}
-<div class="card stack">
-  <h1>Start your hosted studio</h1>
-  {% if sent %}
-    <div class="alert ok">Almost there — check your email to activate your hosted studio. The link opens onboarding and expires in 2 days.</div>
-    <p class="hint"><a href="/login">Back to sign in</a></p>
-  {% else %}
-    <p class="muted">Everything a growing photography studio needs: booking, CRM, contracts,
-      galleries, AI offers, invoices, payments, and retention. 14-day trial, then
-      $40/month. No tiers.</p>
-    {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
-    <form method="post" action="/signup">
-      {% include "_csrf.html" %}
-      <input type="hidden" name="signup_source" value="{{ signup_source or '' }}">
-      <input type="hidden" name="signup_landing_path" value="{{ signup_landing_path or '' }}">
-      <label for="name">Studio name</label>
-      <input type="text" id="name" name="name" placeholder="Kevin Lee Photography" required autofocus>
-      <label for="shoot_type">What do you shoot?</label>
-      <select id="shoot_type" name="shoot_type">
-        {% for st in shoot_types %}<option value="{{ st }}">{{ shoot_type_labels.get(st, st) }}</option>{% endfor %}
-      </select>
-      <label for="email">Email</label>
-      <input type="email" id="email" name="email" required>
-      <label for="password">Password <span class="muted">(at least 8 characters)</span></label>
-      <input type="password" id="password" name="password" required minlength="8">
-      <div class="form-actions">
-        <button class="btn" type="submit">Start 14-day trial</button>
-        <a class="btn secondary" href="/demo">View demo</a>
-        <a class="btn ghost" href="/login">Sign in</a>
-      </div>
-    </form>
-  {% endif %}
+<div class="auth-wrap">
+  <div class="auth-card stack">
+    <h1>Start your hosted studio</h1>
+    {% if sent %}
+      <div class="alert ok">Almost there — check your email to activate your hosted studio. The link opens onboarding and expires in 2 days.</div>
+      <p class="auth-foot"><a href="/login">Back to sign in</a></p>
+    {% else %}
+      <p class="muted">Everything a growing photography studio needs: booking, CRM, contracts,
+        galleries, AI offers, invoices, payments, and retention. 14-day trial, then
+        $40/month. No tiers.</p>
+      {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+      <form method="post" action="/signup">
+        {% include "_csrf.html" %}
+        <input type="hidden" name="signup_source" value="{{ signup_source or '' }}">
+        <input type="hidden" name="signup_landing_path" value="{{ signup_landing_path or '' }}">
+        <label for="name">Studio name</label>
+        <input type="text" id="name" name="name" placeholder="Kevin Lee Photography" required autofocus>
+        <label for="shoot_type">What do you shoot?</label>
+        <select id="shoot_type" name="shoot_type">
+          {% for st in shoot_types %}<option value="{{ st }}">{{ shoot_type_labels.get(st, st) }}</option>{% endfor %}
+        </select>
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required>
+        <label for="password">Password <span class="muted">(at least 8 characters)</span></label>
+        <input type="password" id="password" name="password" required minlength="8">
+        <div class="form-actions">
+          <button class="btn" type="submit">Start 14-day trial</button>
+          <a class="btn secondary" href="/demo">View demo</a>
+          <a class="btn ghost" href="/login">Sign in</a>
+        </div>
+      </form>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

@@ -4,28 +4,35 @@
 <div class="page-title">
   <div>
     <h1>Pipeline</h1>
-    <span class="muted">Your whole book of work by stage — lead to archived.</span>
+    <span class="muted">Your whole book of work by stage — lead to archived. Drag isn't wired yet; use the project page to change stage.</span>
   </div>
   <a class="btn secondary" href="/projects">All projects</a>
 </div>
 
-<div style="display:flex; gap:14px; overflow-x:auto; padding-bottom:8px; align-items:flex-start">
+<div class="board" style="grid-template-columns:repeat({{ stages|length }}, minmax(220px, 1fr))">
   {% for s in stages %}
-  <div style="flex:1 0 220px; min-width:220px">
-    <div class="card stack" style="gap:10px">
-      <div>
-        <h3 style="text-transform:capitalize; margin:0">{{ s.stage }} · {{ s.count }}</h3>
-        {% if s.collected_cents %}<span class="muted" style="font-size:.82rem">{{ s.collected_display }} collected</span>{% endif %}
-      </div>
+  <div class="board-col">
+    <div class="board-col-head">
+      <span class="dot ember"></span>
+      <span class="name" style="text-transform:capitalize">{{ s.stage }}</span>
+      <span class="count">{{ s.count }}</span>
+      {% if s.collected_cents %}<span class="total">{{ s.collected_display }}</span>{% endif %}
+    </div>
+    <div class="board-cards">
       {% for p in s.projects %}
-      <div class="card" style="padding:10px; margin:0">
-        <a href="/projects/{{ p.id }}">{{ p.name }}</a>
-        <div class="muted" style="font-size:.8rem">
-          {{ shoot_type_labels.get(p.shoot_type, p.shoot_type) }}{% if p.client_name %} · {{ p.client_name }}{% endif %}{% if p.collected_cents %} · {{ p.collected_display }}{% endif %}
+      <a class="board-card" href="/projects/{{ p.id }}">
+        <div class="board-card-top">
+          <span class="board-card-name">{{ p.name }}</span>
         </div>
-      </div>
+        <div class="board-card-meta">{{ shoot_type_labels.get(p.shoot_type, p.shoot_type) }}{% if p.client_name %} · {{ p.client_name }}{% endif %}</div>
+        {% if p.collected_cents %}
+        <div class="board-card-foot">
+          <span class="board-card-value">{{ p.collected_display }}</span>
+        </div>
+        {% endif %}
+      </a>
       {% else %}
-      <p class="muted" style="font-size:.85rem; margin:0">No projects here.</p>
+      <p class="muted" style="font-size:.78rem; margin:0">No projects here.</p>
       {% endfor %}
     </div>
   </div>

@@ -1,22 +1,30 @@
 {% extends "base.html" %}
 {% block title %}Payment plans — Hestia{% endblock %}
 {% block content %}
-<div class="page-title">
-  <h1>Payment plans</h1>
+{% set money_tab = 'plans' %}
+<div class="hub-head">
+  <div>
+    <h1>Money</h1>
+    <div class="sub">Invoices, plans, and recurring in one ledger</div>
+  </div>
+  {% include "_tabs_money.html" %}
+</div>
+<div class="page-title" style="margin-top:2px">
+  <div></div>
   <a class="btn" href="/payment-plans/new">+ New plan</a>
 </div>
 {% if plans %}
-<div class="card">
+<div class="doc-list">
   <table>
-    <thead><tr><th>Plan</th><th>Client</th><th>Total</th><th>Collected</th><th>Status</th></tr></thead>
+    <thead><tr><th>Plan</th><th>Client</th><th class="num">Total</th><th class="num">Collected</th><th>Status</th></tr></thead>
     <tbody>
       {% for pl in plans %}
       <tr>
         <td><a href="/payment-plans/{{ pl.id }}">{{ pl.title }}</a>
           <span class="muted">· {{ pl.installment_count }} installments</span></td>
         <td class="muted">{{ pl.client_name or pl.project_name or "—" }}</td>
-        <td>{{ pl.total_display }}</td>
-        <td class="muted">{{ pl.paid_display }}</td>
+        <td class="num">{{ pl.total_display }}</td>
+        <td class="num muted">{{ pl.paid_display }}</td>
         <td>
           {% if pl.status == 'void' %}<span class="pill off">void</span>
           {% else %}<span class="pill {{ 'on' if pl.progress == 'paid' else 'off' }}">{{ pl.progress }}</span>{% endif %}

@@ -1,8 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Packages — Hestia{% endblock %}
 {% block content %}
-<div class="page-title">
-  <h1>Service packages</h1>
+{% set doc_tab = 'packages' %}
+<div class="hub-head">
+  <div>
+    <h1>Documents</h1>
+    <div class="sub">Contracts, proposals, and forms — with templates and e-sign</div>
+  </div>
+  {% include "_tabs_documents.html" %}
+</div>
+<div class="page-title" style="margin-top:2px">
+  <h1 style="font-size:1.1rem">Service packages</h1>
 </div>
 
 <div class="card stack">
@@ -32,37 +40,34 @@
 {% set archived = packages|rejectattr('active')|list %}
 
 {% if active %}
-<div class="card" style="margin-top:18px">
-  <table>
-    <thead><tr><th>Package</th><th>Price</th><th>Deposit</th><th></th></tr></thead>
-    <tbody>
-      {% for p in active %}
-      <tr>
-        <td><a href="/packages/{{ p.id }}">{{ p.name }}</a>
-          {% if p.description %}<br><span class="muted" style="font-size:.85rem">{{ p.description }}</span>{% endif %}</td>
-        <td>{{ p.price_display }}</td>
-        <td class="muted">{{ p.deposit_display or '—' }}</td>
-        <td style="white-space:nowrap; text-align:right">
-          <a class="btn ghost" href="/proposals/new?package_id={{ p.id }}">Use on proposal</a>
-          <a class="btn ghost" href="/invoices/new?package_id={{ p.id }}">Use on invoice</a>
-          <a class="btn ghost" href="/payment-plans/new?package_id={{ p.id }}">Use as plan</a>
-          <form method="post" action="/packages/{{ p.id }}/archive" style="display:inline">
-            {% include "_csrf.html" %}
-            <button class="btn ghost" type="submit">Archive</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="doc-templates" style="margin-top:14px">
+  {% for p in active %}
+  <div class="doc-template-card" style="flex:1 1 260px">
+    <div class="t"><a href="/packages/{{ p.id }}" style="color:inherit">{{ p.name }}</a></div>
+    {% if p.description %}<div class="d">{{ p.description }}</div>{% endif %}
+    <div style="display:flex; align-items:baseline; gap:8px; margin-top:8px">
+      <span style="font-weight:600">{{ p.price_display }}</span>
+      {% if p.deposit_display %}<span class="muted" style="font-size:.72rem">{{ p.deposit_display }} deposit</span>{% endif %}
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px">
+      <a class="btn ghost" style="padding:4px 0; font-size:.68rem" href="/proposals/new?package_id={{ p.id }}">Use on proposal</a>
+      <a class="btn ghost" style="padding:4px 0; font-size:.68rem" href="/invoices/new?package_id={{ p.id }}">Use on invoice</a>
+      <a class="btn ghost" style="padding:4px 0; font-size:.68rem" href="/payment-plans/new?package_id={{ p.id }}">Use as plan</a>
+    </div>
+    <form method="post" action="/packages/{{ p.id }}/archive" style="margin-top:8px">
+      {% include "_csrf.html" %}
+      <button class="btn ghost" style="padding:0; font-size:.68rem" type="submit">Archive</button>
+    </form>
+  </div>
+  {% endfor %}
 </div>
 {% else %}
-<p class="muted" style="margin-top:18px">No packages yet — add your go-to offerings above and pull
+<p class="muted" style="margin-top:14px">No packages yet — add your go-to offerings above and pull
   them into any invoice in one click.</p>
 {% endif %}
 
 {% if archived %}
-<div class="card" style="margin-top:18px">
+<div class="card" style="margin-top:14px">
   <h3 class="muted">Archived</h3>
   <table>
     <tbody>

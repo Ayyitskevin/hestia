@@ -1,28 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Questionnaires — Hestia{% endblock %}
 {% block content %}
-<div class="page-title">
-  <h1>Questionnaires</h1>
+{% set doc_tab = 'forms' %}
+<div class="hub-head">
+  <div>
+    <h1>Documents</h1>
+    <div class="sub">Contracts, proposals, and forms — with templates and e-sign</div>
+  </div>
+  {% include "_tabs_documents.html" %}
+</div>
+<div class="page-title" style="margin-top:2px">
+  <div></div>
   <div style="display:flex; gap:8px">
     <a class="btn secondary" href="/questionnaires/templates">Templates</a>
     <a class="btn" href="/questionnaires/new">+ New questionnaire</a>
   </div>
 </div>
 {% if questionnaires %}
-<div class="card">
-  <table>
-    <thead><tr><th>Questionnaire</th><th>Client</th><th>Questions</th><th>Status</th></tr></thead>
-    <tbody>
-      {% for q in questionnaires %}
-      <tr>
-        <td><a href="/questionnaires/{{ q.id }}">{{ q.title }}</a></td>
-        <td class="muted">{{ q.client_name or q.project_name or "—" }}</td>
-        <td class="muted">{{ q.item_count }}</td>
-        <td><span class="pill {{ 'on' if q.status == 'completed' else 'off' }}">{{ q.status }}</span></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="doc-list">
+  {% for q in questionnaires %}
+  <a class="doc-row" href="/questionnaires/{{ q.id }}">
+    <span class="doc-icon" style="background:var(--info-tint); color:var(--info)">▤</span>
+    <div class="doc-body">
+      <div class="doc-title">{{ q.title }}</div>
+      <div class="doc-meta">Form{% if q.client_name or q.project_name %} · {{ q.client_name or q.project_name }}{% endif %} · {{ q.item_count }} question{{ '' if q.item_count == 1 else 's' }}</div>
+    </div>
+    <span class="pill {{ 'on' if q.status == 'completed' else 'off' }}">{{ q.status }}</span>
+  </a>
+  {% endfor %}
 </div>
 {% else %}
 <div class="card stack">

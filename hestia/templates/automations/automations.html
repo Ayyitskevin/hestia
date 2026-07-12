@@ -6,10 +6,14 @@
     <h1>Automations</h1>
     <span class="muted">When something happens, Hestia emails the client for you.</span>
   </div>
-  <a class="btn" href="/automations/new">+ New automation</a>
+  <div style="display:flex; gap:8px">
+    <a class="btn secondary" href="/settings/outbox">Outbox</a>
+    <a class="btn secondary" href="/settings/activity">Activity log</a>
+    <a class="btn" href="/automations/new">+ New automation</a>
+  </div>
 </div>
 
-<div class="card stack" style="margin-bottom:18px">
+<div class="card stack" style="margin-bottom:14px">
   <h3>Retention recipes</h3>
   <p class="muted">One-click re-engagement flows — they fire automatically, days after the moment.</p>
   <div style="display:flex; gap:10px; flex-wrap:wrap">
@@ -25,25 +29,34 @@
 </div>
 
 {% if automations %}
-<div class="card">
-  <table>
-    <thead><tr><th>Automation</th><th>When</th><th>Action</th><th>Status</th><th></th></tr></thead>
-    <tbody>
-      {% for a in automations %}
-      <tr>
-        <td><strong>{{ a.name }}</strong></td>
-        <td class="muted">{{ a.trigger_label }}{% if a.delay_days %} · +{{ a.delay_days }}d{% endif %}</td>
-        <td class="muted">email client</td>
-        <td><span class="pill {{ 'on' if a.enabled else 'off' }}">{{ 'on' if a.enabled else 'off' }}</span></td>
-        <td style="text-align:right; white-space:nowrap">
-          <form method="post" action="/automations/{{ a.id }}/toggle" style="display:inline">{% include "_csrf.html" %}<button class="btn ghost" type="submit">{{ 'Disable' if a.enabled else 'Enable' }}</button></form>
-          <form method="post" action="/automations/{{ a.id }}/delete" style="display:inline"
-                data-confirm="Delete this automation?">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Delete</button></form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="stack" style="gap:12px; margin-bottom:14px">
+  {% for a in automations %}
+  <div class="automation-row {{ '' if a.enabled else 'off' }}">
+    <div style="min-width:0; flex:1">
+      <div class="automation-title">
+        <span class="name">{{ a.name }}</span>
+        <span class="pill {{ 'on' if a.enabled else 'off' }}">{{ 'ON' if a.enabled else 'OFF' }}</span>
+      </div>
+      <div class="automation-chain">
+        <span class="chip-trigger">⚡ {{ a.trigger_label }}{% if a.delay_days %} · +{{ a.delay_days }}d{% endif %}</span>
+        <span class="arrow">→</span>
+        <span class="chip-step">✉ email client</span>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center; flex:none">
+      <form method="post" action="/automations/{{ a.id }}/delete" style="margin:0"
+            data-confirm="Delete this automation?">{% include "_csrf.html" %}<button class="btn ghost" type="submit">Delete</button></form>
+      <form method="post" action="/automations/{{ a.id }}/toggle" style="margin:0; display:flex; align-items:center; gap:8px">
+        {% include "_csrf.html" %}
+        <span class="muted" style="font-size:.72rem">{{ 'Disable' if a.enabled else 'Enable' }}</span>
+        <label class="ios-toggle">
+          <input type="checkbox" {{ 'checked' if a.enabled }} aria-label="{{ 'Disable' if a.enabled else 'Enable' }} {{ a.name }}">
+          <span class="track"></span><span class="knob"></span>
+        </label>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
 </div>
 {% else %}
 <div class="card stack">
@@ -53,7 +66,7 @@
 </div>
 {% endif %}
 
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Recent runs</h3>
   {% if runs %}
     <table>
@@ -74,4 +87,14 @@
     <p class="muted">No runs yet. When a matching event fires, you'll see it here.</p>
   {% endif %}
 </div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+// iOS-style toggle checkboxes submit their form on change (delegated — no inline handlers,
+// so script-src can stay strict).
+document.addEventListener("change", function (e) {
+  var input = e.target.closest(".ios-toggle input");
+  if (input) input.closest("form").submit();
+});
+</script>
 {% endblock %}

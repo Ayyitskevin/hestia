@@ -1,21 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Recurring invoices — Hestia{% endblock %}
 {% block content %}
-<div class="page-title">
-  <h1>Recurring invoices</h1>
+{% set money_tab = 'recurring' %}
+<div class="hub-head">
+  <div>
+    <h1>Money</h1>
+    <div class="sub">Invoices, plans, and recurring in one ledger</div>
+  </div>
+  {% include "_tabs_money.html" %}
+</div>
+<div class="page-title" style="margin-top:2px">
+  <div></div>
   <a class="btn" href="/recurring/new">+ New recurring invoice</a>
 </div>
 
 {% if profiles %}
-<div class="card">
+<div class="doc-list">
   <table>
-    <thead><tr><th>Invoice</th><th>Client</th><th>Amount</th><th>Every</th><th>Next</th><th></th></tr></thead>
+    <thead><tr><th>Invoice</th><th>Client</th><th class="num">Amount</th><th>Every</th><th>Next</th><th></th></tr></thead>
     <tbody>
       {% for p in profiles %}
       <tr>
         <td>{{ p.title }}{% if p.invoice_count %} <span class="muted">· {{ p.invoice_count }} sent</span>{% endif %}</td>
         <td class="muted">{{ p.client_name or "—" }}</td>
-        <td>{{ p.amount_display }}</td>
+        <td class="num">{{ p.amount_display }}</td>
         <td class="muted">{{ p.cadence_label }}</td>
         <td>
           {% if p.active %}{{ p.next_run_at }}{% else %}<span class="pill off">paused</span>{% endif %}
@@ -42,7 +50,7 @@
       {% endfor %}
     </tbody>
   </table>
-  <p class="hint">Each profile bills automatically on its cadence — Hestia generates the
+  <p class="hint" style="padding:0 18px 14px">Each profile bills automatically on its cadence — Hestia generates the
     invoice and emails the client their pay link. Pause one to stop future invoices
     (already-sent invoices are unaffected).</p>
 </div>

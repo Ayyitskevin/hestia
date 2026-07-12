@@ -1,170 +1,181 @@
 {% extends "base.html" %}
 {% block title %}Studio site — Hestia{% endblock %}
-{% block wrap_class %}narrow{% endblock %}
 {% block content %}
 <div class="page-title">
   <h1>Studio site</h1>
   <a class="btn secondary" href="/studio/{{ tenant.slug }}" target="_blank">View public site ↗</a>
 </div>
 
-{% if request.query_params.get('forbidden') %}
-  <div class="alert error">That's owner-only — billing, the plan, team management,
-    AI keys, and data repair are reserved for the account holder. Ask the studio
-    owner to make the change.</div>
-{% endif %}
+<div class="settings-layout">
+  <nav class="settings-rail">
+    <a href="/settings/account" class="{{ 'active' if request.url.path.startswith('/settings/account') }}">Account</a>
+    <a href="/settings/billing" class="{{ 'active' if request.url.path.startswith('/settings/billing') }}">Billing</a>
+    <a href="/settings/team" class="{{ 'active' if request.url.path.startswith('/settings/team') }}">Team</a>
+    <a href="/settings/site" class="{{ 'active' if request.url.path.startswith('/settings/site') }}">Site</a>
+    <a href="/settings/integrity" class="{{ 'active' if request.url.path.startswith('/settings/integrity') }}">Integrity</a>
+  </nav>
 
-<div class="card stack">
-  <p class="muted">Your public page lives at
-    <span class="mono">{{ settings.public_url }}/studio/{{ tenant.slug }}</span>.
-    Inquiries land in your CRM as a new client + lead.</p>
-  <form method="post" action="/settings/site">
-    {% include "_csrf.html" %}
-    <label for="headline">Headline</label>
-    <input type="text" id="headline" name="headline" value="{{ profile.headline }}"
-           placeholder="Timeless wedding photography in the PNW">
-    <label for="about">About</label>
-    <input type="text" id="about" name="about" value="{{ profile.about }}"
-           placeholder="A sentence or two about your studio.">
-    <label for="contact_email">Contact email</label>
-    <input type="email" id="contact_email" name="contact_email" value="{{ profile.contact_email }}">
-    <label style="display:flex; align-items:center; gap:8px; margin-top:16px">
-      <input type="checkbox" name="published" value="1" {{ 'checked' if profile.published else '' }}
-             style="width:auto"> Publish my site (make it publicly visible)
-    </label>
-    <div class="form-actions"><button class="btn" type="submit">Save</button></div>
-  </form>
-</div>
+  <div>
+    {% if request.query_params.get('forbidden') %}
+      <div class="alert error">That's owner-only — billing, the plan, team management,
+        AI keys, and data repair are reserved for the account holder. Ask the studio
+        owner to make the change.</div>
+    {% endif %}
 
-<div class="card stack" style="margin-top:18px">
-  <h3>Sales tax</h3>
-  <p class="muted">Add sales tax to new invoices. It's applied on top of the price and shown
-    separately — your revenue and profit still count the pre-tax amount, since collected tax is
-    owed to the state, not income. Leave at 0 for none.</p>
-  <form method="post" action="/settings/tax">
-    {% include "_csrf.html" %}
-    <label for="tax_rate">Tax rate (%)</label>
-    <input type="text" id="tax_rate" name="tax_rate" inputmode="decimal"
-           value="{{ (tenant.tax_rate_bps / 100) if tenant.tax_rate_bps else '' }}" placeholder="8.5">
-    <div class="form-actions"><button class="btn" type="submit">Save tax rate</button></div>
-  </form>
-</div>
+    <div class="card stack">
+      <p class="muted">Your public page lives at
+        <span class="mono">{{ settings.public_url }}/studio/{{ tenant.slug }}</span>.
+        Inquiries land in your CRM as a new client + lead.</p>
+      <form method="post" action="/settings/site">
+        {% include "_csrf.html" %}
+        <label for="headline">Headline</label>
+        <input type="text" id="headline" name="headline" value="{{ profile.headline }}"
+               placeholder="Timeless wedding photography in the PNW">
+        <label for="about">About</label>
+        <input type="text" id="about" name="about" value="{{ profile.about }}"
+               placeholder="A sentence or two about your studio.">
+        <label for="contact_email">Contact email</label>
+        <input type="email" id="contact_email" name="contact_email" value="{{ profile.contact_email }}">
+        <label style="display:flex; align-items:center; gap:8px; margin-top:16px">
+          <input type="checkbox" name="published" value="1" {{ 'checked' if profile.published else '' }}
+                 style="width:auto"> Publish my site (make it publicly visible)
+        </label>
+        <div class="form-actions"><button class="btn" type="submit">Save</button></div>
+      </form>
+    </div>
 
-<div class="card stack" style="margin-top:18px">
-  <h3>Email signature</h3>
-  <p class="muted">Signed onto every client email Hestia sends for you — confirmations,
-    reminders, invoices, gallery links, questionnaires. Your name, studio, phone, site.
-    Account mail (sign-in, password resets, lead alerts) stays plain. Leave blank for none.</p>
-  <form method="post" action="/settings/signature">
-    {% include "_csrf.html" %}
-    <textarea name="email_signature" rows="4"
-      placeholder="Warm regards,&#10;{{ tenant.name }}&#10;(555) 123-4567 · {{ settings.public_url }}/studio/{{ tenant.slug }}">{{ tenant.email_signature }}</textarea>
-    <div class="form-actions"><button class="btn" type="submit">Save signature</button></div>
-  </form>
-</div>
+    <div class="card stack" style="margin-top:18px">
+      <h3>Sales tax</h3>
+      <p class="muted">Add sales tax to new invoices. It's applied on top of the price and shown
+        separately — your revenue and profit still count the pre-tax amount, since collected tax is
+        owed to the state, not income. Leave at 0 for none.</p>
+      <form method="post" action="/settings/tax">
+        {% include "_csrf.html" %}
+        <label for="tax_rate">Tax rate (%)</label>
+        <input type="text" id="tax_rate" name="tax_rate" inputmode="decimal"
+               value="{{ (tenant.tax_rate_bps / 100) if tenant.tax_rate_bps else '' }}" placeholder="8.5">
+        <div class="form-actions"><button class="btn" type="submit">Save tax rate</button></div>
+      </form>
+    </div>
 
-<div class="card stack" style="margin-top:18px">
-  <h3>Print &amp; album offers</h3>
-  <p class="muted">Set your print, canvas, album, and gift bundle prices — what clients see on
-    gallery offer links after you process a shoot.</p>
-  <div><a class="btn secondary" href="/settings/offers">Edit offer catalog →</a></div>
-</div>
+    <div class="card stack" style="margin-top:18px">
+      <h3>Email signature</h3>
+      <p class="muted">Signed onto every client email Hestia sends for you — confirmations,
+        reminders, invoices, gallery links, questionnaires. Your name, studio, phone, site.
+        Account mail (sign-in, password resets, lead alerts) stays plain. Leave blank for none.</p>
+      <form method="post" action="/settings/signature">
+        {% include "_csrf.html" %}
+        <textarea name="email_signature" rows="4"
+          placeholder="Warm regards,&#10;{{ tenant.name }}&#10;(555) 123-4567 · {{ settings.public_url }}/studio/{{ tenant.slug }}">{{ tenant.email_signature }}</textarea>
+        <div class="form-actions"><button class="btn" type="submit">Save signature</button></div>
+      </form>
+    </div>
 
-<div class="card stack" style="margin-top:18px">
-  <h3>Email templates</h3>
-  <p class="muted">Rewrite the wording of the emails Hestia sends your clients — booking
-    confirmations, reminders, and invoices — with fill-in variables. Defaults work out of
-    the box; customize them to sound like you.</p>
-  <div><a class="btn secondary" href="/settings/messages">Edit email templates →</a></div>
-</div>
+    <div class="card stack" style="margin-top:18px">
+      <h3>Print &amp; album offers</h3>
+      <p class="muted">Set your print, canvas, album, and gift bundle prices — what clients see on
+        gallery offer links after you process a shoot.</p>
+      <div><a class="btn secondary" href="/settings/offers">Edit offer catalog →</a></div>
+    </div>
 
-<div class="card stack" style="margin-top:18px">
-  <h3>Data integrity</h3>
-  {% if integrity.total %}
-    <p class="muted">{{ integrity.total }} hidden relationship issue{{ '' if integrity.total == 1 else 's' }}
-      detected. {{ integrity.repairable_total }} can be repaired automatically.</p>
-    <div><a class="btn secondary" href="/settings/integrity">Review integrity →</a></div>
-  {% else %}
-    <p class="muted">No hidden relationship issues detected.</p>
-    <div><a class="btn secondary" href="/settings/integrity">Review integrity →</a></div>
-  {% endif %}
-</div>
+    <div class="card stack" style="margin-top:18px">
+      <h3>Email templates</h3>
+      <p class="muted">Rewrite the wording of the emails Hestia sends your clients — booking
+        confirmations, reminders, and invoices — with fill-in variables. Defaults work out of
+        the box; customize them to sound like you.</p>
+      <div><a class="btn secondary" href="/settings/messages">Edit email templates →</a></div>
+    </div>
 
-<div class="card stack" style="margin-top:18px">
-  <h3>Weekly digest</h3>
-  <p class="muted">A once-a-week email of what needs you — new leads, unpaid invoices,
-    upcoming sessions, galleries to deliver, and clients to reconnect with. You can always
-    pull it up on demand from the dashboard.</p>
-  <form method="post" action="/settings/digest">
-    {% include "_csrf.html" %}
-    <label style="display:flex; align-items:center; gap:8px">
-      <input type="checkbox" name="digest_enabled" value="1" {{ 'checked' if tenant.digest_enabled else '' }}>
-      Email me the weekly digest
-    </label>
-    <div class="form-actions"><button class="btn" type="submit">Save</button></div>
-  </form>
-</div>
+    <div class="card stack" style="margin-top:18px">
+      <h3>Data integrity</h3>
+      {% if integrity.total %}
+        <p class="muted">{{ integrity.total }} hidden relationship issue{{ '' if integrity.total == 1 else 's' }}
+          detected. {{ integrity.repairable_total }} can be repaired automatically.</p>
+        <div><a class="btn secondary" href="/settings/integrity">Review integrity →</a></div>
+      {% else %}
+        <p class="muted">No hidden relationship issues detected.</p>
+        <div><a class="btn secondary" href="/settings/integrity">Review integrity →</a></div>
+      {% endif %}
+    </div>
 
-<div class="card stack" style="margin-top:18px">
-  <h3>AI style profile</h3>
-  {% if can_style %}
-    <p class="muted">Describe the look you cull and sell toward — your culling and hero picks
-      lean this way. Wired into the prompt on the live xAI backend.</p>
-    <form method="post" action="/settings/vision-style">
-      {% include "_csrf.html" %}
-      <textarea name="vision_style" rows="3"
-        placeholder="bright & airy, documentary candids over posed, skin tones true to life">{{ tenant.vision_style }}</textarea>
-      <div class="form-actions"><button class="btn" type="submit">Save style profile</button></div>
-    </form>
-  {% else %}
-    <p class="muted">Custom AI style profiles are included with Hestia Studio. Start your
-      trial from <a href="/settings/billing">Billing →</a></p>
-  {% endif %}
-</div>
+    <div class="card stack" style="margin-top:18px">
+      <h3>Weekly digest</h3>
+      <p class="muted">A once-a-week email of what needs you — new leads, unpaid invoices,
+        upcoming sessions, galleries to deliver, and clients to reconnect with. You can always
+        pull it up on demand from the dashboard.</p>
+      <form method="post" action="/settings/digest">
+        {% include "_csrf.html" %}
+        <label style="display:flex; align-items:center; gap:8px">
+          <input type="checkbox" name="digest_enabled" value="1" {{ 'checked' if tenant.digest_enabled else '' }}>
+          Email me the weekly digest
+        </label>
+        <div class="form-actions"><button class="btn" type="submit">Save</button></div>
+      </form>
+    </div>
 
-{% if vision_live and auth.is_owner %}
-<div class="card stack" style="margin-top:18px">
-  <h3>Live AI vision — your own xAI key</h3>
-  <p class="muted">Your plan includes one founder-hosted live AI gallery process. Once that's
-    used, add your own xAI key to keep live culling on every gallery with no image cap —
-    you pay xAI directly for those calls. The key is encrypted at rest and never leaves
-    this server except to call xAI.</p>
-  {% if ai_subsidy and ai_subsidy.message %}
-    <p class="muted" style="margin:0 0 10px">{{ ai_subsidy.message }}</p>
-  {% endif %}
-  {% if ai_subsidy and ai_subsidy.own_key %}
-    <p class="muted" style="margin:0 0 10px"><strong>Your own xAI key is set.</strong>
-      Live vision runs on it with no subsidy cap.</p>
-    <form method="post" action="/settings/ai-key/clear">
-      {% include "_csrf.html" %}
-      <div class="form-actions"><button class="btn secondary" type="submit">Remove key</button></div>
-    </form>
-  {% else %}
-    <form method="post" action="/settings/ai-key">
-      {% include "_csrf.html" %}
-      <input type="password" name="xai_api_key" autocomplete="off"
-        placeholder="xai-... (paste your xAI API key)">
-      <div class="form-actions">
-        <button class="btn" type="submit">Save key</button>
-        <span class="muted" style="margin-left:8px">Leave blank + Save to clear.</span>
-      </div>
-    </form>
-  {% endif %}
-</div>
-{% endif %}
+    <div class="card stack" style="margin-top:18px">
+      <h3>AI style profile</h3>
+      {% if can_style %}
+        <p class="muted">Describe the look you cull and sell toward — your culling and hero picks
+          lean this way. Wired into the prompt on the live xAI backend.</p>
+        <form method="post" action="/settings/vision-style">
+          {% include "_csrf.html" %}
+          <textarea name="vision_style" rows="3"
+            placeholder="bright & airy, documentary candids over posed, skin tones true to life">{{ tenant.vision_style }}</textarea>
+          <div class="form-actions"><button class="btn" type="submit">Save style profile</button></div>
+        </form>
+      {% else %}
+        <p class="muted">Custom AI style profiles are included with Hestia Studio. Start your
+          trial from <a href="/settings/billing">Billing →</a></p>
+      {% endif %}
+    </div>
 
-<div class="card stack" style="margin-top:18px">
-  <h3>Testimonials</h3>
-  <p class="muted">Ask happy clients for a review and feature the best ones right here on your
-    public site — social proof that turns visitors into bookings.</p>
-  <div><a class="btn secondary" href="/settings/testimonials">Manage testimonials →</a></div>
-</div>
+    {% if vision_live and auth.is_owner %}
+    <div class="card stack" style="margin-top:18px">
+      <h3>Live AI vision — your own xAI key</h3>
+      <p class="muted">Your plan includes one founder-hosted live AI gallery process. Once that's
+        used, add your own xAI key to keep live culling on every gallery with no image cap —
+        you pay xAI directly for those calls. The key is encrypted at rest and never leaves
+        this server except to call xAI.</p>
+      {% if ai_subsidy and ai_subsidy.message %}
+        <p class="muted" style="margin:0 0 10px">{{ ai_subsidy.message }}</p>
+      {% endif %}
+      {% if ai_subsidy and ai_subsidy.own_key %}
+        <p class="muted" style="margin:0 0 10px"><strong>Your own xAI key is set.</strong>
+          Live vision runs on it with no subsidy cap.</p>
+        <form method="post" action="/settings/ai-key/clear">
+          {% include "_csrf.html" %}
+          <div class="form-actions"><button class="btn secondary" type="submit">Remove key</button></div>
+        </form>
+      {% else %}
+        <form method="post" action="/settings/ai-key">
+          {% include "_csrf.html" %}
+          <input type="password" name="xai_api_key" autocomplete="off"
+            placeholder="xai-... (paste your xAI API key)">
+          <div class="form-actions">
+            <button class="btn" type="submit">Save key</button>
+            <span class="muted" style="margin-left:8px">Leave blank + Save to clear.</span>
+          </div>
+        </form>
+      {% endif %}
+    </div>
+    {% endif %}
 
-{% if auth.is_owner %}
-<div class="card stack" style="margin-top:18px">
-  <h3>Team</h3>
-  <p class="muted">Add a secondary studio admin to share the workload — they can run galleries,
-    clients, and the AI pipeline, but can't change the plan or manage the team.</p>
-  <div><a class="btn secondary" href="/settings/team">Manage team →</a></div>
+    <div class="card stack" style="margin-top:18px">
+      <h3>Testimonials</h3>
+      <p class="muted">Ask happy clients for a review and feature the best ones right here on your
+        public site — social proof that turns visitors into bookings.</p>
+      <div><a class="btn secondary" href="/settings/testimonials">Manage testimonials →</a></div>
+    </div>
+
+    {% if auth.is_owner %}
+    <div class="card stack" style="margin-top:18px">
+      <h3>Team</h3>
+      <p class="muted">Add a secondary studio admin to share the workload — they can run galleries,
+        clients, and the AI pipeline, but can't change the plan or manage the team.</p>
+      <div><a class="btn secondary" href="/settings/team">Manage team →</a></div>
+    </div>
+    {% endif %}
+  </div>
 </div>
-{% endif %}
 {% endblock %}

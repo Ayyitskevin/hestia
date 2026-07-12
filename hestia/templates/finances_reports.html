@@ -1,25 +1,30 @@
 {% extends "base.html" %}
 {% block title %}Finance reports — Hestia{% endblock %}
 {% block content %}
-<div class="page-title">
+{% set money_tab = 'reports' %}
+<div class="hub-head">
   <div>
-    <h1>Finance reports</h1>
-    <span class="muted">Who owes you and how late, and where your money goes.</span>
+    <h1>Money</h1>
+    <div class="sub">Who owes you and how late, and where your money goes.</div>
   </div>
+  {% include "_tabs_money.html" %}
+</div>
+<div class="page-title" style="margin-top:2px">
+  <div></div>
   <a class="btn secondary" href="/finances">← Finances</a>
 </div>
 
 <div class="card stack">
   <h3>Booking funnel</h3>
   <p class="muted">How leads move to booked and delivered — your conversion at a glance.</p>
-  <div class="health-strip">
-    <div class="health-item"><span class="svc">{{ funnel.total }}</span> <span class="url">leads (all projects)</span></div>
-    <div class="health-item"><span class="svc">{{ funnel.booked }}</span> <span class="url">booked · {{ funnel.lead_to_booked_pct }}%</span></div>
-    <div class="health-item"><span class="svc">{{ funnel.delivered }}</span> <span class="url">delivered · {{ funnel.booked_to_delivered_pct }}% of booked</span></div>
-    <div class="health-item"><span class="svc">{{ funnel.overall_pct }}%</span> <span class="url">lead → delivered</span></div>
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-label">Leads (all projects)</div><div class="kpi-value">{{ funnel.total }}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Booked</div><div class="kpi-value">{{ funnel.booked }}</div><div class="kpi-delta">{{ funnel.lead_to_booked_pct }}%</div></div>
+    <div class="kpi-card"><div class="kpi-label">Delivered</div><div class="kpi-value">{{ funnel.delivered }}</div><div class="kpi-delta">{{ funnel.booked_to_delivered_pct }}% of booked</div></div>
+    <div class="kpi-card"><div class="kpi-label">Lead → delivered</div><div class="kpi-value">{{ funnel.overall_pct }}%</div></div>
   </div>
   {% if funnel.total %}
-  <table>
+  <table style="margin-top:14px">
     <thead><tr><th>Stage</th><th>Projects</th></tr></thead>
     <tbody>
       {% for stage, n in funnel.by_status.items() %}
@@ -33,7 +38,7 @@
 </div>
 
 {% if sources.total_leads %}
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Lead sources</h3>
   <p class="muted">Where your leads come from and how many booked — so you know which channels
     are worth your time. Set from "How did you hear about us?" on your inquiry form.</p>
@@ -54,18 +59,18 @@
 {% endif %}
 
 {% if clients.rows %}
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Top clients</h3>
   <p class="muted">Your highest-value clients by collected revenue — {{ clients.count }} paying
     client{{ '' if clients.count == 1 else 's' }}, {{ clients.total }} all-time.</p>
   <table>
-    <thead><tr><th>Client</th><th>Projects</th><th>Revenue</th></tr></thead>
+    <thead><tr><th>Client</th><th>Projects</th><th class="num">Revenue</th></tr></thead>
     <tbody>
       {% for c in clients.rows %}
       <tr>
         <td><a href="/clients/{{ c.id }}">{{ c.name }}</a></td>
         <td class="muted">{{ c.projects }}</td>
-        <td>{{ c.lifetime }}</td>
+        <td class="num">{{ c.lifetime }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -74,14 +79,14 @@
 {% endif %}
 
 {% if galleries.total_galleries %}
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Gallery sales</h3>
   <p class="muted">Which delivered galleries convert to print &amp; album orders —
     {{ galleries.converted }} of {{ galleries.total_galleries }} galleries sold
     (<span class="pill {{ 'on' if galleries.conversion_pct >= 30 else 'off' }}">{{ galleries.conversion_pct }}%</span>)
     · {{ galleries.total_revenue }} in print revenue.</p>
   <table>
-    <thead><tr><th>Gallery</th><th>Views</th><th>Favorites</th><th>Orders</th><th>Revenue</th></tr></thead>
+    <thead><tr><th>Gallery</th><th>Views</th><th>Favorites</th><th>Orders</th><th class="num">Revenue</th></tr></thead>
     <tbody>
       {% for g in galleries.rows %}
       <tr>
@@ -89,7 +94,7 @@
         <td class="muted">{{ g.views }}</td>
         <td class="muted">{{ g.favorites }}</td>
         <td class="muted">{{ g.orders }}</td>
-        <td>{{ g.revenue }}</td>
+        <td class="num">{{ g.revenue }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -98,7 +103,7 @@
 {% endif %}
 
 {% if tax.cents %}
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Sales tax collected · {{ tax.display }}</h3>
   <p class="muted">Tax collected on paid invoices — set aside to remit. Revenue and profit below
     exclude it, since collected tax is owed, not income.
@@ -116,23 +121,22 @@
 </div>
 {% endif %}
 
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Monthly trend</h3>
   <p class="muted">Revenue, expenses, and profit by month — your studio's trajectory. Each sale counts once.</p>
   {% set maxrev = trend|map(attribute='revenue_cents')|max %}
   <table>
-    <thead><tr><th>Month</th><th>Revenue</th><th>Expenses</th><th>Profit</th><th style="width:30%"></th></tr></thead>
+    <thead><tr><th>Month</th><th class="num">Revenue</th><th class="num">Expenses</th><th>Profit</th><th style="width:30%"></th></tr></thead>
     <tbody>
       {% for m in trend %}
       <tr>
         <td>{{ m.month }}</td>
-        <td>{{ m.revenue }}</td>
-        <td class="muted">{{ m.expenses }}</td>
+        <td class="num">{{ m.revenue }}</td>
+        <td class="num muted">{{ m.expenses }}</td>
         <td><span class="pill {{ 'on' if m.profit_cents >= 0 else 'off' }}">{{ m.profit }}</span></td>
         <td>
-          <div style="background:rgba(127,127,127,.15);border-radius:5px;height:9px;overflow:hidden">
-            <div style="height:9px;border-radius:5px;background:#3a7ca5;
-                 width:{{ (100 * m.revenue_cents / maxrev)|round if maxrev else 0 }}%"></div>
+          <div class="aging-bar">
+            <span style="background:var(--info); width:{{ (100 * m.revenue_cents / maxrev)|round if maxrev else 0 }}%"></span>
           </div>
         </td>
       </tr>
@@ -141,23 +145,23 @@
   </table>
 </div>
 
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>A/R aging · {{ aging.total }} outstanding</h3>
   <p class="muted">Outstanding invoices grouped by how overdue they are
-    {% if aging.overdue_cents %}— <span class="pill off">{{ aging.overdue }} overdue</span>{% endif %}.</p>
+    {% if aging.overdue_cents %}— <span class="pill danger">{{ aging.overdue }} overdue</span>{% endif %}.</p>
   {% if aging.total_cents %}
   <table>
-    <thead><tr><th>Age</th><th>Invoices</th><th>Amount</th><th style="width:40%">Share</th></tr></thead>
+    <thead><tr><th>Age</th><th>Invoices</th><th class="num">Amount</th><th style="width:40%">Share</th></tr></thead>
     <tbody>
       {% for b in aging.buckets %}
       <tr>
         <td>{{ b.label }}</td>
         <td class="muted">{{ b.count }}</td>
-        <td>{{ b.display }}</td>
+        <td class="num">{{ b.display }}</td>
         <td>
-          <div style="background:rgba(127,127,127,.15);border-radius:5px;height:9px;overflow:hidden">
-            <div style="height:9px;border-radius:5px;width:{{ (100 * b.cents / aging.total_cents)|round }}%;
-                 background:{{ '#b5562f' if b.label != 'Not yet due' else 'rgba(127,127,127,.5)' }}"></div>
+          <div class="aging-bar">
+            <span style="width:{{ (100 * b.cents / aging.total_cents)|round }}%;
+                 background:{{ 'var(--danger)' if b.label != 'Not yet due' else 'var(--fill-strong)' }}"></span>
           </div>
         </td>
       </tr>
@@ -165,26 +169,26 @@
     </tbody>
   </table>
   {% else %}
-  <p class="muted">Nothing outstanding — every sent invoice is paid. 🎉</p>
+  <p class="muted">Nothing outstanding — every sent invoice is paid.</p>
   {% endif %}
 </div>
 
-<div class="card stack" style="margin-top:18px">
+<div class="card stack" style="margin-top:14px">
   <h3>Expenses by category · {{ breakdown.total }}</h3>
   {% if breakdown.rows %}
   <table>
-    <thead><tr><th>Category</th><th>Count</th><th>Amount</th><th style="width:40%">Share</th></tr></thead>
+    <thead><tr><th>Category</th><th>Count</th><th class="num">Amount</th><th style="width:40%">Share</th></tr></thead>
     <tbody>
       {% for r in breakdown.rows %}
       <tr>
         <td>{{ r.category.replace('_', ' ') }}</td>
         <td class="muted">{{ r.count }}</td>
-        <td>{{ r.display }}</td>
+        <td class="num">{{ r.display }}</td>
         <td>
-          <div style="background:rgba(127,127,127,.15);border-radius:5px;height:9px;overflow:hidden">
-            <div style="height:9px;border-radius:5px;width:{{ r.pct }}%;background:#3a7ca5"></div>
+          <div class="aging-bar" style="margin-bottom:3px">
+            <span style="width:{{ r.pct }}%; background:var(--info)"></span>
           </div>
-          <span class="muted" style="font-size:.85em">{{ r.pct }}%</span>
+          <span class="muted" style="font-size:.68rem">{{ r.pct }}%</span>
         </td>
       </tr>
       {% endfor %}
