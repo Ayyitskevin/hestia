@@ -25,24 +25,40 @@
 <div class="alert ok">✓ Signed by <strong>{{ contract.signature_name }}</strong> on {{ contract.signed_at }}{% if contract.signed_ip %} (IP {{ contract.signed_ip }}){% endif %}.</div>
 {% endif %}
 
-{% if contract.status in ('sent', 'signed') %}
-<div class="card stack">
-  <h3>Client sign link</h3>
-  <a class="offer-url" href="{{ sign_url }}" target="_blank">{{ sign_url }}</a>
-  <p class="muted">
-    {% if contract.status == 'signed' %}This contract has been signed — the link now shows the signed copy.
-    {% else %}Share this with your client to review and sign. Signing is recorded once and can't be duplicated.{% endif %}
-  </p>
-</div>
-{% else %}
-<div class="card stack">
-  <h3>Not sent yet</h3>
-  <p class="muted">This contract is still a draft. Send it for signature to generate a client sign link.</p>
-</div>
-{% endif %}
-
-<div class="card stack">
-  <h3>Terms</h3>
-  {% if contract.body %}<pre class="contract-body">{{ contract.body }}</pre>{% else %}<p class="muted">No terms entered.</p>{% endif %}
+<div class="doc-preview">
+  <div class="doc-preview-head">
+    <span class="t">Terms</span>
+    <span class="pill {{ 'on' if contract.status == 'signed' else 'off' }}">{{ contract.status }}</span>
+  </div>
+  <div class="doc-paper">
+    <div class="kicker">{{ contract.title }}</div>
+    {% if contract.body %}<pre style="white-space:pre-wrap; font-family:inherit; margin:0">{{ contract.body }}</pre>{% else %}<p>No terms entered.</p>{% endif %}
+    <div class="doc-sign-block">
+      <div class="field">
+        <div class="label">Signature</div>
+        {% if contract.status == 'signed' %}<div class="sig">{{ contract.signature_name }}</div>{% else %}<div class="sig-line"></div>{% endif %}
+      </div>
+      <div class="field">
+        <div class="label">Date</div>
+        {% if contract.status == 'signed' %}<div class="sig">{{ contract.signed_at }}</div>
+          <div class="status">Executed electronically{% if contract.signed_ip %} · IP {{ contract.signed_ip }}{% endif %}</div>
+        {% else %}<div class="sig-line"></div><div class="status">Awaiting signature</div>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="doc-preview-foot">
+    {% if contract.status in ('sent', 'signed') %}
+      <div class="log">
+        <div class="log-row">
+          <span class="dot {{ 'ok' if contract.status == 'signed' else 'sign' }}"></span>
+          {% if contract.status == 'signed' %}This contract has been signed — the link now shows the signed copy.
+          {% else %}Share this with your client to review and sign. Signing is recorded once and can't be duplicated.{% endif %}
+        </div>
+      </div>
+      <a class="offer-url" href="{{ sign_url }}" target="_blank">{{ sign_url }}</a>
+    {% else %}
+      <p class="muted" style="margin:0">This contract is still a draft. Send it for signature to generate a client sign link.</p>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

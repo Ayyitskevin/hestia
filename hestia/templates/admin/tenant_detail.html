@@ -12,7 +12,7 @@
 {% if created %}<div class="alert ok">Studio created. Save the API key below — it's shown once.</div>{% endif %}
 
 {% if new_api_key %}
-<div class="card stack" style="border-color:#f0d9b4; background:#fff7ec">
+<div class="card stack" style="border-color:rgba(255,214,10,.3); background:var(--warn-tint)">
   <h3>API key (shown once)</h3>
   <p class="mono" style="word-break:break-all">{{ new_api_key }}</p>
   <p class="hint">Bearer token for automation: <span class="mono">Authorization: Bearer {{ new_api_key }}</span></p>

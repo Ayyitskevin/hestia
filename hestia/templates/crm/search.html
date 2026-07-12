@@ -21,6 +21,7 @@
 <div class="card stack" style="margin-bottom:18px">
   <h3>Clients · {{ clients|length }}</h3>
   <table>
+    <thead><tr><th>Name</th><th>Email</th></tr></thead>
     <tbody>
       {% for c in clients %}
       <tr>
@@ -37,6 +38,7 @@
 <div class="card stack">
   <h3>Projects · {{ projects|length }}</h3>
   <table>
+    <thead><tr><th>Project</th><th>Client</th><th>Status</th></tr></thead>
     <tbody>
       {% for p in projects %}
       <tr>

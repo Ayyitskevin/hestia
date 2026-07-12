@@ -27,8 +27,15 @@
           {% if favorites %}<a class="btn secondary" href="/d/{{ token }}/favorites.zip">♥ Download my favorites ({{ favorites|length }})</a>{% endif %}
         </div>
       </div>
-
-      <div class="card" style="margin-top:18px">
+      {% else %}
+      <div class="card stack" style="text-align:center">
+        <p class="muted">This gallery has no files yet — check back soon.</p>
+      </div>
+      {% endif %}
+    </div>
+    {% if images %}
+    <div class="wrap" style="margin-top:18px">
+      <div class="card">
         <h3>Files</h3>
         <p class="muted">Tap any photo to download the full-resolution original.</p>
         <div class="thumb-grid">
@@ -43,12 +50,8 @@
           {% endfor %}
         </div>
       </div>
-      {% else %}
-      <div class="card stack" style="text-align:center">
-        <p class="muted">This gallery has no files yet — check back soon.</p>
-      </div>
-      {% endif %}
     </div>
+    {% endif %}
   </main>
   <footer class="site-footer"><div class="wrap">Delivered with Hestia 🔥</div></footer>
 </body>

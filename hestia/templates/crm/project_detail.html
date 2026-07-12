@@ -2,16 +2,8 @@
 {% block title %}{{ project.name }} — Hestia{% endblock %}
 {% block content %}
 <div class="page-title">
-  <div>
-    <h1>{{ project.name }}</h1>
-    <span class="muted">
-      {% if project.client_id %}<a href="/clients/{{ project.client_id }}">{{ project.client_name }}</a> · {% endif %}
-      {{ shoot_type_labels.get(project.shoot_type, project.shoot_type) }}
-      {% if project.event_date %} · {{ project.event_date }}{% endif %}
-      {% if referred_by %} · 🔗 referred by <a href="/clients/{{ referred_by.id }}">{{ referred_by.name }}</a>{% endif %}
-    </span>
-  </div>
-  <div style="display:flex; gap:10px">
+  <h1>{{ project.name }}</h1>
+  <div style="display:flex; gap:10px; flex-wrap:wrap">
     {% if project.client_id %}<a class="btn ghost" href="/clients/{{ project.client_id }}/email">✉ Email</a>{% endif %}
     <a class="btn ghost" href="/contracts/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Contract</a>
     <a class="btn ghost" href="/questionnaires/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">+ Form</a>
@@ -22,228 +14,247 @@
   </div>
 </div>
 
-<div class="grid cols-2">
-  <div class="card stack">
-    <h3>Status</h3>
-    <form method="post" action="/projects/{{ project.id }}/status" style="display:flex; gap:10px; align-items:center">
-      {% include "_csrf.html" %}
-      <select name="status">
-        {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == project.status else '' }}>{{ s }}</option>{% endfor %}
-      </select>
-      <button class="btn secondary" type="submit">Update</button>
-    </form>
-    {% if project.notes %}<p class="muted">{{ project.notes }}</p>{% endif %}
-  </div>
+{% if project.notes %}<div class="card" style="margin-bottom:14px"><p class="muted" style="margin:0">{{ project.notes }}</p></div>{% endif %}
 
-  <div class="card stack">
-    <h3>Checklist{% if task_progress.total %} <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ task_progress.done }}/{{ task_progress.total }} done</span>{% endif %}</h3>
-    {% for t in tasks %}
-    <div style="display:flex; align-items:center; gap:8px">
-      <form method="post" action="/projects/{{ project.id }}/tasks/{{ t.id }}/toggle" style="margin:0">
+<div class="record-grid" style="margin-bottom:14px">
+  <!-- left: facts + stage + docs -->
+  <div class="record-rail">
+    <div class="card">
+      <div class="label" style="margin-bottom:10px">Project</div>
+      <div class="profile-facts" style="margin-top:0">
+        <div class="row">
+          <span class="k">Client</span>
+          <span class="v">{% if project.client_id %}<a href="/clients/{{ project.client_id }}">{{ project.client_name }}</a>{% else %}<span class="muted">—</span>{% endif %}</span>
+        </div>
+        <div class="row">
+          <span class="k">Type</span>
+          <span class="v">{{ shoot_type_labels.get(project.shoot_type, project.shoot_type) }}</span>
+        </div>
+        {% if project.event_date %}
+        <div class="row"><span class="k">Date</span><span class="v">{{ project.event_date }}</span></div>
+        {% endif %}
+        {% if referred_by %}
+        <div class="row"><span class="k">Source</span><span class="v">referred by <a href="/clients/{{ referred_by.id }}">{{ referred_by.name }}</a></span></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:10px">Stage</div>
+      <div class="lifecycle-list">
+        {% set ns = namespace(passed=false) %}
+        {% for s in statuses %}
+        <div class="lifecycle-item{{ ' current' if s == project.status else '' }}">
+          <span class="dot {{ 'ember' if s == project.status else ('ok' if not ns.passed else '') }}"></span>
+          <span class="label">{{ s }}</span>
+        </div>
+        {% if s == project.status %}{% set ns.passed = true %}{% endif %}
+        {% endfor %}
+      </div>
+      <form method="post" action="/projects/{{ project.id }}/status" style="display:flex; gap:8px; align-items:center; margin-top:14px">
         {% include "_csrf.html" %}
-        <button class="btn ghost" type="submit" title="Toggle done" style="padding:2px 9px">{{ '✓' if t.done else '○' }}</button>
-      </form>
-      <span class="{{ 'muted' if t.done else '' }}" style="flex:1{% if t.done %}; text-decoration:line-through{% endif %}">{{ t.label }}</span>
-      <form method="post" action="/projects/{{ project.id }}/tasks/{{ t.id }}/delete" style="margin:0">
-        {% include "_csrf.html" %}
-        <button class="btn ghost" type="submit" title="Delete" style="padding:2px 9px">✕</button>
+        <select name="status" style="flex:1; min-width:0">
+          {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == project.status else '' }}>{{ s }}</option>{% endfor %}
+        </select>
+        <button class="btn secondary" type="submit" style="flex:none">Update</button>
       </form>
     </div>
-    {% else %}
-    <p class="muted">No tasks yet — track your deliverables so nothing slips.</p>
-    {% endfor %}
-    <form method="post" action="/projects/{{ project.id }}/tasks" style="display:flex; gap:8px; margin-top:6px">
-      {% include "_csrf.html" %}
-      <input type="text" name="label" placeholder="Add a task — e.g. send contract" style="flex:1">
-      <button class="btn secondary" type="submit">Add</button>
-    </form>
-    <div style="display:flex; gap:10px; align-items:center; margin-top:8px">
-      <form method="post" action="/projects/{{ project.id }}/apply-checklist" style="margin:0">
-        {% include "_csrf.html" %}
-        <button class="btn ghost" type="submit" title="Copy your saved checklist for this shoot type">⤓ Apply checklist template</button>
-      </form>
-      <a class="muted" href="/checklists" style="font-size:.85rem">Manage templates →</a>
-    </div>
-  </div>
 
-  <div class="card stack">
-    <h3>Files{% if files %} <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ files|length }}</span>{% endif %}</h3>
-    <p class="muted" style="font-size:.9rem; margin:0">Keep project documents here — signed PDFs,
-      shot lists, vendor info, mood boards.</p>
-    {% for f in files %}
-    <div style="display:flex; align-items:center; gap:8px">
-      <a href="/projects/{{ project.id }}/files/{{ f.id }}" style="flex:1">{{ f.filename }}</a>
-      {% if f.bytes %}<span class="muted" style="font-size:.85rem">{{ f.bytes | filesizeformat }}</span>{% endif %}
-      <form method="post" action="/projects/{{ project.id }}/files/{{ f.id }}/delete" style="margin:0"
-            data-confirm="Delete this file?">
+    <div class="related-card">
+      <div class="related-head"><span class="label">Files</span>{% if files %}<span class="action">{{ files|length }}</span>{% endif %}</div>
+      {% if files %}
+      <div class="related-rows">
+        {% for f in files %}
+        <div class="related-row">
+          <a class="name" href="/projects/{{ project.id }}/files/{{ f.id }}">{{ f.filename }}</a>
+          {% if f.bytes %}<span class="when">{{ f.bytes | filesizeformat }}</span>{% endif %}
+          <form method="post" action="/projects/{{ project.id }}/files/{{ f.id }}/delete" style="margin:0"
+                data-confirm="Delete this file?">
+            {% include "_csrf.html" %}
+            <button class="btn ghost" type="submit" title="Delete" style="padding:0 4px; font-size:.68rem">✕</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0 0 10px">No files yet — keep signed PDFs, shot lists, vendor info, and mood boards here.</p>
+      {% endif %}
+      <form method="post" action="/projects/{{ project.id }}/files" enctype="multipart/form-data"
+            style="display:flex; gap:8px; margin-top:12px; align-items:center">
         {% include "_csrf.html" %}
-        <button class="btn ghost" type="submit" title="Delete" style="padding:2px 9px">✕</button>
+        <input type="file" name="file" required style="min-width:0; flex:1">
+        <button class="btn secondary" type="submit" style="flex:none">Upload</button>
       </form>
     </div>
-    {% else %}
-    <p class="muted">No files yet.</p>
-    {% endfor %}
-    <form method="post" action="/projects/{{ project.id }}/files" enctype="multipart/form-data"
-          style="display:flex; gap:8px; margin-top:6px; align-items:center">
-      {% include "_csrf.html" %}
-      <input type="file" name="file" required>
-      <button class="btn secondary" type="submit">Upload</button>
-    </form>
-  </div>
 
-  <div class="card stack">
-    <h3>Galleries</h3>
-    {% if galleries %}
-      <table>
-        <thead><tr><th>Gallery</th><th>Status</th></tr></thead>
-        <tbody>
-          {% for g in galleries %}
-          <tr>
-            <td><a href="/galleries/{{ g.id }}">{{ g.title }}</a></td>
-            <td><span class="pill {{ 'on' if g.status == 'published' else 'off' }}">{{ g.status }}</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="muted">No galleries in this project yet.</p>
+    <div class="related-card">
+      <div class="related-head"><span class="label">Galleries</span></div>
+      {% if galleries %}
+      <div class="related-rows">
+        {% for g in galleries %}
+        <div class="related-row">
+          <a class="name" href="/galleries/{{ g.id }}">{{ g.title }}</a>
+          <span class="pill {{ 'on' if g.status == 'published' else 'off' }}">{{ g.status }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0 0 10px">No galleries in this project yet.</p>
       <a class="btn" href="/galleries/new?project_id={{ project.id }}">Add a gallery</a>
-    {% endif %}
-  </div>
+      {% endif %}
+    </div>
 
-  <div class="card stack">
-    <h3>Contracts</h3>
-    {% if contracts %}
-      <table>
-        <thead><tr><th>Contract</th><th>Status</th></tr></thead>
-        <tbody>
-          {% for ct in contracts %}
-          <tr>
-            <td><a href="/contracts/{{ ct.id }}">{{ ct.title }}</a></td>
-            <td><span class="pill {{ 'on' if ct.status == 'signed' else 'off' }}">{{ ct.status }}</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="muted">No contracts for this project yet.</p>
+    <div class="related-card">
+      <div class="related-head"><span class="label">Contracts</span></div>
+      {% if contracts %}
+      <div class="related-rows">
+        {% for ct in contracts %}
+        <div class="related-row">
+          <a class="name" href="/contracts/{{ ct.id }}">{{ ct.title }}</a>
+          <span class="pill {{ 'on' if ct.status == 'signed' else 'off' }}">{{ ct.status }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0 0 10px">No contracts for this project yet.</p>
       <a class="btn" href="/contracts/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Draft a contract</a>
-    {% endif %}
+      {% endif %}
+    </div>
   </div>
 
-  <div class="card stack">
-    <h3>Sessions</h3>
-    {% if appointments %}
-      <table>
-        <thead><tr><th>Session</th><th>When</th><th>Status</th></tr></thead>
-        <tbody>
-          {% for a in appointments %}
-          <tr>
-            <td><a href="/schedule/{{ a.id }}">{{ a.title }}</a></td>
-            <td class="muted">{{ a.starts_at or "—" }}</td>
-            <td>
-              {% if a.status == 'canceled' %}<span class="pill off">canceled</span>
-              {% else %}<span class="pill {{ 'on' if a.status == 'confirmed' else 'off' }}">{{ a.status }}</span>{% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="muted">No sessions for this project yet.</p>
+  <!-- center: checklist -->
+  <div class="record-main">
+    <div class="record-tabs">
+      <span class="active">Checklist{% if task_progress.total %} <span class="muted" style="font-weight:normal; font-size:.85rem">· {{ task_progress.done }}/{{ task_progress.total }} done</span>{% endif %}</span>
+    </div>
+    <div style="padding:18px 22px; display:flex; flex-direction:column; gap:10px">
+      {% for t in tasks %}
+      <div style="display:flex; align-items:center; gap:8px">
+        <form method="post" action="/projects/{{ project.id }}/tasks/{{ t.id }}/toggle" style="margin:0">
+          {% include "_csrf.html" %}
+          <button class="btn ghost" type="submit" title="Toggle done" style="padding:2px 9px">{{ '✓' if t.done else '○' }}</button>
+        </form>
+        <span class="{{ 'muted' if t.done else '' }}" style="flex:1{% if t.done %}; text-decoration:line-through{% endif %}">{{ t.label }}</span>
+        <form method="post" action="/projects/{{ project.id }}/tasks/{{ t.id }}/delete" style="margin:0">
+          {% include "_csrf.html" %}
+          <button class="btn ghost" type="submit" title="Delete" style="padding:2px 9px">✕</button>
+        </form>
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0">No tasks yet — track your deliverables so nothing slips.</p>
+      {% endfor %}
+      <form method="post" action="/projects/{{ project.id }}/tasks" style="display:flex; gap:8px; margin-top:6px">
+        {% include "_csrf.html" %}
+        <input type="text" name="label" placeholder="Add a task — e.g. send contract" style="flex:1">
+        <button class="btn secondary" type="submit">Add</button>
+      </form>
+      <div style="display:flex; gap:10px; align-items:center; margin-top:8px; flex-wrap:wrap">
+        <form method="post" action="/projects/{{ project.id }}/apply-checklist" style="margin:0">
+          {% include "_csrf.html" %}
+          <button class="btn ghost" type="submit" title="Copy your saved checklist for this shoot type">⤓ Apply checklist template</button>
+        </form>
+        <a class="muted" href="/checklists" style="font-size:.85rem">Manage templates →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- right: sessions, forms, money, marketing -->
+  <div class="record-rail">
+    <div class="related-card">
+      <div class="related-head"><span class="label">Sessions</span></div>
+      {% if appointments %}
+      <div class="related-rows">
+        {% for a in appointments %}
+        <div class="related-row">
+          <a class="name" href="/schedule/{{ a.id }}">{{ a.title }}</a>
+          <span class="when">{{ a.starts_at or "—" }}</span>
+          {% if a.status == 'canceled' %}<span class="pill off">canceled</span>
+          {% else %}<span class="pill {{ 'on' if a.status == 'confirmed' else 'off' }}">{{ a.status }}</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0 0 10px">No sessions for this project yet.</p>
       <a class="btn" href="/schedule/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Schedule a session</a>
-    {% endif %}
-  </div>
+      {% endif %}
+    </div>
 
-  <div class="card stack">
-    <h3>Questionnaires</h3>
-    {% if questionnaires %}
-      <table>
-        <thead><tr><th>Form</th><th>Status</th></tr></thead>
-        <tbody>
-          {% for q in questionnaires %}
-          <tr>
-            <td><a href="/questionnaires/{{ q.id }}">{{ q.title }}</a></td>
-            <td><span class="pill {{ 'on' if q.status == 'completed' else 'off' }}">{{ q.status }}</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="muted">No questionnaires for this project yet.</p>
+    <div class="related-card">
+      <div class="related-head"><span class="label">Questionnaires</span></div>
+      {% if questionnaires %}
+      <div class="related-rows">
+        {% for q in questionnaires %}
+        <div class="related-row">
+          <a class="name" href="/questionnaires/{{ q.id }}">{{ q.title }}</a>
+          <span class="pill {{ 'on' if q.status == 'completed' else 'off' }}">{{ q.status }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0 0 10px">No questionnaires for this project yet.</p>
       <a class="btn" href="/questionnaires/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Draft a questionnaire</a>
-    {% endif %}
-  </div>
+      {% endif %}
+    </div>
 
-  <div class="card stack">
-    <h3>Payment plans</h3>
-    {% if plans %}
-      <table>
-        <thead><tr><th>Plan</th><th>Collected</th><th>Status</th></tr></thead>
-        <tbody>
-          {% for pl in plans %}
-          <tr>
-            <td><a href="/payment-plans/{{ pl.id }}">{{ pl.title }}</a></td>
-            <td class="muted">{{ pl.paid_display }} / {{ pl.total_display }}</td>
-            <td>
-              {% if pl.status == 'void' %}<span class="pill off">void</span>
-              {% else %}<span class="pill {{ 'on' if pl.progress == 'paid' else 'off' }}">{{ pl.progress }}</span>{% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="muted">No payment plans yet.</p>
+    <div class="related-card">
+      <div class="related-head"><span class="label">Payment plans</span></div>
+      {% if plans %}
+      <div class="related-rows">
+        {% for pl in plans %}
+        <div class="related-row">
+          <a class="name" href="/payment-plans/{{ pl.id }}">{{ pl.title }}</a>
+          <span class="amt">{{ pl.paid_display }} / {{ pl.total_display }}</span>
+          {% if pl.status == 'void' %}<span class="pill off">void</span>
+          {% else %}<span class="pill {{ 'on' if pl.progress == 'paid' else 'off' }}">{{ pl.progress }}</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0 0 10px">No payment plans yet.</p>
       <a class="btn" href="/payment-plans/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Set up a deposit + balance</a>
-    {% endif %}
-  </div>
+      {% endif %}
+    </div>
 
-  <div class="card stack">
-    <h3>Invoices</h3>
-    {% if invoices %}
-      <table>
-        <thead><tr><th>Invoice</th><th>Amount</th><th>Status</th></tr></thead>
-        <tbody>
-          {% for i in invoices %}
-          <tr>
-            <td><a href="/invoices/{{ i.id }}">{{ i.title }}</a></td>
-            <td>{{ i.amount_display }}</td>
-            <td><span class="pill {{ 'on' if i.status == 'paid' else 'off' }}">{{ i.status }}</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="muted">No invoices for this project yet.</p>
+    <div class="related-card">
+      <div class="related-head"><span class="label">Invoices</span></div>
+      {% if invoices %}
+      <div class="related-rows">
+        {% for i in invoices %}
+        <div class="related-row">
+          <a class="name" href="/invoices/{{ i.id }}">{{ i.title }}</a>
+          <span class="amt">{{ i.amount_display }}</span>
+          <span class="pill {{ 'on' if i.status == 'paid' else 'off' }}">{{ i.status }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0 0 10px">No invoices for this project yet.</p>
       <a class="btn" href="/invoices/new?project_id={{ project.id }}{% if project.client_id %}&client_id={{ project.client_id }}{% endif %}">Create an invoice</a>
-    {% endif %}
-  </div>
+      {% endif %}
+    </div>
 
-  <div class="card stack">
-    <h3>Marketing content</h3>
-    <form method="post" action="/projects/{{ project.id }}/content" style="display:flex; gap:10px; align-items:center">
-      {% include "_csrf.html" %}
-      <select name="recipe">
-        {% for r in recipes %}<option value="{{ r.slug }}">{{ r.label }}</option>{% endfor %}
-      </select>
-      <button class="btn secondary" type="submit">Generate</button>
-    </form>
-    {% if packs %}
-      <table>
-        <thead><tr><th>Pack</th><th>Status</th></tr></thead>
-        <tbody>
-          {% for p in packs %}
-          <tr>
-            <td><a href="/content/{{ p.id }}">{{ p.title }}</a></td>
-            <td><span class="pill {{ 'on' if p.status == 'approved' else 'off' }}">{{ p.status }}</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="muted">Shot lists, captions, and campaign copy — generated from this project's vision keywords.</p>
-    {% endif %}
+    <div class="related-card">
+      <div class="related-head"><span class="label">Marketing content</span></div>
+      <form method="post" action="/projects/{{ project.id }}/content" style="display:flex; gap:8px; align-items:center; margin-bottom:12px">
+        {% include "_csrf.html" %}
+        <select name="recipe" style="flex:1; min-width:0">
+          {% for r in recipes %}<option value="{{ r.slug }}">{{ r.label }}</option>{% endfor %}
+        </select>
+        <button class="btn secondary" type="submit" style="flex:none">Generate</button>
+      </form>
+      {% if packs %}
+      <div class="related-rows">
+        {% for p in packs %}
+        <div class="related-row">
+          <a class="name" href="/content/{{ p.id }}">{{ p.title }}</a>
+          <span class="pill {{ 'on' if p.status == 'approved' else 'off' }}">{{ p.status }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0">Shot lists, captions, and campaign copy — generated from this project's vision keywords.</p>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

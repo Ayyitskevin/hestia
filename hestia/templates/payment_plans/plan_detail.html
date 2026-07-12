@@ -19,16 +19,9 @@
   </div>
 </div>
 
-<div class="grid cols-2">
-  <div class="card stack">
-    <h3>Total</h3>
-    <p class="muted" style="font-size:1.4rem; color:var(--ink)">{{ plan.total_display }}</p>
-  </div>
-  <div class="card stack">
-    <h3>Collected</h3>
-    <p class="muted" style="font-size:1.4rem; color:var(--ink)">{{ plan.paid_display }}
-      <span class="muted" style="font-size:.9rem">of {{ plan.total_display }} · {{ plan.remaining_display }} remaining</span></p>
-  </div>
+<div class="kpi-row" style="margin-bottom:14px">
+  <div class="kpi-card"><div class="kpi-label">Total</div><div class="kpi-value">{{ plan.total_display }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Collected</div><div class="kpi-value">{{ plan.paid_display }}</div><div class="kpi-delta">of {{ plan.total_display }} · {{ plan.remaining_display }} remaining</div></div>
 </div>
 
 <div class="card stack">

@@ -11,12 +11,14 @@
   </div>
 </div>
 {% if tags %}
-<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; align-items:center">
+<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center">
   <span class="muted" style="font-size:.85rem">Filter:</span>
-  <a class="pill {{ 'on' if not active_tag else '' }}" href="/clients">All</a>
-  {% for t in tags %}
-  <a class="pill {{ 'on' if active_tag == t.tag else '' }}" href="/clients?tag={{ t.tag|urlencode }}">{{ t.tag }} · {{ t.count }}</a>
-  {% endfor %}
+  <div class="filter-pills">
+    <a class="{{ 'active' if not active_tag else '' }}" href="/clients">All</a>
+    {% for t in tags %}
+    <a class="{{ 'active' if active_tag == t.tag else '' }}" href="/clients?tag={{ t.tag|urlencode }}">{{ t.tag }} · {{ t.count }}</a>
+    {% endfor %}
+  </div>
 </div>
 {% endif %}
 {% if clients %}
@@ -25,9 +27,15 @@
     <thead><tr><th>Client</th><th>Email</th><th>Phone</th><th>Projects</th><th>Lifetime value</th></tr></thead>
     <tbody>
       {% for c in clients %}
+      {% set _cw = (c.name or '?').split() %}
       <tr>
-        <td><a href="/clients/{{ c.id }}">{{ c.name }}</a>
-          {% if c.tags %}<div style="margin-top:3px; display:flex; gap:4px; flex-wrap:wrap">{% for t in c.tags %}<span class="pill" style="font-size:.68rem">{{ t }}</span>{% endfor %}</div>{% endif %}</td>
+        <td>
+          <div style="display:flex; align-items:center; gap:8px">
+            <span class="avatar sm">{{ (_cw[:2] | map('first') | join) | upper }}</span>
+            <a href="/clients/{{ c.id }}">{{ c.name }}</a>
+          </div>
+          {% if c.tags %}<div style="margin-top:3px; margin-left:28px; display:flex; gap:4px; flex-wrap:wrap">{% for t in c.tags %}<span class="pill" style="font-size:.68rem">{{ t }}</span>{% endfor %}</div>{% endif %}
+        </td>
         <td class="muted">{{ c.email or "—" }}</td>
         <td class="muted">{{ c.phone or "—" }}</td>
         <td>{{ c.project_count }}</td>

@@ -6,29 +6,30 @@
     <h1>Activity</h1>
     <span class="muted">Recent events in your studio — leads, galleries, invoices, payments</span>
   </div>
+  <a class="btn secondary" href="/automations">← Automations</a>
 </div>
 
-{% set labels = {
-  'studio.inquiry': '📨 New inquiry',
-  'gallery.published': '🌐 Gallery published',
-  'pipeline.start': '⚡ Processing started',
-  'pipeline.done': '✓ Offer ready',
-  'pipeline.error': '⚠ Processing failed',
-  'invoice.sent': '📤 Invoice sent',
-  'invoice.paid': '💰 Invoice paid',
-  'invoice.void': '🗑 Invoice voided',
+{% set meta = {
+  'studio.inquiry':    {'icon': '✦', 'text': 'New inquiry',        'bg': 'var(--info-tint)',   'fg': 'var(--info)'},
+  'gallery.published': {'icon': '⧉', 'text': 'Gallery published',  'bg': 'var(--info-tint)',   'fg': 'var(--info)'},
+  'pipeline.start':    {'icon': '⚡', 'text': 'Processing started', 'bg': 'var(--ember-tint)',  'fg': 'var(--ember-soft)'},
+  'pipeline.done':     {'icon': '✓', 'text': 'Offer ready',         'bg': 'var(--ok-tint)',     'fg': 'var(--ok)'},
+  'pipeline.error':    {'icon': '⚠', 'text': 'Processing failed',  'bg': 'var(--danger-tint)', 'fg': 'var(--danger)'},
+  'invoice.sent':      {'icon': '→', 'text': 'Invoice sent',        'bg': 'var(--info-tint)',   'fg': 'var(--info)'},
+  'invoice.paid':      {'icon': '✓', 'text': 'Invoice paid',        'bg': 'var(--ok-tint)',     'fg': 'var(--ok)'},
+  'invoice.void':      {'icon': '✕', 'text': 'Invoice voided',      'bg': 'var(--danger-tint)', 'fg': 'var(--danger)'},
 } %}
 
 {% if events %}
-<div class="stack">
+<div class="doc-list">
   {% for e in events %}
-  <div class="card" style="display:flex; justify-content:space-between; gap:12px; align-items:baseline">
-    <div>
-      <span style="font-weight:600">{{ labels.get(e.action, e.action) }}</span>
-      {% if e.detail %}<span class="muted"> — {{ e.detail }}</span>{% endif %}
-      <div class="muted" style="font-size:.8rem">by {{ e.actor }}</div>
+  {% set m = meta.get(e.action) %}
+  <div class="doc-row">
+    <span class="doc-icon" style="background:{{ m.bg if m else 'var(--fill)' }}; color:{{ m.fg if m else 'var(--ink-2)' }}">{{ m.icon if m else '•' }}</span>
+    <div class="doc-body">
+      <div class="doc-title">{{ m.text if m else e.action }}{% if e.detail %} <span class="muted" style="font-weight:400">— {{ e.detail }}</span>{% endif %}</div>
+      <div class="doc-meta">by {{ e.actor }} · {{ e.created_at }}</div>
     </div>
-    <span class="muted" style="font-size:.8rem; white-space:nowrap">{{ e.created_at }}</span>
   </div>
   {% endfor %}
 </div>

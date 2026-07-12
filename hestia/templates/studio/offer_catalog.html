@@ -23,12 +23,12 @@
     <p class="hint">When a client hearts photos, Hestia auto-builds a favorites package at this rate.</p>
 
     {% for row in rows %}
-    <hr style="margin:20px 0; border:none; border-top:1px solid var(--border)">
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--hairline)">
     <h3>{{ row.label }}</h3>
-    <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px">
+    <label class="check" style="margin-bottom:12px">
       <input type="checkbox" name="{{ row.sku }}_enabled" value="1"
-             {{ 'checked' if row.enabled else '' }} style="width:auto">
-      Include in gallery offers
+             {{ 'checked' if row.enabled else '' }}>
+      <span>Include in gallery offers</span>
     </label>
     <label for="{{ row.sku }}_name">Display name</label>
     <input type="text" id="{{ row.sku }}_name" name="{{ row.sku }}_name" value="{{ row.name }}">

@@ -38,7 +38,7 @@
           <div>{{ invoice.title }}</div>
         </div>
 
-        <hr style="border:none; border-top:1px solid #eee; margin:4px 0">
+        <hr style="border:none; border-top:1px solid var(--hairline); margin:4px 0">
         {% if items %}
         {% for it in items %}
         <p style="display:flex; justify-content:space-between; margin:0"><span class="muted">{{ it.description }}</span><span>{{ it.amount_display }}</span></p>

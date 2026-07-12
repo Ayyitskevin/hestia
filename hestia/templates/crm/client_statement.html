@@ -10,10 +10,10 @@
 </div>
 
 <div class="card stack">
-  <div class="health-strip">
-    <div class="health-item"><span class="svc">{{ statement.billed }}</span> <span class="url">billed</span></div>
-    <div class="health-item"><span class="svc">{{ statement.paid }}</span> <span class="url">paid</span></div>
-    <div class="health-item"><span class="svc">{{ statement.outstanding }}</span> <span class="url">outstanding</span></div>
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-label">Billed</div><div class="kpi-value">{{ statement.billed }}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Paid</div><div class="kpi-value">{{ statement.paid }}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Outstanding</div><div class="kpi-value">{{ statement.outstanding }}</div></div>
   </div>
   {% if statement.lines %}
   <table>

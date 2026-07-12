@@ -28,14 +28,16 @@
       {% elif not chosen %}
       <div class="card stack">
         <h3>Choose a session</h3>
-        {% for t in types %}
-        <a href="/studio/{{ tenant.slug }}/book?type={{ t.id }}"
-           style="display:block; padding:12px 14px; border:1px solid var(--line); border-radius:8px; text-decoration:none">
-          <strong>{{ t.title }}</strong>
-          <span class="muted">· {{ t.duration_minutes }} min{% if t.price_display %} · {{ t.price_display }}{% endif %}{% if t.deposit_display %} · {{ t.deposit_display }} deposit{% endif %}</span>
-          {% if t.description %}<br><span class="muted" style="font-size:.85rem">{{ t.description }}</span>{% endif %}
-        </a>
-        {% endfor %}
+        <div class="portal-actions">
+          {% for t in types %}
+          <a class="portal-action ready" href="/studio/{{ tenant.slug }}/book?type={{ t.id }}">
+            <strong>{{ t.title }}</strong>
+            <small>{{ t.duration_minutes }} min{% if t.price_display %} · {{ t.price_display }}{% endif %}{% if t.deposit_display %} · {{ t.deposit_display }} deposit{% endif %}</small>
+            {% if t.description %}<small>{{ t.description }}</small>{% endif %}
+            <em>Select →</em>
+          </a>
+          {% endfor %}
+        </div>
       </div>
 
       {% else %}
