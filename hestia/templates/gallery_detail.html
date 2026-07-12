@@ -14,7 +14,7 @@
       {% if project %}<a href="/projects/{{ project.id }}">{{ project.name }}</a> · {% endif %}
       {{ gallery.client_name or "No client set" }} ·
       {{ images|length }} image{{ '' if images|length == 1 else 's' }}
-      {% if gallery.pin %} · 🔒 PIN set{% endif %}
+      {% if gallery.pin %} · PIN set{% endif %}
     </div>
   </div>
   <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap">

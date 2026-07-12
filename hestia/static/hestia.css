@@ -51,6 +51,15 @@
   --shadow-card: 0 4px 16px rgba(0, 0, 0, .4);
   --shadow-float: 0 12px 40px rgba(0, 0, 0, .6);
 
+  /* doc-paper: a deliberate warm-paper surface simulating a physical printed
+     document (contracts/questionnaires preview), floating inside the dark
+     chrome — intentionally off-palette from the rest of the dark UI. */
+  --paper-bg: #f5f2ec;
+  --paper-ink: #2b2622;
+  --paper-ink-2: #5c5249;
+  --paper-ink-3: #8a7f72;
+  --paper-hairline: #cabfa9;
+
   /* legacy aliases so any un-migrated markup still resolves to the new palette */
   --cream: var(--surface);
   --cream-2: var(--surface-2);
@@ -592,16 +601,16 @@ a.health-item:hover { border-color: rgba(255, 255, 255, .16); color: var(--ink);
 .doc-preview { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-card); display: flex; flex-direction: column; overflow: hidden; }
 .doc-preview-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--hairline); }
 .doc-preview-head .t { font-size: .78rem; font-weight: 600; min-width: 0; flex: 1; }
-.doc-paper { padding: 16px 18px; background: #f5f2ec; color: #2b2622; flex: 1; font-size: .72rem; line-height: 1.7; overflow: auto; }
+.doc-paper { padding: 16px 18px; background: var(--paper-bg); color: var(--paper-ink); flex: 1; font-size: .72rem; line-height: 1.7; overflow: auto; }
 .doc-paper strong { font-weight: 700; }
 .doc-paper .kicker { font-weight: 700; font-size: .8rem; margin-bottom: 8px; }
-.doc-paper p, .doc-paper div.clause { color: #5c5249; margin-top: 10px; }
-.doc-sign-block { margin-top: 14px; border-top: 1px dashed #cabfa9; padding-top: 10px; display: flex; gap: 20px; }
+.doc-paper p, .doc-paper div.clause { color: var(--paper-ink-2); margin-top: 10px; }
+.doc-sign-block { margin-top: 14px; border-top: 1px dashed var(--paper-hairline); padding-top: 10px; display: flex; gap: 20px; }
 .doc-sign-block .field { flex: 1; }
-.doc-sign-block .label { font-size: .6rem; color: #8a7f72; text-transform: uppercase; letter-spacing: .06em; }
+.doc-sign-block .label { font-size: .6rem; color: var(--paper-ink-3); text-transform: uppercase; letter-spacing: .06em; }
 .doc-sign-block .sig { font-style: italic; font-size: .88rem; margin-top: 4px; }
-.doc-sign-block .sig-line { border-bottom: 1.5px solid #cabfa9; height: 22px; }
-.doc-sign-block .status { font-size: .58rem; color: #8a7f72; margin-top: 2px; }
+.doc-sign-block .sig-line { border-bottom: 1.5px solid var(--paper-hairline); height: 22px; }
+.doc-sign-block .status { font-size: .58rem; color: var(--paper-ink-3); margin-top: 2px; }
 .doc-preview-foot { padding: 13px 18px; border-top: 1px solid var(--hairline); }
 .doc-preview-foot .log { display: flex; flex-direction: column; gap: 7px; font-size: .72rem; margin-bottom: 12px; }
 .doc-preview-foot .log-row { display: flex; gap: 9px; align-items: center; }

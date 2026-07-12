@@ -5,8 +5,8 @@
   <h1>Clients{% if active_tag %} · <span class="muted">{{ active_tag }}</span>{% endif %}</h1>
   <div style="display:flex; gap:10px">
     {% if active_tag %}<a class="btn secondary" href="/clients/broadcast?tag={{ active_tag|urlencode }}">✉ Email “{{ active_tag }}”</a>{% endif %}
-    <a class="btn secondary" href="/clients/export.csv{% if active_tag %}?tag={{ active_tag|urlencode }}{% endif %}">⬇ Export CSV</a>
-    <a class="btn secondary" href="/clients/import">⬆ Import CSV</a>
+    <a class="btn secondary" href="/clients/export.csv{% if active_tag %}?tag={{ active_tag|urlencode }}{% endif %}">↓ Export CSV</a>
+    <a class="btn secondary" href="/clients/import">↑ Import CSV</a>
     <a class="btn" href="/clients/new">+ New client</a>
   </div>
 </div>
