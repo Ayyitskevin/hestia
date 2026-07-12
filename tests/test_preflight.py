@@ -35,7 +35,9 @@ def _by_name(checks: list[PreflightCheck]) -> dict[str, PreflightCheck]:
 
 
 def test_hosted_preflight_accepts_production_shaped_config(settings, tmp_path):
-    checks = run_preflight(_hosted_settings(settings, tmp_path), root=Path("."))
+    # A production deploy has made a media-durability decision (here: an off-site remote).
+    checks = run_preflight(_hosted_settings(settings, tmp_path), root=Path("."),
+                           env={"HESTIA_OFFSITE_REMOTE": "s3:hestia-offsite/prod"})
     by_name = _by_name(checks)
 
     assert not [check for check in checks if check.level == "fail"]
@@ -214,6 +216,28 @@ def test_live_robots_missing_disallow_is_a_launch_blocker(settings, tmp_path):
     assert checks["runtime /robots.txt"].level == "fail"
     assert "/portal/" in checks["runtime /robots.txt"].detail
     assert "/d/" in checks["runtime /robots.txt"].detail
+
+
+def test_media_durability_ladder(settings, tmp_path):
+    """Local media with no off-site copy is a launch blocker — a volume loss is
+    unrecoverable for a photo product. Closed by an off-site remote, an explicit
+    infra acknowledgment, or S3 storage (which never reaches the check)."""
+    hosted = _hosted_settings(settings, tmp_path)          # local storage
+
+    naked = _by_name(run_preflight(hosted, root=Path("."), env={}))
+    assert naked["media durability"].level == "fail"
+    assert "off-site" in naked["media durability"].detail
+
+    synced = _by_name(run_preflight(hosted, root=Path("."),
+                                    env={"HESTIA_OFFSITE_REMOTE": "s3:bkt/hestia"}))
+    assert synced["media durability"].level == "pass"
+
+    acked = _by_name(run_preflight(hosted, root=Path("."),
+                                   env={"HESTIA_MEDIA_DURABILITY_ACK": "daily volume snapshots"}))
+    assert acked["media durability"].level == "pass"
+
+    s3 = _hosted_settings(settings, tmp_path, storage_backend="s3", s3_bucket="private-media")
+    assert "media durability" not in _by_name(run_preflight(s3, root=Path("."), env={}))
 
 
 def test_backup_freshness_ladder(settings, tmp_path):

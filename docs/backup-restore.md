@@ -24,10 +24,30 @@ docker compose exec hestia bash /app/scripts/backup.sh
 
 Bare-metal (systemd/deploy.sh installs): `HESTIA_DATA_DIR=/srv/hestia/data bash scripts/backup.sh`.
 
-## Off-site copies
+## Off-site copies (DB **and** media)
 
-The `.db.gz` artifacts are plain files — sync `backups/` off the box with
-rsync/rclone on whatever cadence you trust the box. One machine is zero backups.
+One machine is zero backups — and for a photography product the media directory (the
+client galleries) is the irreplaceable half. The daily `backup` service snapshots the
+**database** to `backups/`; the **media** blobs are not in those artifacts, so an
+off-site copy must carry both.
+
+`scripts/offsite-sync.sh` does exactly that — it pushes `backups/` *and* (for local
+storage) the media directory to an rclone remote:
+
+```sh
+# one-time: configure the remote (S3, B2, R2, Drive, SFTP…)
+rclone config
+
+# then cron it a few minutes after the daily backup:
+HESTIA_OFFSITE_REMOTE="s3:my-bucket/hestia" bash scripts/offsite-sync.sh
+```
+
+Media blobs are content-addressed and immutable, so each run copies only new files, and
+it uses `copy` (never `sync`) so a client's originals are never deleted off-site. With
+**S3/R2 storage** the media already lives off-box and the script syncs only the DB
+backups. Preflight **fails** a local-storage launch until `HESTIA_OFFSITE_REMOTE` is set
+(or `HESTIA_MEDIA_DURABILITY_ACK`, if host volume snapshots cover it) — losing every
+gallery to a dead disk is not a footnote.
 
 ## Restore drill
 
