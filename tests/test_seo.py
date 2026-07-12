@@ -21,7 +21,7 @@ def _assert_share_meta(page, *, title: str, description: str, canonical: str):
     assert '<meta name="twitter:image" content="http://testserver/static/og-cover.png">' in text
     assert f'<meta name="twitter:title" content="{title}">' in text
     assert f'<meta name="twitter:description" content="{description}">' in text
-    assert '<meta name="theme-color" content="#c0552f">' in text
+    assert '<meta name="theme-color" content="#000000">' in text
 
 
 def test_landing_page_has_share_metadata(client):
