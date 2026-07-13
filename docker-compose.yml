@@ -5,6 +5,9 @@ services:
     environment:
       HESTIA_DATA_DIR: /data
       HESTIA_MEDIA_DIR: /data/media
+      # The app sits behind exactly one reverse proxy (Caddy), so the real client IP is
+      # the last X-Forwarded-For hop. Tells the rate limiter to trust one hop deep.
+      HESTIA_TRUSTED_PROXIES: "1"
     volumes:
       - hestia-data:/data
     restart: unless-stopped
