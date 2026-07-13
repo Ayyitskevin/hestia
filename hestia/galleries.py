@@ -198,6 +198,35 @@ def _dimensions(data: bytes) -> tuple[int | None, int | None]:
         return None, None
 
 
+# Longest-edge cap for the browse thumbnail. A 20-40 MB original collapses to
+# ~100-250 KB, so a client paging a 400-frame proof gallery pulls a few MB, not a few
+# GB — the difference between a responsive grid and OOMing the shared box. The full
+# original is always one click away for the single large view and downloads.
+_THUMB_MAX_EDGE = 1024
+_THUMB_QUALITY = 80
+
+
+def _make_thumbnail(data: bytes) -> bytes | None:
+    """A downscaled JPEG preview (longest edge ``_THUMB_MAX_EDGE``) of an uploaded
+    frame, honoring EXIF orientation and flattened to RGB. Returns ``None`` — and the
+    caller serves the original instead — if Pillow is missing or the bytes don't decode
+    as an image, so a single bad frame can never fail the whole upload."""
+    try:
+        import io
+
+        from PIL import Image, ImageOps  # type: ignore
+
+        with Image.open(io.BytesIO(data)) as im:
+            im = ImageOps.exif_transpose(im)
+            im = im.convert("RGB")
+            im.thumbnail((_THUMB_MAX_EDGE, _THUMB_MAX_EDGE))
+            out = io.BytesIO()
+            im.save(out, format="JPEG", quality=_THUMB_QUALITY, optimize=True)
+            return out.getvalue()
+    except Exception:
+        return None
+
+
 def add_image(
     conn: sqlite3.Connection,
     storage: Storage,
@@ -232,6 +261,13 @@ def add_image(
 
     storage.put(key, io.BytesIO(data), content_type)
     conn.execute("UPDATE images SET storage_key = ? WHERE id = ?", (key, image_id))
+    # Downscaled browse thumbnail (best-effort). thumb_key stays NULL if it can't be
+    # made, and serving falls back to the original — an upload never fails over a thumb.
+    thumb = _make_thumbnail(data)
+    if thumb is not None:
+        thumb_key = f"{key.rsplit('.', 1)[0]}_thumb.jpg"
+        storage.put(thumb_key, io.BytesIO(thumb), "image/jpeg")
+        conn.execute("UPDATE images SET thumb_key = ? WHERE id = ?", (thumb_key, image_id))
     # First image becomes the cover.
     conn.execute(
         "UPDATE galleries SET cover_image_id = COALESCE(cover_image_id, ?) WHERE id = ?",

@@ -56,7 +56,7 @@ def products_view(request: Request, set_id: int):
         for iid, grp in by_image.items():
             img = get_image(conn, auth.tenant["id"], iid)
             if img:
-                grp["url"] = storage.public_path(img["storage_key"])
+                grp["url"] = storage.thumb_url(img)
         groups = list(by_image.values())
         rendered_count = sum(1 for v in pset["variants"] if v.get("status") == "rendered")
     return render(request, "products/set.html", auth=auth, pset=pset, gallery=gallery,

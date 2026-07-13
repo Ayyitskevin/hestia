@@ -21,7 +21,7 @@ from ..proofing import favorite_image_ids
 from ..ratelimit import enforce
 from ..tenants import get_tenant
 from ..vision import alt_text_map
-from .deps import db_conn, render, storage_of
+from .deps import db_conn, image_response, render, storage_of
 
 router = APIRouter()
 
@@ -158,10 +158,11 @@ def delivery_view(request: Request, token: str, image_id: int):
         if not img:
             return Response(status_code=404)
         img = dict(img)
-    try:
-        data = storage.open(img["storage_key"])
-    except FileNotFoundError:
-        return Response(status_code=404)
-    # Inline render, so clamp to a safe image type — a stored text/html "image" must
-    # not execute as a page on our origin.
-    return Response(content=data, media_type=safe_inline_type(img["content_type"]))
+    # Serve the small browse thumbnail when one exists (this is the download-page grid,
+    # where a client loads every frame at once); fall back to the original, clamped to a
+    # safe image type so a stored text/html "image" can't execute on our origin. Either
+    # way the response streams from disk and caches hard (see image_response).
+    if img.get("thumb_key"):
+        return image_response(request, storage, img["thumb_key"], media_type="image/jpeg")
+    return image_response(request, storage, img["storage_key"],
+                          media_type=safe_inline_type(img["content_type"]))

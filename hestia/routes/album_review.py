@@ -15,7 +15,7 @@ from ..albums import (
 )
 from ..galleries import safe_inline_type
 from ..tenants import get_tenant
-from .deps import db_conn, render, storage_of
+from .deps import db_conn, image_response, render, storage_of
 
 router = APIRouter()
 
@@ -70,9 +70,10 @@ def album_review_photo(request: Request, token: str, image_id: int):
         if not img:
             return Response(status_code=404)
         img = dict(img)
-    try:
-        data = storage.open(img["storage_key"])
-    except FileNotFoundError:
-        return Response(status_code=404)
-    # Inline render → clamp to a safe image type so a stored text/html "image" can't execute.
-    return Response(content=data, media_type=safe_inline_type(img["content_type"]))
+    # Serve the small browse thumbnail when present (the review page shows every spread
+    # frame); fall back to the original, clamped to a safe image type so a stored
+    # text/html "image" can't execute. Streams from disk and caches hard (image_response).
+    if img.get("thumb_key"):
+        return image_response(request, storage, img["thumb_key"], media_type="image/jpeg")
+    return image_response(request, storage, img["storage_key"],
+                          media_type=safe_inline_type(img["content_type"]))
