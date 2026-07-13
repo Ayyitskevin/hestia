@@ -173,6 +173,31 @@ def _backup_freshness(settings: Settings, env: dict[str, str], *, max_age_hours:
     return _check("pass", "backup freshness", f"newest backup {newest.name} is {age_hours:.1f}h old")
 
 
+def _media_durability(env: dict[str, str]) -> PreflightCheck:
+    """Local media sits on the same volume as the DB, so a volume loss takes every
+    client gallery with it — and unlike the DB, there's nothing to restore from. For a
+    photography product that's the worst possible loss, so require an off-site copy:
+    HESTIA_OFFSITE_REMOTE (scripts/offsite-sync.sh pushes DB backups + media there)
+    closes it. An operator who handles durability at the infrastructure layer (e.g.
+    daily volume snapshots Hestia can't see) can acknowledge with
+    HESTIA_MEDIA_DURABILITY_ACK. S3/R2 storage never reaches this check — the object
+    store is already durable and off-box."""
+    remote = (env.get("HESTIA_OFFSITE_REMOTE") or "").strip()
+    ack = (env.get("HESTIA_MEDIA_DURABILITY_ACK") or "").strip()
+    if remote:
+        return _check("pass", "media durability",
+                      f"media + DB backups sync off-site to {remote} via scripts/offsite-sync.sh")
+    if ack:
+        return _check("pass", "media durability",
+                      f"off-site media durability acknowledged as handled externally ({ack})")
+    return _check(
+        "fail", "media durability",
+        "local media has no off-site copy — a volume loss would lose every client "
+        "gallery, unrecoverably. Set HESTIA_OFFSITE_REMOTE and cron scripts/offsite-sync.sh, "
+        "switch to S3 storage, or set HESTIA_MEDIA_DURABILITY_ACK if host volume snapshots cover it.",
+    )
+
+
 def run_preflight(
     settings: Settings | None = None,
     *,
@@ -416,6 +441,7 @@ def run_preflight(
     if settings.storage_backend == "local":
         media_ok, media_detail = _can_write_dir(settings.media_dir)
         checks.append(_check("pass" if media_ok else "fail", "media volume", media_detail))
+        checks.append(_media_durability(env))
     elif settings.storage_backend == "s3":
         checks.append(
             _check(

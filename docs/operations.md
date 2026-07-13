@@ -37,8 +37,10 @@ tenant-serving path end-to-end.)
 - [ ] Confirm backups are current — `/admin/system` (or `hosted-preflight.sh --url …`
       `backup freshness` check) should never be stale. Artifacts live at
       `/data/backups/hestia-*.db.gz`.
-- [ ] Confirm the **off-site** copy actually pulled the newest artifact. One machine
-      is zero backups.
+- [ ] Confirm the **off-site** copy actually ran — `scripts/offsite-sync.sh` (cron'd a
+      few minutes after the daily backup) pushes both the DB backups **and** the media
+      directory off the box. One machine is zero backups, and the galleries are the half
+      you can't rebuild. See `docs/backup-restore.md`.
 - [ ] Skim access logs for anomalies (auth failures, 5xx spikes) — structured JSON,
       one line per request, no client tokens (they're redacted).
 - [ ] Requeue any genuinely-stuck failed jobs from `/admin/system` after reading why
