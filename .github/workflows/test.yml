@@ -30,11 +30,8 @@ jobs:
       - name: Build and boot production container
         run: bash scripts/container-smoke.sh
 
-      - name: Lint + tests + healthz boot
+      - name: Lint + tests + runtime invariants + dogfood
         run: bash scripts/ci-smoke.sh
-
-      - name: Dogfood the magic moment (mock vision, no fleet)
-        run: bash scripts/dogfood-hestia.sh
 
       # Advisory supply-chain scan: surfaces known-CVE dependencies in the CI log without
       # blocking the merge on an unfixable transitive/tooling CVE. A solo operator reviews
