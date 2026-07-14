@@ -1,7 +1,7 @@
 # Hestia codebase review and improvement plan
 
-**Reviewed:** 2026-07-13  
-**Baseline:** `a3f31b9c722554ddbdfcd26882c19eabcb95ad75` (`main`)  
+**Reviewed:** 2026-07-13
+**Baseline:** `a3f31b9c722554ddbdfcd26882c19eabcb95ad75` (`main`)
 **Scope:** preserve every product capability; improve correctness, security,
 reproducibility, maintainability, and launch confidence without changing Hestia's
 modular-monolith doctrine.
