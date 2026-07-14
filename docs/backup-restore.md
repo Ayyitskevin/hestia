@@ -73,6 +73,23 @@ gallery to a dead disk is not a footnote.
 
 Bare-metal: same `restore.sh` with `HESTIA_DATA_DIR` pointing at the data dir.
 
+## Automated scratch drill
+
+CI exercises both scripts against disposable state on every change:
+
+```sh
+bash scripts/restore-drill.sh
+```
+
+The drill creates a migrated source database, takes an online backup, copies the
+compressed artifact, restores it over different scratch state, runs SQLite integrity
+checks, and proves the replaced database was kept as a usable pre-restore safety copy.
+It deliberately ignores your configured `HESTIA_DATA_DIR` and cannot touch live data.
+
+This synthetic proof catches script and schema compatibility regressions. It does not
+replace the quarterly drill below, which must use a real off-site artifact and verify
+that client media is present too.
+
 ## Quarterly drill checklist
 
 - [ ] Pick a real backup from `/data/backups` (not one made for the test).

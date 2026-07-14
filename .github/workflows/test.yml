@@ -24,6 +24,9 @@ jobs:
       - name: Lint + tests + healthz boot
         run: bash scripts/ci-smoke.sh
 
+      - name: Scratch backup and restore drill
+        run: bash scripts/restore-drill.sh
+
       - name: Dogfood the magic moment (mock vision, no fleet)
         run: bash scripts/dogfood-hestia.sh
 
