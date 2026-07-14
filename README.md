@@ -276,7 +276,7 @@ Details: [`docs/architecture.md`](docs/architecture.md)
 ## Verification
 
 ```bash
-bash scripts/ci-smoke.sh        # ruff + pytest + healthz boot + privacy invariants
+bash scripts/ci-smoke.sh        # ruff + pytest + health/privacy + magic-moment dogfood
 bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke
 bash scripts/wheel-smoke.sh     # build, install, and boot the distributable artifact
 bash scripts/container-smoke.sh # build and boot the non-root production container
