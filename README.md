@@ -277,6 +277,7 @@ Details: [`docs/architecture.md`](docs/architecture.md)
 
 ```bash
 bash scripts/ci-smoke.sh        # ruff + pytest + health/privacy + magic-moment dogfood
+bash scripts/coverage.sh        # blocking hosted-CI aggregate line-coverage floor
 bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke
 bash scripts/wheel-smoke.sh     # build, install, and boot the distributable artifact
 bash scripts/container-smoke.sh # build and boot the non-root production container

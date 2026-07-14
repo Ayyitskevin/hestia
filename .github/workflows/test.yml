@@ -24,6 +24,9 @@ jobs:
       - name: Verify dependency locks
         run: bash scripts/lock-dependencies.sh --check
 
+      - name: Enforce aggregate revenue-spine coverage floor
+        run: bash scripts/coverage.sh
+
       - name: Build and boot installed wheel
         run: bash scripts/wheel-smoke.sh
 

@@ -52,7 +52,14 @@ def settings(tmp_path: Path) -> Settings:
         tenant_key_pepper="test-pepper",
         session_secret="test-secret",
         vision_backend="mock",
+        album_backend="mock",
+        content_backend="mock",
+        product_backend="mock",
         storage_backend="local",
+        payments_backend="mock",
+        subscription_backend="mock",
+        email_backend="mock",
+        fulfillment_backend="mock",
         public_url="http://testserver",
     )
 
