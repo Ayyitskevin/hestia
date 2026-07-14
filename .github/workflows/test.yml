@@ -1,8 +1,9 @@
 name: ci-smoke
 
 on:
+  # Pull-request branches run below; keep push scoped to main to avoid duplicate full-suite runs.
   push:
-    branches: ["**"]
+    branches: ["main"]
   pull_request:
 
 jobs:
