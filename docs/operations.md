@@ -43,6 +43,10 @@ tenant-serving path end-to-end.)
       you can't rebuild. See `docs/backup-restore.md`.
 - [ ] Skim access logs for anomalies (auth failures, 5xx spikes) — structured JSON,
       one line per request, no client tokens (they're redacted).
+- [ ] When an xAI backend is live, filter for logger `hestia.xai` and action
+      `xai.request`. Each call records only its operation path, HTTP status, and
+      duration; rising failures or latency are actionable without exposing prompts,
+      images, model output, exception detail, or API keys.
 - [ ] Requeue any genuinely-stuck failed jobs from `/admin/system` after reading why
       they failed.
 

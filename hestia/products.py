@@ -20,6 +20,7 @@ import os
 import sqlite3
 
 from .config import Settings
+from .xai import XaiTransport
 
 # Marketplace presets (mirrors Aphrodite's marketplaces.py).
 PRESETS = [
@@ -65,8 +66,9 @@ class MockRenderer:
 class XaiRenderer:
     backend = "xai"
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, transport: XaiTransport | None = None):
         self.settings = settings
+        self.transport = transport or XaiTransport(settings)
 
     def render(self, *, image: dict, preset: dict, storage=None) -> dict:
         planned = {"status": "planned", "output_ref": image["storage_key"]}
@@ -82,18 +84,14 @@ class XaiRenderer:
         import base64
         import io
 
-        import httpx
-
         source = storage.open(image["storage_key"])
-        with httpx.Client(base_url=self.settings.xai_base_url, timeout=120) as c:
-            resp = c.post(
-                "/images/edits",
-                headers={"Authorization": f"Bearer {self.settings.xai_api_key}"},
-                data={"model": XAI_IMAGE_MODEL, "prompt": _prompt_for(preset),
-                      "response_format": "b64_json"},
-                files={"image": (image["filename"], source, "application/octet-stream")},
-            )
-        resp.raise_for_status()
+        resp = self.transport.post(
+            "/images/edits",
+            timeout=120,
+            data={"model": XAI_IMAGE_MODEL, "prompt": _prompt_for(preset),
+                  "response_format": "b64_json"},
+            files={"image": (image["filename"], source, "application/octet-stream")},
+        )
         out = base64.b64decode(resp.json()["data"][0]["b64_json"])
         out_key = f"{image['storage_key']}.{preset['key']}.{preset['format']}"
         storage.put(out_key, io.BytesIO(out), f"image/{preset['format']}")
