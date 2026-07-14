@@ -86,7 +86,9 @@ and fails closed under a high-cardinality flood. *Tests: `test_ratelimit.py`.*
   *Tests: `test_fail_closed.py`.*
 - Secrets appear only in outbound auth headers and crypto — never in a log line,
   template, error, or JSON response. `config_warnings` names a bad secret, never prints
-  its value (`test_config.py`).
+  its value (`test_config.py`). xAI transport telemetry follows the same rule: it logs
+  only operation path, status, and duration, with success and failure leak regressions
+  covered by `test_xai_transport.py`.
 - Rotating `HESTIA_SESSION_SECRET` invalidates all sessions; rotating
   `HESTIA_TENANT_KEY_PEPPER` invalidates tenant API keys + outstanding invite/reset
   tokens. Rotate on suspected compromise.
