@@ -18,20 +18,23 @@ jobs:
 
       - name: Install
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install --require-hashes -r requirements/dev.lock
+          pip install --no-deps --no-build-isolation -e .
+
+      - name: Verify dependency locks
+        run: bash scripts/lock-dependencies.sh --check
 
       - name: Build and boot installed wheel
         run: bash scripts/wheel-smoke.sh
 
-      - name: Lint + tests + healthz boot
+      - name: Build and boot production container
+        run: bash scripts/container-smoke.sh
+
+      - name: Lint + tests + runtime invariants + dogfood
         run: bash scripts/ci-smoke.sh
 
       - name: Scratch backup and restore drill
         run: bash scripts/restore-drill.sh
-
-      - name: Dogfood the magic moment (mock vision, no fleet)
-        run: bash scripts/dogfood-hestia.sh
 
       # Advisory supply-chain scan: surfaces known-CVE dependencies in the CI log without
       # blocking the merge on an unfixable transitive/tooling CVE. A solo operator reviews
@@ -39,6 +42,4 @@ jobs:
       # the hestia package itself.
       - name: Dependency vulnerability scan (advisory)
         continue-on-error: true
-        run: |
-          pip install pip-audit
-          pip-audit --skip-editable --progress-spinner=off
+        run: pip-audit --skip-editable --progress-spinner=off
