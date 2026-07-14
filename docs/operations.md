@@ -48,7 +48,7 @@ tenant-serving path end-to-end.)
 
 ## Monthly
 
-- [ ] Dependency + base-image refresh: `pip install pip-audit && pip-audit` for known
+- [ ] Dependency + base-image refresh: `pip-audit --skip-editable` for known
       CVEs, then rebuild (`docker compose build --pull`) to pick up `python:3.12-slim`
       security patches. Run `bash scripts/ci-smoke.sh` before deploying the rebuilt image.
       Security posture reference: `docs/security.md`.
