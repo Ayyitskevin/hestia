@@ -31,6 +31,7 @@ from .features import LEAD_SOURCES, SHOOT_TYPE_LABELS, SHOOT_TYPES
 from .jobs import run_worker
 from .marketing import LAUNCH_PROOF_STEPS
 from .obs import access_log, configure_logging, new_request_id, redact_path
+from .private_surfaces import PRIVATE_SURFACE_PREFIXES
 from .ratelimit import RateLimiter
 from .routes import (
     admin,
@@ -83,24 +84,6 @@ _HERE = Path(__file__).resolve().parent
 TEMPLATES_DIR = _HERE / "templates"
 STATIC_DIR = _HERE / "static"
 
-_CAPABILITY_PATH_PREFIXES = (
-    "/portal/",
-    "/d/",
-    "/pay/",
-    "/a/",
-    "/sign/",
-    "/g/",
-    "/s/",
-    "/book/",
-    "/q/",
-    "/t/",
-    "/invite/",
-    "/verify/",
-    "/reset/",
-    "/calendar/",
-    "/media/",
-    "/proposal/",
-)
 _AUTH_PATHS = frozenset({"/login", "/signup", "/forgot", "/admin"})
 
 
@@ -110,7 +93,7 @@ def _sensitive_response(request, response) -> bool:
         request.cookies.get(SESSION_COOKIE)
         or response.headers.get("set-cookie")
         or path in _AUTH_PATHS
-        or path.startswith(("/admin/", *_CAPABILITY_PATH_PREFIXES))
+        or path.startswith(("/admin/", *PRIVATE_SURFACE_PREFIXES))
     )
 
 

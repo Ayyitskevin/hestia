@@ -2,6 +2,14 @@
 
 All notable changes to Hestia are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/) and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+
+- Centralized the private-surface path registry across response hardening, access-log
+  redaction, `robots.txt`, hosted preflight, and CI. Proposal bearer tokens are now
+  redacted in real request logs and proposal pages carry an explicit `noindex` meta tag.
+
 ## [1.0.0] - 2026-07-02
 
 The go-live release. 0.1.0 froze the feature set; 1.0.0 is that product made

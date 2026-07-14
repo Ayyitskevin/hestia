@@ -31,7 +31,9 @@ rotation instantly revokes the prior link. *Tests: `test_seo_privacy.py`,
 each token page carries `noindex`; sensitive and authenticated responses also carry
 `X-Robots-Tag: noindex, nofollow, noarchive` and `Cache-Control: no-store`. CI enforces
 the crawler rules and probes the live domain. Access logs redact the credential tail
-of token paths. *Tests: `test_csp.py`, `test_seo_privacy.py`;
+of token paths. The canonical prefix registry is `hestia/private_surfaces.py`; response
+hardening, log redaction, robots output, hosted preflight, and CI all consume it.
+*Tests: `test_csp.py`, `test_seo_privacy.py`, `test_obs.py`;
 enforced by `scripts/ci-smoke.sh`.*
 
 **Media can't execute or enumerate.** Uploaded images are served with a raster-type

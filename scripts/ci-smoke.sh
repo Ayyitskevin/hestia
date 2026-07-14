@@ -28,7 +28,8 @@ curl -sf "http://127.0.0.1:$PORT/healthz" | python -c "import sys,json; d=json.l
 echo "== privacy invariants =="
 # 1) robots.txt must disallow every client-token prefix and allow everything else.
 ROBOTS="$(curl -sf "http://127.0.0.1:$PORT/robots.txt")"
-for prefix in /portal/ /d/ /pay/ /a/ /sign/ /g/ /t/ /q/ /invite/ /media/; do
+PRIVATE_PREFIXES="$(python -c 'from hestia.private_surfaces import PRIVATE_SURFACE_PREFIXES; print(*PRIVATE_SURFACE_PREFIXES)')"
+for prefix in $PRIVATE_PREFIXES; do
   echo "$ROBOTS" | grep -q "^Disallow: $prefix\$" \
     || { echo "FAIL: robots.txt missing 'Disallow: $prefix'" >&2; exit 1; }
 done

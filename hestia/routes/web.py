@@ -44,6 +44,7 @@ from ..mini_sessions import hydrate_mini_session_displays, list_published_mini_s
 from ..packages import list_packages
 from ..pipeline import list_runs
 from ..presets import preset_applied
+from ..private_surfaces import PRIVATE_SURFACE_PREFIXES
 from ..proposals import proposal_metrics
 from ..ratelimit import enforce
 from ..resets import consume_reset, create_reset, find_reset
@@ -89,9 +90,9 @@ def robots(request: Request):
     never ends up in a search index."""
     from fastapi.responses import PlainTextResponse
 
-    private = ["/portal/", "/d/", "/pay/", "/a/", "/sign/", "/g/", "/s/", "/book/",
-               "/q/", "/t/", "/invite/", "/verify/", "/reset/", "/calendar/", "/media/"]
-    lines = ["User-agent: *"] + [f"Disallow: {p}" for p in private] + ["Allow: /", ""]
+    lines = ["User-agent: *"] + [
+        f"Disallow: {prefix}" for prefix in PRIVATE_SURFACE_PREFIXES
+    ] + ["Allow: /", ""]
     return PlainTextResponse("\n".join(lines))
 
 

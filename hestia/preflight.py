@@ -25,6 +25,7 @@ from urllib.request import urlopen
 
 from .config import Settings
 from .domains import normalize_custom_domain, validate_custom_domain
+from .private_surfaces import PRIVATE_SURFACE_PREFIXES
 
 Level = Literal["pass", "warn", "fail"]
 FetchJson = Callable[[str, float], tuple[int, dict]]
@@ -32,10 +33,9 @@ FetchText = Callable[[str, float], tuple[int, str]]
 
 LOCAL_HOSTS = {"", "127.0.0.1", "::1", "0.0.0.0", "localhost", "testserver"}
 
-# Client-token prefixes that must be robots-disallowed on the LIVE domain — the
-# same list ci-smoke enforces in code; this proves the deployed box serves it.
-ROBOTS_REQUIRED = ("/portal/", "/d/", "/pay/", "/a/", "/sign/", "/g/", "/t/", "/q/",
-                   "/invite/", "/media/")
+# Private prefixes that must be robots-disallowed on the live domain. This alias
+# stays public for operator tooling while the source of truth lives in one module.
+ROBOTS_REQUIRED = PRIVATE_SURFACE_PREFIXES
 
 
 @dataclass(frozen=True)
