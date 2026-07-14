@@ -1,0 +1,5 @@
+# Packaging toolchain used by both the CI install and the production image.
+# Keep these exact so editable installation never downloads a floating backend.
+pip==26.1.2
+setuptools==83.0.0
+wheel==0.47.0

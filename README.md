@@ -209,7 +209,8 @@ Hestia is a modular monolith, not a bundle of disconnected services.
 ```bash
 python3.12 -m venv .venv
 . .venv/bin/activate
-pip install -e ".[dev]"
+pip install --require-hashes -r requirements/dev.lock
+pip install --no-deps --no-build-isolation -e .
 cp .env.example .env
 bash scripts/start-hestia.sh
 ```
@@ -275,9 +276,11 @@ Details: [`docs/architecture.md`](docs/architecture.md)
 ## Verification
 
 ```bash
-bash scripts/ci-smoke.sh        # ruff + pytest + healthz boot + privacy invariants
+bash scripts/ci-smoke.sh        # ruff + pytest + health/privacy + magic-moment dogfood
 bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke
 bash scripts/wheel-smoke.sh     # build, install, and boot the distributable artifact
+bash scripts/container-smoke.sh # build and boot the non-root production container
+bash scripts/lock-dependencies.sh --check  # prove Python 3.12 locks match project metadata
 bash scripts/hosted-preflight.sh --url https://yourdomain.com
 ```
 
