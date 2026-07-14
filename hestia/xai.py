@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any
 
 import httpx
 
 from .config import Settings
+
+log = logging.getLogger("hestia.xai")
 
 
 class XaiTransport:
@@ -18,13 +22,36 @@ class XaiTransport:
         self._model = settings.xai_model
 
     def post(self, path: str, *, timeout: float, **kwargs: Any) -> httpx.Response:
-        with httpx.Client(base_url=self._base_url, timeout=timeout) as client:
-            response = client.post(
-                path,
-                headers={"Authorization": f"Bearer {self._api_key}"},
-                **kwargs,
+        started = time.monotonic()
+        response = None
+        try:
+            with httpx.Client(base_url=self._base_url, timeout=timeout) as client:
+                response = client.post(
+                    path,
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    **kwargs,
+                )
+            response.raise_for_status()
+        except Exception:
+            log.warning(
+                "xai request failed",
+                extra={
+                    "action": "xai.request",
+                    "path": path,
+                    "status": getattr(response, "status_code", "error"),
+                    "duration_ms": round((time.monotonic() - started) * 1000),
+                },
             )
-        response.raise_for_status()
+            raise
+        log.info(
+            "xai request completed",
+            extra={
+                "action": "xai.request",
+                "path": path,
+                "status": response.status_code,
+                "duration_ms": round((time.monotonic() - started) * 1000),
+            },
+        )
         return response
 
     def chat_content(

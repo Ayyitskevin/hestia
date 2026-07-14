@@ -13,12 +13,14 @@ from hestia.albums import XaiArranger
 from hestia.content import XaiContent
 from hestia.products import PRESETS, XaiRenderer
 from hestia.vision import VisionError, XaiVisionProvider
+from hestia.xai import XaiTransport
 
 
 class _Response:
-    def __init__(self, payload: dict, error: Exception | None = None):
+    def __init__(self, payload: dict, error: Exception | None = None, status_code: int = 200):
         self.payload = payload
         self.error = error
+        self.status_code = status_code
         self.status_checked = False
 
     def raise_for_status(self) -> None:
@@ -30,9 +32,14 @@ class _Response:
         return self.payload
 
 
-def _capture_client(monkeypatch, payload: dict, error: Exception | None = None):
+def _capture_client(
+    monkeypatch,
+    payload: dict,
+    error: Exception | None = None,
+    status_code: int = 200,
+):
     calls: list[tuple] = []
-    response = _Response(payload, error)
+    response = _Response(payload, error, status_code)
 
     class Client:
         def __init__(self, **kwargs):
@@ -206,3 +213,58 @@ def test_vision_xai_transport_failure_remains_explicit(monkeypatch, settings):
 
     with pytest.raises(VisionError, match="xai vision failed: upstream unavailable"):
         XaiVisionProvider(_live(settings)).analyze(filename="frame.jpg", data=b"jpeg")
+
+
+class _LogRecorder:
+    def __init__(self):
+        self.records = []
+
+    def info(self, message: str, *, extra: dict) -> None:
+        self.records.append(("info", message, extra))
+
+    def warning(self, message: str, *, extra: dict) -> None:
+        self.records.append(("warning", message, extra))
+
+
+def test_transport_logs_metadata_only_on_success(monkeypatch, settings):
+    _capture_client(monkeypatch, {"ok": True}, status_code=201)
+    recorder = _LogRecorder()
+    monkeypatch.setattr("hestia.xai.log", recorder)
+    ticks = iter([10.0, 10.125])
+    monkeypatch.setattr("hestia.xai.time.monotonic", lambda: next(ticks))
+
+    XaiTransport(_live(settings)).post("/safe-operation", timeout=30, json={"secret": "payload"})
+
+    assert recorder.records == [(
+        "info",
+        "xai request completed",
+        {"action": "xai.request", "path": "/safe-operation", "status": 201,
+         "duration_ms": 125},
+    )]
+    assert "xai-test-secret" not in repr(recorder.records)
+    assert "payload" not in repr(recorder.records)
+
+
+def test_transport_logs_metadata_only_on_failure(monkeypatch, settings):
+    _capture_client(
+        monkeypatch,
+        {},
+        RuntimeError("failure contains sensitive upstream detail"),
+        status_code=503,
+    )
+    recorder = _LogRecorder()
+    monkeypatch.setattr("hestia.xai.log", recorder)
+    ticks = iter([20.0, 20.25])
+    monkeypatch.setattr("hestia.xai.time.monotonic", lambda: next(ticks))
+
+    with pytest.raises(RuntimeError, match="sensitive upstream detail"):
+        XaiTransport(_live(settings)).post("/safe-operation", timeout=30)
+
+    assert recorder.records == [(
+        "warning",
+        "xai request failed",
+        {"action": "xai.request", "path": "/safe-operation", "status": 503,
+         "duration_ms": 250},
+    )]
+    assert "sensitive upstream detail" not in repr(recorder.records)
+    assert "xai-test-secret" not in repr(recorder.records)
