@@ -69,25 +69,29 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 filterwarnings = ["ignore::DeprecationWarning"]
 
-# Coverage is an opt-in gate (``scripts/coverage.sh``), not the default pytest
-# run, so regular ``ci-smoke`` stays fast and a coverage dip never blocks a
-# launch on its own. The gate measures the revenue spine only — the modules a
-# $40/mo studio lives or dies by — and is run deliberately before merge.
+# Coverage remains separate from the default pytest run so regular
+# ``ci-smoke`` stays fast. Hosted CI runs ``scripts/coverage.sh`` as a blocking
+# aggregate line-coverage floor over the revenue spine. It is a regression
+# signal, not a substitute for behavior-level money invariants or human review.
 [tool.coverage.run]
 branch = false
 source = [
-    "hestia/pipeline",
-    "hestia/sales",
-    "hestia/orders",
-    "hestia/invoices",
-    "hestia/payments",
-    "hestia/fulfillment",
-    "hestia/vision",
-    "hestia/ai_usage",
-    "hestia/domains",
+    "hestia.pipeline",
+    "hestia.sales",
+    "hestia.orders",
+    "hestia.invoices",
+    "hestia.payments",
+    "hestia.payment_plans",
+    "hestia.subscriptions",
+    "hestia.fulfillment",
+    "hestia.routes.webhooks",
+    "hestia.vision",
+    "hestia.ai_usage",
+    "hestia.domains",
 ]
 
 [tool.coverage.report]
+fail_under = 70
 show_missing = true
 skip_covered = false
 exclude_lines = [
