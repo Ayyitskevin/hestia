@@ -27,6 +27,9 @@ jobs:
       - name: Build and boot installed wheel
         run: bash scripts/wheel-smoke.sh
 
+      - name: Build and boot production container
+        run: bash scripts/container-smoke.sh
+
       - name: Lint + tests + healthz boot
         run: bash scripts/ci-smoke.sh
 
