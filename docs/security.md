@@ -103,7 +103,7 @@ offending constraint in `pyproject.toml` (as we did for `cryptography>=43.0.1`).
 it before each release and monthly (see `docs/operations.md`):
 
 ```sh
-pip install pip-audit && pip-audit          # known-CVE check on installed deps
+pip-audit --skip-editable                   # known-CVE check; installed by requirements/dev.lock
 docker compose build --pull                 # pick up base-image (python:3.12-slim) patches
 ```
 
