@@ -328,6 +328,7 @@ def test_http_proposal_publish_and_accept_flow(client, app):
     assert "reminded 1 time" in client.get(f"/proposals/{proposal_id}").text
     page = public.get(f"/proposal/{token}")
     assert page.status_code == 200
+    assert '<meta name="robots" content="noindex">' in page.text
     assert "Wedding Collection" in page.text and "$1,000.00 due to reserve" in page.text
     detail = client.get(f"/proposals/{proposal_id}")
     assert "Viewed 1 time" in detail.text

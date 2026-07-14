@@ -5,6 +5,7 @@ import logging
 import sys
 
 from hestia.obs import JsonFormatter, configure_logging, new_request_id
+from hestia.private_surfaces import PRIVATE_SURFACE_PREFIXES
 
 
 def _record(level=logging.INFO, msg="request", exc=None, **extra):
@@ -62,15 +63,9 @@ def test_request_id_is_echoed_when_supplied(client):
 
 def test_redact_path_strips_token_tails():
     from hestia.obs import redact_path
-    # client bearer tokens and media keys → prefix kept, credential dropped
-    assert redact_path("/portal/abc123secret") == "/portal/[redacted]"
-    assert redact_path("/d/deliverytoken") == "/d/[redacted]"
-    assert redact_path("/pay/invtoken") == "/pay/[redacted]"
-    assert redact_path("/s/studio-slug/offertoken") == "/s/[redacted]"
-    assert redact_path("/g/studio/gallery-slug") == "/g/[redacted]"
-    assert redact_path("/calendar/tok.ics") == "/calendar/[redacted]"
-    assert redact_path("/media/3f9atenantuuid/12/800.jpg") == "/media/[redacted]"
-    assert redact_path("/invite/invtok") == "/invite/[redacted]"
+    # Every registered private surface keeps its route prefix but drops the full tail.
+    for prefix in PRIVATE_SURFACE_PREFIXES:
+        assert redact_path(f"{prefix}credential/tail") == f"{prefix}[redacted]"
     # ordinary app paths are untouched — access logging keeps its detail
     assert redact_path("/dashboard") == "/dashboard"
     assert redact_path("/admin/launch") == "/admin/launch"
@@ -102,3 +97,35 @@ def test_access_log_never_persists_a_client_token(settings, conn, storage, caplo
     logged_paths = [getattr(r, "path", "") for r in caplog.records]
     assert any(p == "/d/[redacted]" for p in logged_paths)      # route observability kept
     assert not any(token in (p or "") for p in logged_paths)    # credential never logged
+
+
+def test_access_log_never_persists_a_proposal_token(settings, conn, caplog):
+    """Regression: proposal links are bearer credentials too, including real requests."""
+    from starlette.testclient import TestClient
+
+    from hestia.main import create_app
+    from hestia.packages import create_package
+    from hestia.proposals import create_proposal, send_proposal
+    from hestia.tenants import create_tenant
+
+    tenant = create_tenant(conn, name="Proposal Log Studio", shoot_type="wedding")
+    package = create_package(
+        conn, tenant_id=tenant["id"], name="Wedding Collection", price_cents=350000
+    )
+    proposal = create_proposal(
+        conn,
+        settings,
+        tenant_id=tenant["id"],
+        package_id=package["id"],
+        title="Private proposal",
+    )
+    send_proposal(conn, tenant["id"], proposal["id"])
+    conn.commit()
+
+    with caplog.at_level("INFO", logger="hestia.access"):
+        response = TestClient(create_app(settings)).get(f"/proposal/{proposal['token']}")
+
+    assert response.status_code == 200
+    logged_paths = [getattr(record, "path", "") for record in caplog.records]
+    assert any(path == "/proposal/[redacted]" for path in logged_paths)
+    assert not any(proposal["token"] in (path or "") for path in logged_paths)

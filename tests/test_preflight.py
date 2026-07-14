@@ -4,6 +4,7 @@ import dataclasses
 from pathlib import Path
 
 from hestia.preflight import PreflightCheck, run_preflight
+from hestia.private_surfaces import PRIVATE_SURFACE_PREFIXES
 
 
 def _hosted_settings(settings, tmp_path: Path, **overrides):
@@ -73,8 +74,7 @@ def test_hosted_preflight_fails_on_launch_blockers(settings, tmp_path):
 
 
 GOOD_ROBOTS = "User-agent: *\n" + "\n".join(
-    f"Disallow: {p}" for p in ("/portal/", "/d/", "/pay/", "/a/", "/sign/", "/g/",
-                               "/t/", "/q/", "/invite/", "/media/")
+    f"Disallow: {prefix}" for prefix in PRIVATE_SURFACE_PREFIXES
 ) + "\nAllow: /\n"
 
 

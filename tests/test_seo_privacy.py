@@ -9,6 +9,7 @@ from conftest import login_owner, onboard_studio
 
 from hestia.delivery import enable_delivery
 from hestia.galleries import add_image, create_gallery, publish_gallery
+from hestia.private_surfaces import PRIVATE_SURFACE_PREFIXES
 from hestia.tenants import create_tenant
 
 
@@ -46,7 +47,25 @@ def test_token_surfaces_are_noindexed(client, conn, storage):
 def test_robots_txt_disallows_private_paths(client):
     body = client.get("/robots.txt").text
     assert "User-agent: *" in body
-    for path in ("/portal/", "/d/", "/pay/", "/a/", "/sign/", "/g/", "/t/", "/q/",
-                 "/invite/", "/media/"):
+    for path in PRIVATE_SURFACE_PREFIXES:
         assert f"Disallow: {path}" in body
     assert "Allow: /" in body                                # everything else is crawlable
+
+
+def test_registered_private_surfaces_get_response_privacy_headers(client):
+    for prefix in PRIVATE_SURFACE_PREFIXES:
+        response = client.get(f"{prefix}privacy-probe", follow_redirects=False)
+        assert response.headers["X-Robots-Tag"] == "noindex, nofollow, noarchive", prefix
+        assert response.headers["Cache-Control"] == "no-store", prefix
+
+
+def test_every_token_route_is_registered(app):
+    token_routes = {
+        route.path
+        for route in app.routes
+        if "{token}" in getattr(route, "path", "") or "{key:path}" in getattr(route, "path", "")
+    }
+    unregistered = sorted(
+        path for path in token_routes if not path.startswith(PRIVATE_SURFACE_PREFIXES)
+    )
+    assert unregistered == []
