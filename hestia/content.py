@@ -18,6 +18,7 @@ import sqlite3
 
 from .config import Settings
 from .ownership import mask_invalid_project_id
+from .xai import XaiTransport
 
 # recipe slug → (label, applicable shoot types or None for all)
 RECIPES = {
@@ -90,15 +91,14 @@ class MockContent:
 class XaiContent:
     backend = "xai"
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, transport: XaiTransport | None = None):
         self.settings = settings
+        self.transport = transport or XaiTransport(settings)
 
     def generate(self, *, project: dict, recipe: str, keywords: list[str]) -> dict:
         fallback = MockContent().generate(project=project, recipe=recipe, keywords=keywords)
         if not self.settings.xai_api_key:
             return fallback
-        import httpx
-
         prompt = (
             f"Draft a {recipe} marketing pack for a {project.get('shoot_type')} photography "
             f"project '{project.get('name')}'. Gallery keywords: {', '.join(keywords) or 'none'}. "
@@ -106,14 +106,10 @@ class XaiContent:
             "shot_list (array of strings), captions (array of strings)."
         )
         try:
-            with httpx.Client(base_url=self.settings.xai_base_url, timeout=60) as c:
-                resp = c.post("/chat/completions", json={
-                    "model": self.settings.xai_model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.7,
-                }, headers={"Authorization": f"Bearer {self.settings.xai_api_key}"})
-            resp.raise_for_status()
-            text = resp.json()["choices"][0]["message"]["content"]
+            text = self.transport.chat_content(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+            )
             body = json.loads(text[text.find("{"): text.rfind("}") + 1])
             # Validate shape; fall back per-field if the model under-delivered.
             return {

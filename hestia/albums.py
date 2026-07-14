@@ -19,6 +19,7 @@ import sqlite3
 
 from .config import Settings
 from .crypto import new_session_token
+from .xai import XaiTransport
 
 PHOTOS_PER_SPREAD = 4
 
@@ -41,15 +42,14 @@ class MockArranger:
 class XaiArranger:
     backend = "xai"
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, transport: XaiTransport | None = None):
         self.settings = settings
+        self.transport = transport or XaiTransport(settings)
 
     def propose(self, images: list[dict]) -> list[int]:
         order = [img["id"] for img in images]
         if not self.settings.xai_api_key:
             return order
-        import httpx
-
         manifest = [{"id": i["id"], "shot_type": i.get("shot_type"),
                      "hero": round(i.get("hero_potential") or 0, 2)} for i in images]
         prompt = (
@@ -58,14 +58,10 @@ class XaiArranger:
             f"once. Photos: {json.dumps(manifest)}"
         )
         try:
-            with httpx.Client(base_url=self.settings.xai_base_url, timeout=60) as c:
-                resp = c.post("/chat/completions", json={
-                    "model": self.settings.xai_model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.3,
-                }, headers={"Authorization": f"Bearer {self.settings.xai_api_key}"})
-            resp.raise_for_status()
-            text = resp.json()["choices"][0]["message"]["content"]
+            text = self.transport.chat_content(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+            )
             proposed = json.loads(text[text.find("["): text.rfind("]") + 1])
             return [int(x) for x in proposed]
         except Exception:  # noqa: BLE001 - validate_and_repair fixes any mess

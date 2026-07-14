@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 from .config import Settings
 from .storage import Storage
+from .xai import XaiTransport
 
 SHOT_TYPES = ["portrait", "candid", "detail", "wide", "group", "landscape", "still-life"]
 
@@ -304,36 +305,32 @@ class XaiVisionProvider:
 
     backend = "xai"
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, transport: XaiTransport | None = None):
         self.settings = settings
+        self.transport = transport or XaiTransport(settings)
 
     def analyze(self, *, filename: str, data: bytes, style: str = "") -> VisionResult:
         import base64
-
-        import httpx
 
         if not self.settings.xai_api_key:
             raise VisionError("HESTIA_XAI_API_KEY not set for xai vision backend")
         b64 = base64.b64encode(data).decode()
         prompt = vision_prompt(style)
-        body = {
-            "model": self.settings.xai_model,
-            "messages": [{
+        messages = [
+            {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
                     {"type": "image_url",
                      "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
                 ],
-            }],
-            "temperature": 0.2,
-        }
+            }
+        ]
         try:
-            with httpx.Client(base_url=self.settings.xai_base_url, timeout=60) as c:
-                resp = c.post("/chat/completions", json=body,
-                              headers={"Authorization": f"Bearer {self.settings.xai_api_key}"})
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
+            content = self.transport.chat_content(
+                messages=messages,
+                temperature=0.2,
+            )
             parsed = json.loads(_extract_json(content))
         except Exception as exc:  # noqa: BLE001 - degrade to a usable result
             raise VisionError(f"xai vision failed: {exc}") from exc
