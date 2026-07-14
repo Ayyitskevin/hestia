@@ -6,6 +6,9 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Security
 
+- CI now fails closed on known vulnerabilities or unauditable entries in the
+  hash-locked production dependency set, while keeping development-tool findings
+  visible as an advisory scan.
 - Centralized the private-surface path registry across response hardening, access-log
   redaction, `robots.txt`, hosted preflight, and CI. Proposal bearer tokens are now
   redacted in real request logs and proposal pages carry an explicit `noindex` meta tag.
