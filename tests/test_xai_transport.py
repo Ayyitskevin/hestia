@@ -202,6 +202,27 @@ def test_image_edit_xai_contract(monkeypatch, settings):
     )
 
 
+@pytest.mark.parametrize(
+    "encoded", [base64.b64encode(b"pixels").decode() + "%%%", ""]
+)
+def test_image_edit_xai_invalid_pixels_keep_planned_variant(monkeypatch, settings, encoded):
+    _capture_client(monkeypatch, {
+        "data": [{"b64_json": encoded}],
+    })
+    storage = _Storage()
+
+    result = XaiRenderer(_live(settings)).render(
+        image={"storage_key": "tenant/gallery/source.jpg", "filename": "source.jpg"},
+        preset=PRESETS[0],
+        storage=storage,
+    )
+
+    assert result["status"] == "planned"
+    assert result["output_ref"] == "tenant/gallery/source.jpg"
+    assert "xai render failed" in result["note"]
+    assert storage.saved is None
+
+
 def test_album_xai_transport_failure_keeps_gallery_order(monkeypatch, settings):
     _capture_client(monkeypatch, {}, RuntimeError("upstream unavailable"))
     images = [{"id": 1}, {"id": 2}]

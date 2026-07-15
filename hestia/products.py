@@ -92,7 +92,10 @@ class XaiRenderer:
                   "response_format": "b64_json"},
             files={"image": (image["filename"], source, "application/octet-stream")},
         )
-        out = base64.b64decode(resp.json()["data"][0]["b64_json"])
+        encoded = resp.json()["data"][0]["b64_json"]
+        out = base64.b64decode(encoded, validate=True)
+        if not out:
+            raise ValueError("xai image response contained no rendered bytes")
         out_key = f"{image['storage_key']}.{preset['key']}.{preset['format']}"
         storage.put(out_key, io.BytesIO(out), f"image/{preset['format']}")
         return {"status": "rendered", "output_ref": out_key, "note": f"{preset['label']} rendered"}
