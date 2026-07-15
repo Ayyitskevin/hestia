@@ -88,6 +88,20 @@ class MockContent:
         }
 
 
+def _text_or_fallback(value: object, fallback: str) -> str:
+    """Keep a nonblank model string; reject every other JSON shape."""
+    return value if isinstance(value, str) and value.strip() else fallback
+
+
+def _text_list_or_fallback(value: object, fallback: list[str]) -> list[str]:
+    """Keep a nonempty array of nonblank strings; reject malformed model output."""
+    if not isinstance(value, list) or not value:
+        return fallback
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        return fallback
+    return value
+
+
 class XaiContent:
     backend = "xai"
 
@@ -113,10 +127,12 @@ class XaiContent:
             body = json.loads(text[text.find("{"): text.rfind("}") + 1])
             # Validate shape; fall back per-field if the model under-delivered.
             return {
-                "headline": str(body.get("headline") or fallback["headline"]),
-                "strategy": str(body.get("strategy") or fallback["strategy"]),
-                "shot_list": [str(x) for x in body.get("shot_list", [])] or fallback["shot_list"],
-                "captions": [str(x) for x in body.get("captions", [])] or fallback["captions"],
+                "headline": _text_or_fallback(body.get("headline"), fallback["headline"]),
+                "strategy": _text_or_fallback(body.get("strategy"), fallback["strategy"]),
+                "shot_list": _text_list_or_fallback(
+                    body.get("shot_list"), fallback["shot_list"]
+                ),
+                "captions": _text_list_or_fallback(body.get("captions"), fallback["captions"]),
             }
         except Exception:  # noqa: BLE001
             return fallback

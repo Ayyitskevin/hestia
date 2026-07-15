@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 from hestia.albums import XaiArranger
-from hestia.content import XaiContent
+from hestia.content import MockContent, XaiContent
 from hestia.products import PRESETS, XaiRenderer
 from hestia.vision import VisionError, XaiVisionProvider
 from hestia.xai import XaiTransport
@@ -116,6 +116,34 @@ def test_content_xai_contract(monkeypatch, settings):
     kwargs = _assert_request(calls, response, path="/chat/completions", timeout=60)
     assert kwargs["json"]["model"] == "grok-test"
     assert kwargs["json"]["temperature"] == 0.7
+
+
+def test_content_xai_malformed_fields_use_per_field_fallback(monkeypatch, settings):
+    _capture_client(monkeypatch, {
+        "choices": [{"message": {"content": (
+            '{"headline":7,"strategy":"Lead","shot_list":"Hero portrait",'
+            '"captions":["Caption",null]}'
+        )}}],
+    })
+    project = {"name": "Bistro", "shoot_type": "food"}
+    fallback = MockContent().generate(
+        project=project,
+        recipe="menu-launch",
+        keywords=["steam"],
+    )
+
+    body = XaiContent(_live(settings)).generate(
+        project=project,
+        recipe="menu-launch",
+        keywords=["steam"],
+    )
+
+    assert body == {
+        "headline": fallback["headline"],
+        "strategy": "Lead",
+        "shot_list": fallback["shot_list"],
+        "captions": fallback["captions"],
+    }
 
 
 def test_vision_xai_contract(monkeypatch, settings):
