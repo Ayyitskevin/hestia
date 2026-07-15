@@ -3,7 +3,8 @@
 - **Original review:** 2026-07-13
 - **Historical baseline:** `a3f31b9c722554ddbdfcd26882c19eabcb95ad75` (`main`)
 - **Status refreshed:** 2026-07-14
-- **Current main:** `87f247abfe89950f11caf20f56df44849ed04d49`
+- **Status base:** `23ca5cf6bd2b256d210c725b750efdf104d36f17` (`main` after
+  PRs #218-#220)
 - **Scope:** preserve every product capability; improve correctness, security,
   reproducibility, maintainability, and launch confidence without changing Hestia's
   modular-monolith doctrine.
@@ -40,8 +41,8 @@ No existing feature needs to be removed to do this work.
 | Revenue-spine coverage | **Landed; semantics open** | PR #217 made the selected-suite gate block the `smoke` job and pass: 192 tests, 83.23% coverage. No branch rule requires that job yet; Stripe settlement validation and other money-state invariants remain human-gated. |
 | Custom-domain edge | **Open - human gate** | The public Caddy catch-all and on-demand TLS behavior still require infrastructure review and deployment approval. |
 | Build reproducibility and wheel contents | **Landed** | PRs #209 and #213 added locked installs, artifact checks, and the missing runtime asset. |
-| Runtime vulnerability enforcement | **Draft PR #218** | The exact runtime-lock audit is blocking and its hosted CI run is green; the change is not on `main`. The broader development-lock audit remains advisory. |
-| Deprecation enforcement | **Draft PR #219** | The `httpx` transition landed in PR #213. PR #219 removes the remaining Pillow warning and treats `DeprecationWarning` as an error; hosted CI is green, but the change is not on `main`. |
+| Runtime vulnerability enforcement | **Landed** | PR #218 made the exact runtime-lock audit block the `smoke` job. The broader development-lock audit remains advisory. |
+| Deprecation enforcement | **Landed** | The `httpx` transition landed in PR #213; PR #219 removed the remaining Pillow warning and made every `DeprecationWarning` fail pytest. |
 | Shared xAI transport | **Landed** | PR #211 consolidated the repeated transport/error seam while retaining domain-local prompts and validation. |
 | Restore and artifact evidence | **Partial** | PRs #212 and #213 added restore/artifact evidence. Offsite-sync freshness, media-backend integration, and Caddy adaptation evidence remain open. |
 | Release and license truth | **Open - human gate** | License choice, tag history, and release metadata still require a legal/product decision. |
@@ -53,11 +54,10 @@ No existing feature needs to be removed to do this work.
   delayed success events (including `checkout.session.async_payment_succeeded`); design
   the original-0065/checksum migration path; define offsite-sync success/freshness
   evidence; and review the public Caddy custom-domain edge.
-- **Medium:** review and, if accepted, land PR #218; then refresh PR #219 on the resulting
-  `main` and require combined hosted CI. After approval, implement behavior fixes and
-  regression tests for subscription terminal-state ordering, fulfillment retry safety,
-  and gallery-PIN authorization/rate limiting. Required-check/branch-ruleset enforcement
-  remains a separate owner-approved repository setting.
+- **Medium:** after approval, implement behavior fixes and regression tests for
+  subscription terminal-state ordering, fulfillment retry safety, and gallery-PIN
+  authorization/rate limiting. Required-check/branch-ruleset enforcement remains a
+  separate owner-approved repository setting.
 - **Low:** add a focused Pillow lower-bound compatibility matrix; maintain pinned Actions;
   split large modules only where tests demonstrate an ownership seam; reconcile release
   metadata after the license decision.
@@ -248,22 +248,18 @@ superseded by the remaining sequence below.
 
 ## Remaining execution sequence
 
-1. **Runtime dependency gate** - review draft PR #218 and, if accepted, land it with its
-   blocking exact-runtime audit and green hosted evidence.
-2. **Strict deprecation gate** - refresh draft PR #219 on the resulting `main`; require a
-   combined hosted run before considering it for merge.
-3. **Security and money decisions** - obtain human decisions for media-token scope and
+1. **Security and money decisions** - obtain human decisions for media-token scope and
    Stripe settlement semantics, including delayed-payment success, before changing
    authorization or financial state logic.
-4. **Schema integrity design** - produce the original-0065 compatibility fixture,
+2. **Schema integrity design** - produce the original-0065 compatibility fixture,
    checksum policy, and backup/inspection plan; stop for approval before any migration.
-5. **Durability and public-edge evidence** - define offsite-sync freshness and Caddy
+3. **Durability and public-edge evidence** - define offsite-sync freshness and Caddy
    catch-all acceptance; obtain infrastructure approval before implementation or
    deployment changes.
-6. **Approved behavior corrections** - implement subscription terminal-state,
+4. **Approved behavior corrections** - implement subscription terminal-state,
    fulfillment-retry, and gallery-PIN fixes with regression tests only within the approved
    money/security design.
-7. **Low-risk maintenance** - add focused compatibility coverage and bounded refactors;
+5. **Low-risk maintenance** - add focused compatibility coverage and bounded refactors;
    reconcile release metadata only after the license decision.
 
 ## Autonomous working contract
