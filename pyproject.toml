@@ -67,7 +67,7 @@ ignore = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-filterwarnings = ["ignore::DeprecationWarning"]
+filterwarnings = ["error::DeprecationWarning"]
 
 # Coverage remains separate from the default pytest run so regular
 # ``ci-smoke`` stays fast. Hosted CI runs ``scripts/coverage.sh`` as a blocking
