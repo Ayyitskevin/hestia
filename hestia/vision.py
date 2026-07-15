@@ -68,7 +68,10 @@ def perceptual_hash(data: bytes) -> int | None:
     try:
         with Image.open(io.BytesIO(data)) as im:
             gray = im.convert("L").resize((8, 8), Image.Resampling.LANCZOS)
-            pixels = list(gray.getdata())
+            if hasattr(gray, "get_flattened_data"):
+                pixels = list(gray.get_flattened_data())
+            else:
+                pixels = list(gray.getdata())  # Pillow < 12.1 compatibility
     except Exception:  # noqa: BLE001 - undecodable bytes are "not an image", not a crash
         return None
     avg = sum(pixels) / 64.0
