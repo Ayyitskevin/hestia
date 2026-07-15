@@ -52,9 +52,11 @@ tenant-serving path end-to-end.)
 
 ## Monthly
 
-- [ ] Dependency + base-image refresh: `pip-audit --skip-editable` for known
-      CVEs, then rebuild (`docker compose build --pull`) to pick up `python:3.12-slim`
-      security patches. Run `bash scripts/ci-smoke.sh` before deploying the rebuilt image.
+- [ ] Dependency + base-image refresh: audit `requirements/runtime.lock` with
+      `python -m pip_audit --vulnerability-service=pypi --strict --require-hashes --disable-pip -r requirements/runtime.lock`,
+      review the advisory `requirements/dev.lock` scan, then rebuild
+      (`docker compose build --pull`) to pick up `python:3.12-slim` security
+      patches. Run `bash scripts/ci-smoke.sh` before deploying the rebuilt image.
       Security posture reference: `docs/security.md`.
 - [ ] Rotate nothing on a schedule you don't have to — but confirm secrets are still
       the strong values from launch, and `.env` is still `chmod 600`.
