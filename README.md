@@ -281,7 +281,7 @@ bash scripts/coverage.sh        # blocking hosted-CI aggregate line-coverage flo
 bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke
 bash scripts/wheel-smoke.sh     # build, install, and boot the distributable artifact
 bash scripts/container-smoke.sh # build and boot the non-root production container
-bash scripts/lock-dependencies.sh --check  # prove Python 3.12 locks match project metadata
+bash scripts/lock-dependencies.sh --check  # prove Python 3.12 locks match their declared inputs
 python -m pip_audit --strict --require-hashes --disable-pip \
   --vulnerability-service=pypi -r requirements/runtime.lock  # production CVE gate
 bash scripts/hosted-preflight.sh --url https://yourdomain.com

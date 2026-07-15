@@ -1,0 +1,3 @@
+# Exact supported and audited floor for the focused Python 3.12 compatibility job.
+# Keep this aligned with the Pillow lower bound in pyproject.toml.
+Pillow==12.3.0

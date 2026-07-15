@@ -28,7 +28,7 @@ vision = [
     # Perceptual near-duplicate detection (burst-frame culling) uses Pillow to
     # compute a 64-bit average hash. Optional: without it the cull degrades to
     # the deterministic exact-duplicate floor. See hestia/vision.py.
-    "Pillow>=10.0",
+    "Pillow>=12.3",
 ]
 dev = [
     "build>=1.2",
@@ -42,7 +42,7 @@ dev = [
     "uv==0.11.28",
     "boto3>=1.34",
     "moto[s3]>=5.0",
-    "Pillow>=10.0",
+    "Pillow>=12.3",
 ]
 
 [tool.setuptools.packages.find]

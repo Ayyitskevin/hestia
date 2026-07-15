@@ -28,14 +28,14 @@ fi
 
 CHECK_DIR=""
 if [[ "$MODE" == "--check" ]]; then
-  for lock in requirements/runtime.lock requirements/dev.lock; do
+  for lock in requirements/runtime.lock requirements/dev.lock requirements/pillow-compat.lock; do
     if [[ ! -f "$lock" ]]; then
       echo "FAIL: missing committed dependency lock: $lock" >&2
       exit 1
     fi
   done
   CHECK_DIR="$(mktemp -d)"
-  cp requirements/runtime.lock requirements/dev.lock "$CHECK_DIR/"
+  cp requirements/runtime.lock requirements/dev.lock requirements/pillow-compat.lock "$CHECK_DIR/"
 fi
 
 cleanup() {
@@ -63,12 +63,23 @@ echo "== compile development lock =="
 uv pip compile "${COMMON[@]}" --all-extras "${UPGRADE[@]}" \
   --output-file requirements/dev.lock
 
+echo "== compile Pillow lower-bound compatibility lock =="
+uv pip compile requirements/pillow-compat.in \
+  --no-deps \
+  --python-version 3.12 \
+  --universal \
+  --generate-hashes \
+  --quiet \
+  --custom-compile-command "bash scripts/lock-dependencies.sh --upgrade" \
+  "${UPGRADE[@]}" \
+  --output-file requirements/pillow-compat.lock
+
 if [[ "$MODE" == "--check" ]]; then
-  for lock in runtime.lock dev.lock; do
+  for lock in runtime.lock dev.lock pillow-compat.lock; do
     if ! cmp -s "$CHECK_DIR/$lock" "requirements/$lock"; then
       echo "FAIL: requirements/$lock is stale; run bash scripts/lock-dependencies.sh --upgrade" >&2
       exit 1
     fi
   done
-  echo "dependency locks match pyproject.toml"
+  echo "dependency locks match their declared inputs"
 fi
