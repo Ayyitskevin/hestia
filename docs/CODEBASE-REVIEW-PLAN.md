@@ -1,12 +1,18 @@
 # Hestia codebase review and improvement plan
 
-**Reviewed:** 2026-07-13
-**Baseline:** `a3f31b9c722554ddbdfcd26882c19eabcb95ad75` (`main`)
-**Scope:** preserve every product capability; improve correctness, security,
-reproducibility, maintainability, and launch confidence without changing Hestia's
-modular-monolith doctrine.
+- **Original review:** 2026-07-13
+- **Historical baseline:** `a3f31b9c722554ddbdfcd26882c19eabcb95ad75` (`main`)
+- **Status refreshed:** 2026-07-14
+- **Current main:** `87f247abfe89950f11caf20f56df44849ed04d49`
+- **Scope:** preserve every product capability; improve correctness, security,
+  reproducibility, maintainability, and launch confidence without changing Hestia's
+  modular-monolith doctrine.
 
-## Executive assessment
+## Executive assessment (historical)
+
+This assessment describes the frozen 2026-07-13 baseline above. Its counts and observed
+failures remain as review evidence; they are not claims about current `main`. See the
+status matrix below for the disposition of each finding.
 
 Hestia is not a prototype that needs a rewrite. It is a coherent, unusually well-tested
 vertical SaaS: roughly 25k application lines, 22k test lines, 69 forward migrations, and
@@ -25,7 +31,41 @@ The architecture should remain:
 
 No existing feature needs to be removed to do this work.
 
-## Verified baseline
+## Current status - 2026-07-14
+
+| Review area | Status | Evidence and remaining gate |
+|---|---|---|
+| Private-surface policy | **Landed** | Canonical policy and regressions merged in PR #207. Media-token authorization semantics are a separate security/product decision and remain open. |
+| Migration integrity | **Open - human gate** | The original-0065/checksum and partial-DDL design still requires schema approval, compatibility fixtures, and a live-data backup plan. |
+| Revenue-spine coverage | **Landed; semantics open** | PR #217 made the selected-suite gate block the `smoke` job and pass: 192 tests, 83.23% coverage. No branch rule requires that job yet; Stripe settlement validation and other money-state invariants remain human-gated. |
+| Custom-domain edge | **Open - human gate** | The public Caddy catch-all and on-demand TLS behavior still require infrastructure review and deployment approval. |
+| Build reproducibility and wheel contents | **Landed** | PRs #209 and #213 added locked installs, artifact checks, and the missing runtime asset. |
+| Runtime vulnerability enforcement | **Draft PR #218** | The exact runtime-lock audit is blocking and its hosted CI run is green; the change is not on `main`. The broader development-lock audit remains advisory. |
+| Deprecation enforcement | **Draft PR #219** | The `httpx` transition landed in PR #213. PR #219 removes the remaining Pillow warning and treats `DeprecationWarning` as an error; hosted CI is green, but the change is not on `main`. |
+| Shared xAI transport | **Landed** | PR #211 consolidated the repeated transport/error seam while retaining domain-local prompts and validation. |
+| Restore and artifact evidence | **Partial** | PRs #212 and #213 added restore/artifact evidence. Offsite-sync freshness, media-backend integration, and Caddy adaptation evidence remain open. |
+| Release and license truth | **Open - human gate** | License choice, tag history, and release metadata still require a legal/product decision. |
+
+### Current priority map
+
+- **High - human-gated:** decide media capability scope; validate Stripe settlement
+  amount, currency, payment status, provider session identity, and both immediate and
+  delayed success events (including `checkout.session.async_payment_succeeded`); design
+  the original-0065/checksum migration path; define offsite-sync success/freshness
+  evidence; and review the public Caddy custom-domain edge.
+- **Medium:** review and, if accepted, land PR #218; then refresh PR #219 on the resulting
+  `main` and require combined hosted CI. After approval, implement behavior fixes and
+  regression tests for subscription terminal-state ordering, fulfillment retry safety,
+  and gallery-PIN authorization/rate limiting. Required-check/branch-ruleset enforcement
+  remains a separate owner-approved repository setting.
+- **Low:** add a focused Pillow lower-bound compatibility matrix; maintain pinned Actions;
+  split large modules only where tests demonstrate an ownership seam; reconcile release
+  metadata after the license decision.
+
+## Historical verified baseline (frozen 2026-07-13)
+
+The following evidence is intentionally preserved as observed at commit `a3f31b9`. Later
+rows and prose in this section are historical even where the current status is now green.
 
 | Gate | Result | Evidence |
 |---|---|---|
@@ -42,7 +82,10 @@ No existing feature needs to be removed to do this work.
 The full suite emits one forward-compatibility warning: Starlette's TestClient path is
 deprecating its `httpx` backend in favor of `httpx2`.
 
-## Findings, ordered by risk
+## Historical findings, ordered by original risk
+
+The headings and bodies below are frozen 2026-07-13 findings, not the current risk order.
+The current status matrix above is the source of truth for their disposition.
 
 ### P0 - private bearer-token policy has drifted across multiple consumers
 
@@ -181,7 +224,10 @@ The backup, restore, preflight, and integrity stories are strong. Add scheduled 
 Do not deploy new infrastructure merely to satisfy a checklist; add only the evidence
 for infrastructure Hestia actually uses.
 
-## Execution sequence
+## Original execution sequence (historical)
+
+This sequence records the 2026-07-13 plan. It is preserved for traceability and is
+superseded by the remaining sequence below.
 
 1. **Security registry coherence** - central private-surface policy, proposal-token
    regression, complete privacy CI. PR and review required.
@@ -199,6 +245,26 @@ for infrastructure Hestia actually uses.
    container evidence.
 8. **Product deepening only after the quality floor** - validate the live vision path and
    style-profile behavior against real photography workflows; do not add broad new modules.
+
+## Remaining execution sequence
+
+1. **Runtime dependency gate** - review draft PR #218 and, if accepted, land it with its
+   blocking exact-runtime audit and green hosted evidence.
+2. **Strict deprecation gate** - refresh draft PR #219 on the resulting `main`; require a
+   combined hosted run before considering it for merge.
+3. **Security and money decisions** - obtain human decisions for media-token scope and
+   Stripe settlement semantics, including delayed-payment success, before changing
+   authorization or financial state logic.
+4. **Schema integrity design** - produce the original-0065 compatibility fixture,
+   checksum policy, and backup/inspection plan; stop for approval before any migration.
+5. **Durability and public-edge evidence** - define offsite-sync freshness and Caddy
+   catch-all acceptance; obtain infrastructure approval before implementation or
+   deployment changes.
+6. **Approved behavior corrections** - implement subscription terminal-state,
+   fulfillment-retry, and gallery-PIN fixes with regression tests only within the approved
+   money/security design.
+7. **Low-risk maintenance** - add focused compatibility coverage and bounded refactors;
+   reconcile release metadata only after the license decision.
 
 ## Autonomous working contract
 
