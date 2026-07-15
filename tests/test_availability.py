@@ -77,6 +77,64 @@ def test_slots_stepped_by_duration(conn):
     assert slots == ["2030-06-03 09:00", "2030-06-03 10:00"]     # 11:00 wouldn't fit a 60-min session
 
 
+def test_overlapping_windows_emit_each_exact_start_once(conn):
+    t = _tenant(conn)
+    for start, end in ((540, 660), (540, 660), (600, 720), (570, 690)):
+        add_window(
+            conn,
+            tenant_id=t["id"],
+            weekday=_WD,
+            start_minute=start,
+            end_minute=end,
+        )
+
+    slots = _flat(
+        available_slots(
+            conn,
+            t["id"],
+            duration_minutes=60,
+            days=0,
+            today=_DAY,
+            now=_MIDNIGHT,
+        )
+    )
+
+    assert slots == [
+        "2030-06-03 09:00",
+        "2030-06-03 09:30",
+        "2030-06-03 10:00",
+        "2030-06-03 10:30",
+        "2030-06-03 11:00",
+    ]
+
+
+def test_duplicate_windows_do_not_consume_display_limit(conn):
+    t = _tenant(conn)
+    for weekday in range(7):
+        for _ in range(2):
+            add_window(
+                conn,
+                tenant_id=t["id"],
+                weekday=weekday,
+                start_minute=0,
+                end_minute=24 * 60,
+            )
+
+    slots = _flat(
+        available_slots(
+            conn,
+            t["id"],
+            duration_minutes=60,
+            days=14,
+            today=_DAY,
+            now=_MIDNIGHT - datetime.timedelta(minutes=1),
+        )
+    )
+
+    assert len(slots) == 200
+    assert len(set(slots)) == 200
+
+
 def test_past_slots_excluded(conn):
     t = _tenant(conn)
     add_window(conn, tenant_id=t["id"], weekday=_WD, start_minute=540, end_minute=660)

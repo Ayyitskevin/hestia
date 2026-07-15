@@ -133,8 +133,8 @@ def _overlaps(start: datetime.datetime, end: datetime.datetime, busy) -> bool:
 
 def _generate(conn: sqlite3.Connection, tenant_id: str, *, duration_minutes: int,
               days: int, today: datetime.date, now: datetime.datetime) -> list[datetime.datetime]:
-    """All open slot starts for the window, sorted — stepped by duration, future-only,
-    excluding times that overlap an existing session."""
+    """All unique open slot starts for the window, sorted — stepped by duration,
+    future-only, excluding times that overlap an existing session."""
     dur = max(1, int(duration_minutes or 60))
     windows: dict[int, list[tuple[int, int]]] = {}
     for r in conn.execute(
@@ -151,7 +151,9 @@ def _generate(conn: sqlite3.Connection, tenant_id: str, *, duration_minutes: int
     buffer_td = datetime.timedelta(minutes=buffer_min)
     # pad each busy interval by the buffer so slots can't butt right up against a session
     busy = [(bs - buffer_td, be + buffer_td) for bs, be in _busy_intervals(conn, tenant_id, today)]
-    slots = []
+    # Repeated or aligned windows can describe the same start. That is one
+    # bookable option, and duplicates must not consume the display limit.
+    slots: set[datetime.datetime] = set()
     for offset in range(days + 1):
         d = today + datetime.timedelta(days=offset)
         for ws, we in sorted(windows.get(d.weekday(), [])):
@@ -160,10 +162,9 @@ def _generate(conn: sqlite3.Connection, tenant_id: str, *, duration_minutes: int
                 start = datetime.datetime.combine(d, datetime.time(t // 60, t % 60))
                 end = start + datetime.timedelta(minutes=dur)
                 if start > earliest and not _overlaps(start, end, busy):
-                    slots.append(start)
+                    slots.add(start)
                 t += dur
-    slots.sort()
-    return slots
+    return sorted(slots)
 
 
 def _booking_rules(conn: sqlite3.Connection, tenant_id: str) -> tuple[int, int]:
