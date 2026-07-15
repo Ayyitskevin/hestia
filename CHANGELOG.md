@@ -6,6 +6,9 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Security
 
+- Raised the optional image-processing floor to the current audited Pillow 12.3
+  release, excluding older versions with known advisories, and added a hash-locked
+  focused CI gate for the lower-bound image delivery and perceptual-hash paths.
 - CI now fails closed on known vulnerabilities or unauditable entries in the
   hash-locked production dependency set, while keeping development-tool findings
   visible as an advisory scan.

@@ -97,22 +97,26 @@ and fails closed under a high-cardinality flood. *Tests: `test_ratelimit.py`.*
 
 ## Dependency & supply-chain hygiene
 
-CI audits both committed Python 3.12 locks on every pull request and direct push
-to `main`. The runtime lock is blocking because it is the exact dependency set
-installed in the production image. The gate requires pins and hashes, disables
-fresh dependency resolution, fails on unauditable entries, and retries any
-nonzero audit result three times within a three-minute ceiling. The development
-lock remains advisory so a CVE in test or lint tooling is visible without
-blocking application delivery.
+CI audits the committed Python 3.12 runtime, development, and Pillow compatibility
+locks on every pull request and direct push to `main`. The runtime lock is the exact
+dependency set installed in the production image. The blocking gate covers it and
+the exact Pillow compatibility floor: it requires pins and hashes, disables fresh
+dependency resolution, fails on vulnerabilities or unauditable entries, and retries
+any nonzero audit result three times within a three-minute ceiling. The development
+lock remains advisory so a CVE in test or lint tooling is visible without blocking
+application delivery. The hash-locked Pillow 12.3 install runs the focused
+image-delivery and perceptual-hash tests at the supported API floor; the full suite
+continues to exercise the current development pin.
 
 Review each finding and raise the offending constraint in `pyproject.toml` (as
 we did for `cryptography>=43.0.1`) or `requirements/build.in` for build tools,
-then regenerate both locks. Also run the audits before each release and monthly
+then regenerate all locks. Also run the audits before each release and monthly
 (see `docs/operations.md`):
 
 ```sh
 python -m pip_audit --vulnerability-service=pypi --strict --require-hashes \
-  --disable-pip --progress-spinner=off -r requirements/runtime.lock
+  --disable-pip --progress-spinner=off -r requirements/runtime.lock \
+  -r requirements/pillow-compat.lock
 python -m pip_audit --vulnerability-service=pypi --strict --require-hashes \
   --disable-pip --progress-spinner=off -r requirements/dev.lock  # advisory in CI
 docker compose build --pull                 # pick up base-image (python:3.12-slim) patches
