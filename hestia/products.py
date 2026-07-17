@@ -15,9 +15,12 @@ Idempotent: one variant set per gallery, regenerated in place.
 
 from __future__ import annotations
 
+import base64
+import io
 import json
-import os
 import sqlite3
+
+from PIL import Image, ImageOps
 
 from .config import Settings
 from .xai import XaiTransport
@@ -38,9 +41,125 @@ PRESETS = [
 PRESETS_BY_KEY = {p["key"]: p for p in PRESETS}
 
 
-# xAI Grok Imagine image model. Env-overridable so it can be corrected without a
-# code change; verify against xAI's current image API before going live.
-XAI_IMAGE_MODEL = os.getenv("HESTIA_XAI_IMAGE_MODEL", "grok-2-image-1212")
+# xAI accepts image-edit sources as JSON data URIs, which expands the source in
+# memory. Keep the provider boundary below its documented 20 MiB image-input cap.
+_MAX_SOURCE_BYTES = 20 * 1024 * 1024
+_MAX_SOURCE_PIXELS = 60_000_000
+_MAX_SOURCE_SIDE = 20_000
+
+# Imagine currently returns at most a 2K image. These ceilings leave generous
+# headroom while preventing a malformed Base64 payload or decompression bomb from
+# consuming unbounded memory before the result reaches tenant storage.
+_MAX_RENDER_BYTES = 20 * 1024 * 1024
+_MAX_RENDER_PIXELS = 4096 * 4096
+_MAX_RENDER_SIDE = 4096
+_MAX_RESPONSE_BYTES = 4 * ((_MAX_RENDER_BYTES + 2) // 3) + 64 * 1024
+
+_MIME_BY_IMAGE_FORMAT = {"JPEG": "image/jpeg", "PNG": "image/png"}
+_IMAGE_FORMAT_BY_PRESET = {"jpg": "JPEG", "png": "PNG"}
+
+
+def _inspect_image(
+    data: bytes,
+    *,
+    label: str,
+    max_bytes: int,
+    max_pixels: int,
+    max_side: int,
+) -> tuple[str, str]:
+    if not data:
+        raise ValueError(f"{label} contained no image bytes")
+    if len(data) > max_bytes:
+        raise ValueError(f"{label} exceeds the {max_bytes}-byte limit")
+
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image_format = image.format or ""
+            if image_format not in _MIME_BY_IMAGE_FORMAT:
+                raise ValueError(f"{label} format {image_format or 'unknown'} is unsupported")
+            width, height = image.size
+            if (
+                width <= 0
+                or height <= 0
+                or max(width, height) > max_side
+                or width * height > max_pixels
+            ):
+                raise ValueError(f"{label} dimensions {width}x{height} exceed the safe limit")
+            # Verify the encoded container first, then reopen and load below to
+            # force a full pixel decode. Header or magic-byte checks alone accept
+            # truncated and otherwise corrupt images.
+            image.verify()
+        with Image.open(io.BytesIO(data)) as image:
+            image.load()
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(f"{label} is not a decodable image") from exc
+
+    return image_format, _MIME_BY_IMAGE_FORMAT[image_format]
+
+
+def _canonicalize_rendered_image(data: bytes, *, preset: dict) -> tuple[bytes, str]:
+    expected_format = _IMAGE_FORMAT_BY_PRESET.get(preset["format"])
+    if expected_format is None:
+        raise ValueError(f"unsupported product preset format: {preset['format']}")
+    target_size = (preset["width"], preset["height"])
+    if (
+        min(target_size) <= 0
+        or max(target_size) > _MAX_RENDER_SIDE
+        or target_size[0] * target_size[1] > _MAX_RENDER_PIXELS
+    ):
+        raise ValueError("product preset dimensions exceed the safe render limit")
+    _inspect_image(
+        data,
+        label="xai image response",
+        max_bytes=_MAX_RENDER_BYTES,
+        max_pixels=_MAX_RENDER_PIXELS,
+        max_side=_MAX_RENDER_SIDE,
+    )
+
+    # A single-image xAI edit preserves the source aspect ratio and returns a
+    # provider-sized raster (currently 1K/2K), not Hestia's exact marketplace
+    # dimensions. Center-crop and resize deterministically, then re-encode into
+    # the promised format. This also strips provider metadata.
+    canonical = io.BytesIO()
+    with Image.open(io.BytesIO(data)) as image:
+        image.load()
+        image = ImageOps.fit(image, target_size, method=Image.Resampling.LANCZOS)
+        if expected_format == "JPEG":
+            if "A" in image.getbands():
+                flattened = Image.new("RGBA", image.size, "white")
+                flattened.alpha_composite(image.convert("RGBA"))
+                image = flattened
+            image.convert("RGB").save(canonical, format="JPEG", quality=95, optimize=True)
+        else:
+            image = image.convert("RGBA")
+            if preset.get("background") == "transparent":
+                alpha_min, _ = image.getchannel("A").getextrema()
+                if alpha_min == 255:
+                    raise ValueError("xai image response has no retained transparent pixels")
+            image.save(canonical, format="PNG", optimize=True)
+    rendered = canonical.getvalue()
+    if not rendered or len(rendered) > _MAX_RENDER_BYTES:
+        raise ValueError("canonical xai image response exceeds the decoded size limit")
+    return rendered, _MIME_BY_IMAGE_FORMAT[expected_format]
+
+
+def _decode_rendered_image(encoded: object) -> bytes:
+    if not isinstance(encoded, str) or not encoded:
+        raise ValueError("xai image response contained no rendered image")
+    max_encoded = 4 * ((_MAX_RENDER_BYTES + 2) // 3)
+    if len(encoded) > max_encoded:
+        raise ValueError("xai image response exceeds the encoded size limit")
+    try:
+        rendered = base64.b64decode(encoded, validate=True)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("xai image response was not strict Base64") from exc
+    if not rendered:
+        raise ValueError("xai image response contained no rendered bytes")
+    if len(rendered) > _MAX_RENDER_BYTES:
+        raise ValueError("xai image response exceeds the decoded size limit")
+    return rendered
 
 
 def _prompt_for(preset: dict) -> str:
@@ -69,6 +188,8 @@ class XaiRenderer:
     def __init__(self, settings: Settings, transport: XaiTransport | None = None):
         self.settings = settings
         self.transport = transport or XaiTransport(settings)
+        self._source_cache_key: str | None = None
+        self._source_data_uri: str | None = None
 
     def render(self, *, image: dict, preset: dict, storage=None) -> dict:
         planned = {"status": "planned", "output_ref": image["storage_key"]}
@@ -80,24 +201,48 @@ class XaiRenderer:
         except Exception as exc:  # noqa: BLE001 - never break the set on a render miss
             return {**planned, "note": f"xai render failed, planned: {exc}"}
 
-    def _render_live(self, *, image: dict, preset: dict, storage) -> dict:
-        import base64
-        import io
+    def _source_uri(self, *, image: dict, storage) -> str:
+        storage_key = image["storage_key"]
+        if storage_key == self._source_cache_key and self._source_data_uri is not None:
+            return self._source_data_uri
+        declared_size = image.get("bytes")
+        if isinstance(declared_size, int) and declared_size > _MAX_SOURCE_BYTES:
+            raise ValueError("xai source metadata exceeds the provider size limit")
+        source = storage.open(storage_key)
+        _, source_mime = _inspect_image(
+            source,
+            label="xai source",
+            max_bytes=_MAX_SOURCE_BYTES,
+            max_pixels=_MAX_SOURCE_PIXELS,
+            max_side=_MAX_SOURCE_SIDE,
+        )
+        data_uri = f"data:{source_mime};base64,{base64.b64encode(source).decode()}"
+        self._source_cache_key = storage_key
+        self._source_data_uri = data_uri
+        return data_uri
 
-        source = storage.open(image["storage_key"])
+    def _render_live(self, *, image: dict, preset: dict, storage) -> dict:
+        source_uri = self._source_uri(image=image, storage=storage)
         resp = self.transport.post(
             "/images/edits",
             timeout=120,
-            data={"model": XAI_IMAGE_MODEL, "prompt": _prompt_for(preset),
-                  "response_format": "b64_json"},
-            files={"image": (image["filename"], source, "application/octet-stream")},
+            max_response_bytes=_MAX_RESPONSE_BYTES,
+            json={
+                "model": self.settings.xai_image_model,
+                "prompt": _prompt_for(preset),
+                "image": {
+                    "type": "image_url",
+                    "url": source_uri,
+                },
+                "resolution": "2k",
+                "response_format": "b64_json",
+            },
         )
         encoded = resp.json()["data"][0]["b64_json"]
-        out = base64.b64decode(encoded, validate=True)
-        if not out:
-            raise ValueError("xai image response contained no rendered bytes")
+        out = _decode_rendered_image(encoded)
+        out, output_mime = _canonicalize_rendered_image(out, preset=preset)
         out_key = f"{image['storage_key']}.{preset['key']}.{preset['format']}"
-        storage.put(out_key, io.BytesIO(out), f"image/{preset['format']}")
+        storage.put(out_key, io.BytesIO(out), output_mime)
         return {"status": "rendered", "output_ref": out_key, "note": f"{preset['label']} rendered"}
 
 

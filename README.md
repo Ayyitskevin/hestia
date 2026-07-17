@@ -252,6 +252,11 @@ Beta AI subsidy (when vision uses `xai`): `HESTIA_AI_SUBSIDY_ENABLED` (default `
 `HESTIA_AI_SUBSIDY_GALLERIES` (default `1` live gallery per studio),
 `HESTIA_AI_SUBSIDY_IMAGE_CAP` (default `150` images). After the subsidy is used, new
 galleries fall back to mock cull — see [`docs/launch-week1.md`](docs/launch-week1.md).
+Product-photo edits use the separate `HESTIA_XAI_IMAGE_MODEL` setting (default
+`grok-imagine-image-quality`). Hestia streams provider responses through a hard
+byte cap, accepts only bounded and fully decodable JPEG/PNG rasters, then
+deterministically crops, resizes, and re-encodes each result to its marketplace
+preset. A transparent preset still requires real nonopaque pixels.
 
 Real backends should fail loudly in logs and degrade to safe behavior where the
 product path allows it. Billing and payment secrets stay in untracked environment

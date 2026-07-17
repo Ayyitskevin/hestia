@@ -111,9 +111,8 @@ jobs:
 
           project = tomllib.loads(Path("pyproject.toml").read_text())
           floor = ".".join(__version__.split(".")[:2])
-          for extra in ("vision", "dev"):
-              requirements = project["project"]["optional-dependencies"][extra]
-              assert f"Pillow>={floor}" in requirements, (extra, requirements)
+          requirements = project["project"]["dependencies"]
+          assert f"Pillow>={floor}" in requirements, requirements
 
           assert hasattr(Image.new("L", (1, 1)), "get_flattened_data")
           PY

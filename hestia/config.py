@@ -51,6 +51,7 @@ class Settings:
     xai_api_key: str = ""
     xai_base_url: str = "https://api.x.ai/v1"
     xai_model: str = "grok-2-vision-1212"
+    xai_image_model: str = "grok-imagine-image-quality"
 
     # Album arrangement provider (model proposes order, code validates placement)
     album_backend: str = "mock"  # mock | xai
@@ -124,6 +125,9 @@ class Settings:
             xai_api_key=os.getenv("HESTIA_XAI_API_KEY", os.getenv("XAI_API_KEY", "")),
             xai_base_url=os.getenv("HESTIA_XAI_BASE_URL", "https://api.x.ai/v1"),
             xai_model=os.getenv("HESTIA_XAI_MODEL", "grok-2-vision-1212"),
+            xai_image_model=os.getenv(
+                "HESTIA_XAI_IMAGE_MODEL", "grok-imagine-image-quality"
+            ),
             album_backend=os.getenv("HESTIA_ALBUM_BACKEND", "mock"),
             content_backend=os.getenv("HESTIA_CONTENT_BACKEND", "mock"),
             product_backend=os.getenv("HESTIA_PRODUCT_BACKEND", "mock"),

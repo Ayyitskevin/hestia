@@ -51,6 +51,15 @@ run survives a restart. See [`jobs.py`](../hestia/jobs.py).
 Every seam keeps the whole flow testable in CI with no keys, and degrades safely
 when a real backend errors.
 
+Product-photo edits use xAI's JSON data-URI contract. Source and rendered images
+are byte, side, and pixel bounded and fully decoded with Pillow, and the shared
+xAI transport enforces a response limit while streaming before JSON parsing.
+Malformed output or an opaque result for a transparent preset remains an honest
+planned variant and is never written to storage. Valid provider-sized output is
+center-cropped, resized, and canonically re-encoded before persistence so its
+bytes, dimensions, extension, MIME type, and preset metadata agree. One validated
+source data URI is reused across the preset set for an image.
+
 ## Modules
 
 | Module | Responsibility |
