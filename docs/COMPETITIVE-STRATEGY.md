@@ -1,20 +1,21 @@
 # Hestia Competitive Strategy & Build Roadmap
 
-Derived from a verified competitive deep-research pass (2026-06; 24 adversarially
-verified claims across HoneyBook, Dubsado, Pixieset, Pic-Time, Aftershoot, + Bain
-SaaS-pricing data). Pairs with [`HESTIA-DOCTRINE.md`](HESTIA-DOCTRINE.md) (the *what/why*);
-this doc is the *competitive landscape + what-to-build-next*.
+Originally derived from a verified competitive deep-research pass (2026-06; 24
+adversarially verified claims across HoneyBook, Dubsado, Pixieset, Pic-Time,
+Aftershoot, and Bain pricing data). Pricing, gallery capability, and Hestia build
+status were re-verified against official sources on 2026-07-17. Pairs with
+[`HESTIA-DOCTRINE.md`](HESTIA-DOCTRINE.md) (the *what/why*); this doc is the
+*competitive landscape + what-to-build-next*.
 
 ## Executive summary
 
 The market is collapsing into one fight. CRM incumbents (**Dubsado**, **HoneyBook**)
-own booking → contract → invoice but have weak galleries and bolt-on AI. Gallery
-players (**Pixieset**, **Pic-Time**) are weaponizing delivery into automated
-print-revenue engines. And the acute threat — **Aftershoot** (June 2026) — turned
-the best-in-class AI culling/editing tool into a full delivery platform (built-in
-galleries, proofing, face search, print store; **$45/mo flat, unlimited processing**;
-migration tooling *from* Pixieset/ShootProof/Pic-Time), collapsing edit → deliver →
-sell into one app and invading Hestia's after-the-shoot loop.
+own booking → contract → invoice, while gallery players (**Pixieset**, **Pic-Time**)
+weaponize delivery into automated print-revenue engines. HoneyBook can no longer be
+described as gallery-weak: its July 2026 photographer release added native galleries
+and mini sessions, with 200 GB on Starter and unlimited gallery storage above it.
+The acute threat — **Aftershoot** — now combines AI culling/editing with galleries,
+proofing, face search, and print sales, collapsing edit → deliver → sell into one app.
 
 **Hestia's moat is the only thing none of them have: the *whole* loop as one
 idempotent system** — inquiry → contract → invoice → retention *and* gallery → AI →
@@ -22,21 +23,24 @@ offer — where the same vision signal that culls also auto-builds the offer, dr
 the album, and seeds the marketing pack. Aftershoot attacks from the AI-tool side
 inward; Hestia owns the business-OS side it doesn't touch.
 
-**The credibility hole has moved:** Hestia's booking-side table stakes are now built
-on `main` — contracts, e-sign, scheduling, questionnaires, payment plans, portal, and
-automations all exist on the shared spine. The remaining gap is competitive depth in
-`vision`: credible cull/duplicate/blink parity and live style-profile validation, so
-the AI signal that powers offers, albums, and retention is strong enough to compete
-with dedicated after-the-shoot tools.
+**The credibility hole has moved:** Hestia's booking-side table stakes are built on
+`main`, and blink scoring, perceptual duplicate clustering, cull application, hero
+selection, and style profiles already exist. The remaining vision gap is evidence and
+resilience: bounded live-provider results, explicit fallback, owner-reviewable
+calibration data, and a labeled/live quality benchmark. Two product-truth gaps matter
+just as much: the print-lab module is still a provider seam without shipping/selected
+print semantics, and the flat $40 promise does not yet explain the one-gallery hosted
+AI subsidy limit.
 
 ## The prioritized build roadmap
 
 Each item is a vertical slice through the tenant → client → project → gallery spine.
 
-> **Build status (delivered):** items 1–9, 11, 12 are shipped and on `main`. The full
-> lifecycle runs end to end — visitor → inquiry → booking → contract → deposit →
-> questionnaire → shoot → gallery → proofing → AI-curated offer → sale → fulfillment →
-> retention. Only item 10 (deepen `vision`) remains, gated on the live xAI backend.
+> **Build status:** the application foundations for items 1–8, 11, and 12 exist on
+> `main`. This records code presence, not production-depth parity. Item 9 has a
+> structured mock-first/configurable HTTP lab seam, but not a lab-specific adapter or
+> selected-image/options/shipping capture. Item 10 is partially delivered; live quality
+> and resilience evidence remain open.
 
 ### Phase 1 — Contract-to-cash credibility (makes Hestia a real studio CRM)
 1. ✅ **Contracts + e-signature** on the client/project spine (`crm`) — biggest table-stakes gap.
@@ -53,11 +57,17 @@ Each item is a vertical slice through the tenant → client → project → gall
 7. ✅ **Gallery proofing** + client favorites/comments (favorites feed `sales` curation).
 8. ✅ **Sales automation campaigns** on `sales` — urgency-gated, time-limited sales **auto-curated
    from Hestia's own vision signal + the client's favorites** (the differentiator Pic-Time cannot match).
-9. ✅ **Print-store fulfillment** seam (WHCC/Bay Photo class) — purchasable offers settle to a lab order.
+9. 🟡 **Print-store fulfillment foundation** (WHCC/Bay Photo class) — purchasable
+   offers create a structured lab-order payload through a mock-first/configurable
+   generic HTTP seam. A lab-specific adapter plus selected-image, option, shipping
+   capture, and production retry semantics remain human-gated.
 
 ### Phase 4 — AI compounding + retention (the durable moat)
-10. **Deepen `vision`** to credible cull/dup/blink-rejection parity + custom AI style
-    profiles gated by tier. *(Remaining — needs the live xAI backend to be meaningful.)*
+10. 🟡 **Deepen `vision`** — blink scoring, perceptual duplicate clustering, cull
+    application, hero selection, and style profiles exist. Next: bounded live-result
+    validation, explicit whole-gallery fallback, owner calibration export, and a
+    labeled/live quality benchmark. Paid API calls and real/customer photography
+    remain human-gated.
 11. ✅ **Retention/upsell automations** (anniversary re-book, review requests, welcome) — delayed rules.
 12. ✅ **Mobile-responsive** client + photographer surfaces.
 
@@ -73,22 +83,40 @@ Each item is a vertical slice through the tenant → client → project → gall
 
 ## Pricing & packaging
 
-Bain: **hybrid pricing wins** — a flat base + a light AI usage/feature meter (~65% of
-SaaS vendors adding AI went hybrid; per-seat breaks for AI agents). Aftershoot ($45
-flat, AI gated by tier) and Pixieset (storage-tiered, **15% print commission** as the
-upgrade lever) bracket the market; HoneyBook's Feb-2025 51–89% price hike drove churn
-*to* Dubsado. Annual ≈ 20% discount is segment-standard.
+Official monthly prices re-verified 2026-07-17 (annual commitments shown as their
+advertised monthly equivalent):
 
-**Hestia packaging** is now intentionally simpler than the bracketed incumbents:
-one hosted plan, **Hestia Studio at $40/month after a 14-day trial**, with the full
-command center included. No paid tiers, no annual-lock discount games, no surprise
-print commission. The wedge is a low-friction flat subscription that feels like a
-bargain next to a stack of 5-7 disconnected tools.
+| Product | Entry | More comparable integrated tier |
+|---|---:|---:|
+| [HoneyBook](https://help.honeybook.com/en/articles/2418282-what-s-included-in-each-honeybook-membership-plan) | Starter $36 monthly / $29 annual | Essentials $59 / $49 |
+| [Pixieset Suite](https://pixieset.com/pricing-suite/) | Starter $35 monthly / $28 annual | Pro $50 / $38 |
+| [Pic-Time](https://www.pic-time.com/pricing/client-delivery-suite) | Beginner $8 monthly / $7 annual | Pro $25 / $21 |
+| [Aftershoot Complete](https://aftershoot.com/complete/) | — | $55 monthly / $45 annual for Select + Edit + Retouch; Galleries separate |
+| Hestia Studio | $40 monthly | one plan; no annual discount |
+
+Hestia is therefore **not universally the cheaper sticker-price option**. It is below
+HoneyBook Essentials and Pixieset Pro on month-to-month price, and below Aftershoot
+Complete's AI bundle sticker, though [Aftershoot Galleries](https://aftershoot.com/galleries/)
+is currently a separate 100 GB free launch product, so that comparison is not
+like-for-like. Hestia is above HoneyBook/Pixieset entry tiers and far above Pic-Time
+entry. The defensible claim is integrated value: one idempotent business-and-gallery
+loop with no print commission, not “cheapest.”
+
+The hosted beta subsidy defaults to one live xAI gallery per studio, capped at 150
+images. A studio-owned key takes precedence and removes those caps; a deployment may
+also disable the subsidy, leaving its configured live provider uncapped. Before public
+pricing copy promises every module and AI inside $40, the owner must choose and
+disclose a sustainable hosted-AI, BYOK, or metered policy. Per-tenant storage/cost
+observability should precede any quota or packaging decision.
 
 ## Caveats & open follow-ups
 
-- Aftershoot Galleries is **beta** — its pricing/storage will move; re-verify before
-  keying decisions off it.
+- Aftershoot currently advertises [100 GB of gallery hosting free at
+  launch](https://aftershoot.com/galleries/) separately from Complete; future pricing,
+  beta status, and storage should be re-verified before each packaging decision.
+- HoneyBook's [July 2026 photographer release](https://www.honeybook.com/blog/the-new-honeybook-for-photographers-is-here)
+  added native galleries and mini sessions; strategy must not rely on the old
+  “weak galleries” characterization.
 - Vendor revenue claims ("$2k in 30 days", "5× print sales") are promotional, not audited.
 - The "Dubsado is best" verdict is one affiliate blogger; its workflow *depth* is
   independently confirmed.

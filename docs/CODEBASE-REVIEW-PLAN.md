@@ -2,9 +2,8 @@
 
 - **Original review:** 2026-07-13
 - **Historical baseline:** `a3f31b9c722554ddbdfcd26882c19eabcb95ad75` (`main`)
-- **Status refreshed:** 2026-07-14
-- **Status base:** `23ca5cf6bd2b256d210c725b750efdf104d36f17` (`main` after
-  PRs #218-#220)
+- **Status refreshed:** 2026-07-17
+- **Status base:** `25029d1552b4e8012241f61eaaeb01e90d517dc6` (`main`)
 - **Scope:** preserve every product capability; improve correctness, security,
   reproducibility, maintainability, and launch confidence without changing Hestia's
   modular-monolith doctrine.
@@ -32,7 +31,7 @@ The architecture should remain:
 
 No existing feature needs to be removed to do this work.
 
-## Current status - 2026-07-14
+## Current status - 2026-07-17
 
 | Review area | Status | Evidence and remaining gate |
 |---|---|---|
@@ -43,24 +42,33 @@ No existing feature needs to be removed to do this work.
 | Build reproducibility and wheel contents | **Landed** | PRs #209 and #213 added locked installs, artifact checks, and the missing runtime asset. |
 | Runtime vulnerability enforcement | **Landed** | PR #218 made the exact runtime-lock audit block the `smoke` job. The broader development-lock audit remains advisory. |
 | Deprecation enforcement | **Landed** | The `httpx` transition landed in PR #213; PR #219 removed the remaining Pillow warning and made every `DeprecationWarning` fail pytest. |
-| Shared xAI transport | **Landed** | PR #211 consolidated the repeated transport/error seam while retaining domain-local prompts and validation. |
+| Shared xAI transport | **Landed; paid canary open** | PR #211 consolidated the repeated transport/error seam. Commit `25029d1` added bounded streaming for image responses, the current JSON/data-URI edit contract, and a configurable current image model. A paid live canary still needs explicit approval and a bounded test image. |
+| Product-render validation | **Landed** | Commit `25029d1` validates JPEG/PNG sources and provider output, exercises normal provider-sized rasters against every real preset, requires retained alpha for transparent output, and canonically crops/resizes/re-encodes before storage. |
+| Pillow runtime and compatibility | **Landed** | Pillow 12.3 is a core runtime dependency, its exact floor remains hash-locked, and hosted CI checks the focused perceptual-duplicate and media-delivery paths at that floor. |
 | Restore and artifact evidence | **Partial** | PRs #212 and #213 added restore/artifact evidence. Offsite-sync freshness, media-backend integration, and Caddy adaptation evidence remain open. |
 | Release and license truth | **Open - human gate** | License choice, tag history, and release metadata still require a legal/product decision. |
 
 ### Current priority map
 
-- **High - human-gated:** decide media capability scope; validate Stripe settlement
-  amount, currency, payment status, provider session identity, and both immediate and
-  delayed success events (including `checkout.session.async_payment_succeeded`); design
-  the original-0065/checksum migration path; define offsite-sync success/freshness
-  evidence; and review the public Caddy custom-domain edge.
-- **Medium:** after approval, implement behavior fixes and regression tests for
-  subscription terminal-state ordering, fulfillment retry safety, and gallery-PIN
-  authorization/rate limiting. Required-check/branch-ruleset enforcement remains a
-  separate owner-approved repository setting.
-- **Low:** add a focused Pillow lower-bound compatibility matrix; maintain pinned Actions;
-  split large modules only where tests demonstrate an ownership seam; reconcile release
-  metadata after the license decision.
+- **High - autonomous GREEN:** make live vision results bounded and normalize malformed
+  provider fields; on a transport failure, perform one explicit whole-gallery mock
+  fallback that still mints the idempotent offer. Then add an owner-facing vision
+  calibration/export packet and per-tenant storage/unit-cost observability without
+  enforcing quotas.
+- **High - human-gated:** decide the public pricing/BYOK story (the configurable hosted
+  subsidy defaults to one live gallery up to 150 images; a studio key takes precedence,
+  and deployments may disable the subsidy); decide media capability scope; validate
+  Stripe settlement semantics; design the original-0065/checksum migration path; define
+  offsite-sync freshness evidence; and review the public Caddy custom-domain edge.
+- **Medium - autonomous GREEN:** make gallery publication idempotency and reminder
+  rescheduling behavior explicit with regressions; keep provider result validation
+  domain-local; update competitive claims whenever shipped depth changes.
+- **Medium - human-gated after design:** subscription terminal-state ordering,
+  fulfillment retry/payment semantics, gallery-PIN authorization/rate limiting,
+  timezone/calendar schema, repository rulesets, and release/license metadata.
+- **Completed since the previous refresh:** Pillow floor coverage, strict content result
+  validation, product-render validation, xAI image-contract correction, and availability
+  slot deduplication.
 
 ## Historical verified baseline (frozen 2026-07-13)
 
@@ -248,19 +256,22 @@ superseded by the remaining sequence below.
 
 ## Remaining execution sequence
 
-1. **Security and money decisions** - obtain human decisions for media-token scope and
-   Stripe settlement semantics, including delayed-payment success, before changing
-   authorization or financial state logic.
-2. **Schema integrity design** - produce the original-0065 compatibility fixture,
-   checksum policy, and backup/inspection plan; stop for approval before any migration.
-3. **Durability and public-edge evidence** - define offsite-sync freshness and Caddy
-   catch-all acceptance; obtain infrastructure approval before implementation or
-   deployment changes.
-4. **Approved behavior corrections** - implement subscription terminal-state,
-   fulfillment-retry, and gallery-PIN fixes with regression tests only within the approved
-   money/security design.
-5. **Low-risk maintenance** - add focused compatibility coverage and bounded refactors;
-   reconcile release metadata only after the license decision.
+1. **Live-vision resilience (GREEN)** - normalize bounded result fields and make one
+   clearly labeled whole-gallery mock fallback preserve offer creation and token
+   idempotency when xAI transport fails.
+2. **Vision calibration evidence (GREEN)** - export one review row per image with the
+   inputs and decisions needed to compare culling quality. A paid API benchmark or use of
+   customer photography remains separately human-gated.
+3. **Storage economics visibility (GREEN)** - expose tenant-scoped byte totals and
+   operator rollups from existing metadata, clearly naming thumbnail/S3-overhead
+   exclusions; do not enforce quotas without a pricing decision.
+4. **Product and risk decisions** - obtain human decisions for AI subsidy/BYOK
+   disclosure, media-token scope, Stripe settlement semantics, fulfillment depth,
+   timezone/calendar schema, migration integrity, and the public edge.
+5. **Approved corrections** - implement money, security, schema, and infrastructure
+   changes only inside their approved designs and with their stronger gates.
+6. **Release truth** - reconcile license, tags, and release metadata only after the
+   owner chooses the actual legal and packaging posture.
 
 ## Autonomous working contract
 
