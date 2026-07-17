@@ -7,13 +7,15 @@ confirmation email and a day-before reminder (the reminder via the job queue's
 
 Booking is idempotent: the ``proposed → confirmed`` transition is guarded by
 ``WHERE status = 'proposed'``, so a double submit or a re-opened link never
-rebooks. Tenant-scoped throughout; the reminder job no-ops if the appointment is
-canceled before it fires.
+rebooks. A real reschedule terminally supersedes its still-queued notification
+pair and binds the fresh pair to the new schedule generation; an exact same-time
+retry is a no-op. The handler also skips canceled or stale new-format work.
 """
 
 from __future__ import annotations
 
 import datetime
+import json
 import sqlite3
 
 from .automations import emit_event
@@ -313,29 +315,36 @@ def cancel_by_token(conn: sqlite3.Connection, settings: Settings, token: str) ->
 def reschedule_by_token(conn: sqlite3.Connection, settings: Settings, *, token: str,
                         new_slot: str) -> bool:
     """Client moves their session to a new time via their booking link. Confirms the new
-    time, sends a fresh confirmation + reminder, and alerts the studio. The caller validates
-    the slot is open and holds the write lock. Re-emitting ``appointment.confirmed`` is
-    deliberately skipped so a reschedule doesn't re-fire booking automations. Idempotent on
-    status; a no-op for a canceled/completed session."""
+    time, replaces pending confirmation/reminder work, and alerts the studio. The caller
+    validates the slot is open and holds the write lock. Re-emitting
+    ``appointment.confirmed`` is deliberately skipped so a reschedule doesn't re-fire
+    booking automations. Exact same-time and terminal-state requests are no-ops."""
     appt = get_appointment_by_token(conn, token)
     if not appt or appt["status"] not in ("proposed", "confirmed"):
         return False
     when = (new_slot or "").replace("T", " ").strip()
     if not when:
         return False
-    old = appt.get("starts_at") or ""
+    stored_old = appt.get("starts_at") or ""
+    old = stored_old.replace("T", " ").strip()
+    if appt["status"] == "confirmed" and old == when:
+        return False
     cur = conn.execute(
         "UPDATE appointments SET starts_at = ?, status = 'confirmed', updated_at = datetime('now') "
-        "WHERE id = ? AND status IN ('proposed', 'confirmed')",
-        (when, appt["id"]),
+        "WHERE id = ? AND tenant_id = ? AND status IN ('proposed', 'confirmed') AND starts_at = ?",
+        (when, appt["id"], appt["tenant_id"], stored_old),
     )
     if cur.rowcount == 0:
         return False
     confirmed = get_appointment(conn, appt["tenant_id"], appt["id"])
-    # fresh confirmation + day-before reminder for the new time (no event re-fire)
+    # Retain old job rows as terminal evidence, then create one fresh notification
+    # generation for the new time. Already-running old work is rejected by the
+    # generation/time checks in _notify.
+    _supersede_queued_notifications(conn, appt["tenant_id"], appt["id"])
+    generation = new_session_token()
     enqueue(conn, kind="scheduler.notify", tenant_id=appt["tenant_id"],
-            payload={"appointment_id": appt["id"], "kind": "confirm"})
-    _schedule_reminder(conn, appt["tenant_id"], confirmed)
+            payload=_notification_payload(confirmed, "confirm", generation))
+    _schedule_reminder(conn, appt["tenant_id"], confirmed, generation)
     audit(conn, actor="client", action="appointment.rescheduled", tenant_id=appt["tenant_id"],
           detail=f"{appt['title']} · {old or '—'} → {when}")
     _alert_reschedule(conn, settings, appt["tenant_id"], confirmed, old)
@@ -379,15 +388,95 @@ def _alert_cancellation(conn: sqlite3.Connection, settings: Settings, tenant_id:
 
 def _on_confirmed(conn: sqlite3.Connection, tenant_id: str, appt: dict) -> None:
     """Side effects of a confirmed booking: confirmation email, reminder, event."""
+    generation = new_session_token()
     enqueue(conn, kind="scheduler.notify", tenant_id=tenant_id,
-            payload={"appointment_id": appt["id"], "kind": "confirm"})
-    _schedule_reminder(conn, tenant_id, appt)
+            payload=_notification_payload(appt, "confirm", generation))
+    _schedule_reminder(conn, tenant_id, appt, generation)
     emit_event(conn, tenant_id=tenant_id, event="appointment.confirmed",
                context={"client_id": appt.get("client_id"), "project_id": appt.get("project_id"),
                         "title": appt["title"]})
 
 
-def _schedule_reminder(conn: sqlite3.Connection, tenant_id: str, appt: dict) -> None:
+def _notification_payload(appt: dict, kind: str, generation: str) -> dict:
+    return {
+        "appointment_id": appt["id"],
+        "kind": kind,
+        "expected_starts_at": appt["starts_at"],
+        "notification_generation": generation,
+    }
+
+
+def _load_notification_payload(raw: str) -> dict | None:
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _supersede_queued_notifications(
+    conn: sqlite3.Connection, tenant_id: str, appointment_id: int
+) -> int:
+    """Terminally retain queued notices replaced by a real reschedule.
+
+    Payloads are parsed in Python rather than requiring SQLite JSON1. Each UPDATE
+    rechecks the tenant, kind, and queued state so a concurrently claimed job is
+    never rewritten; new-format running jobs instead fail closed in ``_notify``.
+    """
+    superseded = 0
+    rows = conn.execute(
+        "SELECT id, payload_json FROM jobs "
+        "WHERE tenant_id = ? AND kind = 'scheduler.notify' AND status = 'queued'",
+        (tenant_id,),
+    ).fetchall()
+    for row in rows:
+        payload = _load_notification_payload(row["payload_json"])
+        if not payload or type(payload.get("appointment_id")) is not int:
+            continue
+        if payload["appointment_id"] != appointment_id:
+            continue
+        payload["superseded"] = "appointment.rescheduled"
+        cur = conn.execute(
+            "UPDATE jobs SET status = 'done', payload_json = ?, "
+            "finished_at = datetime('now'), updated_at = datetime('now') "
+            "WHERE id = ? AND tenant_id = ? AND kind = 'scheduler.notify' AND status = 'queued'",
+            (json.dumps(payload), row["id"], tenant_id),
+        )
+        superseded += cur.rowcount
+    return superseded
+
+
+def _is_current_notification(
+    conn: sqlite3.Connection, *, tenant_id: str, appointment_id: int,
+    kind: str, generation: str,
+) -> bool:
+    """Whether ``generation`` is the newest recorded generation for this notice.
+
+    Looking at retained history closes the A→B→A hole that a time-only guard
+    leaves: an already-running old A reminder must not become valid when the
+    appointment later returns to A. Legacy payloads bypass this helper below.
+    """
+    rows = conn.execute(
+        "SELECT payload_json FROM jobs "
+        "WHERE tenant_id = ? AND kind = 'scheduler.notify' ORDER BY id DESC",
+        (tenant_id,),
+    )
+    for row in rows:
+        payload = _load_notification_payload(row["payload_json"])
+        if not payload:
+            continue
+        if type(payload.get("appointment_id")) is not int:
+            continue
+        if payload["appointment_id"] != appointment_id or payload.get("kind") != kind:
+            continue
+        newest = payload.get("notification_generation")
+        return isinstance(newest, str) and bool(newest) and newest == generation
+    return False
+
+
+def _schedule_reminder(
+    conn: sqlite3.Connection, tenant_id: str, appt: dict, generation: str
+) -> None:
     """Queue a day-before reminder, letting SQLite parse the time. Skips silently
     if the time is unparseable or already in the past."""
     starts_at = appt.get("starts_at") or ""
@@ -401,12 +490,17 @@ def _schedule_reminder(conn: sqlite3.Connection, tenant_id: str, appt: dict) -> 
         return
     run_at = row["remind"] if row["remind"] and row["remind"] > row["now"] else row["now"]
     enqueue(conn, kind="scheduler.notify", tenant_id=tenant_id,
-            payload={"appointment_id": appt["id"], "kind": "reminder"}, run_at=run_at)
+            payload=_notification_payload(appt, "reminder", generation), run_at=run_at)
 
 
 @register("scheduler.notify")
 def _notify(settings: Settings, payload: dict) -> None:
-    """Send a confirmation or reminder email for an appointment, if still on."""
+    """Send a current confirmation/reminder, or intentionally skip stale work.
+
+    Marker-less jobs created before the schedule-binding rollout retain their
+    historical confirmed/canceled behavior. New-format jobs additionally bind to
+    the expected time and newest notification generation.
+    """
     from . import messaging
     from .crm import get_client
     from .db import get_db
@@ -418,6 +512,24 @@ def _notify(settings: Settings, payload: dict) -> None:
         appt = _get_by_id(conn, appt_id)
         if not appt or appt["status"] != "confirmed":
             return  # canceled or gone between scheduling and firing → no email
+        if payload.get("superseded"):
+            return
+        expected = payload.get("expected_starts_at")
+        if expected is not None and expected != appt["starts_at"]:
+            return
+        generation = payload.get("notification_generation")
+        if generation is not None and (
+            not isinstance(generation, str)
+            or not generation
+            or not _is_current_notification(
+                conn,
+                tenant_id=appt["tenant_id"],
+                appointment_id=appt_id,
+                kind=kind,
+                generation=generation,
+            )
+        ):
+            return
         client = get_client(conn, appt["tenant_id"], appt["client_id"]) if appt["client_id"] else None
         to = (client or {}).get("email", "")
         if not to:

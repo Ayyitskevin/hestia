@@ -71,6 +71,10 @@ def book_reschedule_submit(request: Request, token: str, slot: str = Form("")):
         appt = get_appointment_by_token(conn, token)
         if not appt or appt["status"] not in ("proposed", "confirmed"):
             return render(request, "offer_missing.html", auth=None, status_code=404)
+        normalized_slot = slot.replace("T", " ").strip()
+        current_slot = (appt.get("starts_at") or "").replace("T", " ").strip()
+        if appt["status"] == "confirmed" and normalized_slot and normalized_slot == current_slot:
+            return RedirectResponse(f"/book/{token}", status_code=303)
         dur = appt["duration_minutes"]
         if not (slot.strip() and is_slot_open(conn, appt["tenant_id"], duration_minutes=dur, slot=slot)):
             tenant = get_tenant(conn, appt["tenant_id"])
@@ -78,7 +82,12 @@ def book_reschedule_submit(request: Request, token: str, slot: str = Form("")):
             return render(request, "scheduler/reschedule.html", auth=None, appt=appt, tenant=tenant,
                           slots=slots, error="That time is no longer available — please pick another.",
                           status_code=400)
-        reschedule_by_token(conn, settings, token=token, new_slot=slot)
+        if not reschedule_by_token(conn, settings, token=token, new_slot=slot):
+            tenant = get_tenant(conn, appt["tenant_id"])
+            slots = available_slots(conn, appt["tenant_id"], duration_minutes=dur)
+            return render(request, "scheduler/reschedule.html", auth=None, appt=appt, tenant=tenant,
+                          slots=slots, error="That booking changed — refresh and try again.",
+                          status_code=409)
     return RedirectResponse(f"/book/{token}", status_code=303)
 
 

@@ -118,4 +118,11 @@ have ready-to-send answers in `docs/support.md` — this table is for the box it
 Hestia runs its own follow-ups on the background worker — trial nudges, card-failed
 dunning, overdue-invoice and unsigned-document reminders, owner/launch digests,
 gallery sale campaigns, recurring invoices — all on shared cooldowns. Don't send these
-by hand; the worker won't double up with you.
+by hand; inspect the queue/outbox before intervening so a manual message does not overlap
+scheduled work.
+
+Appointment rescheduling is narrower and explicit: Hestia retains the old queued
+confirmation/reminder rows as `done` + superseded, then queues one pair for the new
+time. A `done` notification means its handler returned or intentionally skipped; it is
+not proof that SMTP delivered the message. The queue is at-least-once across a worker
+crash, so inspect the email outbox status when delivery itself matters.

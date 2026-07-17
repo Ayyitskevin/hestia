@@ -1,12 +1,16 @@
-"""Client self-reschedule — the move (module) and the public /book/{token}/reschedule flow,
-including the open-slot picker, the double-booking guard, and the no-availability fallback."""
+"""Client self-reschedule — movement, notification replacement, and public flow."""
+
+import json
 
 from conftest import CSRFClient, login_owner, onboard_studio
 
 from hestia.availability import available_slots
 from hestia.crm import create_client
-from hestia.db import connect
+from hestia.db import connect, list_audit
+from hestia.email import list_emails
+from hestia.jobs import drain
 from hestia.scheduler import (
+    _notify,
     confirm_appointment,
     create_appointment,
     get_appointment,
@@ -50,6 +54,17 @@ def _first_slot(app, tid, dur=60):
     return groups[0]["slots"][0]["value"] if groups and groups[0]["slots"] else None
 
 
+def _notification_jobs(conn, appointment_id):
+    jobs = []
+    for row in conn.execute(
+        "SELECT * FROM jobs WHERE kind = 'scheduler.notify' ORDER BY id"
+    ).fetchall():
+        payload = json.loads(row["payload_json"])
+        if payload.get("appointment_id") == appointment_id:
+            jobs.append({**dict(row), "payload": payload})
+    return jobs
+
+
 # ── module ───────────────────────────────────────────────────────────────────
 
 
@@ -73,6 +88,84 @@ def test_reschedule_noop_on_canceled(conn, settings):
 
 def test_reschedule_unknown_token(conn, settings):
     assert reschedule_by_token(conn, settings, token="nope", new_slot="2031-02-02 14:00") is False
+
+
+def test_same_time_module_retry_has_no_side_effects(conn, settings):
+    t = _tenant(conn)
+    a = _confirmed(conn, t["id"])
+    conn.commit()
+    before_jobs = [dict(row) for row in conn.execute("SELECT * FROM jobs ORDER BY id")]
+    before_audit = list_audit(conn, t["id"])
+    before_email = list_emails(conn, t["id"])
+
+    assert reschedule_by_token(conn, settings, token=a["token"], new_slot=a["starts_at"]) is False
+    assert [dict(row) for row in conn.execute("SELECT * FROM jobs ORDER BY id")] == before_jobs
+    assert list_audit(conn, t["id"]) == before_audit
+    assert list_emails(conn, t["id"]) == before_email
+
+
+def test_reschedule_supersedes_pending_pair_and_stale_aba_job(conn, settings):
+    t = _tenant(conn)
+    client = create_client(conn, tenant_id=t["id"], name="Resa", email="resa@example.com")
+    original = _confirmed(conn, t["id"], client_id=client["id"])
+    conn.commit()
+    old_jobs = _notification_jobs(conn, original["id"])
+    assert {job["payload"]["kind"] for job in old_jobs} == {"confirm", "reminder"}
+    assert len({job["payload"]["notification_generation"] for job in old_jobs}) == 1
+    old_reminder = next(job for job in old_jobs if job["payload"]["kind"] == "reminder")
+    legacy_id = conn.execute(
+        "INSERT INTO jobs (tenant_id, kind, payload_json) VALUES (?, 'scheduler.notify', ?)",
+        (t["id"], json.dumps({"appointment_id": original["id"], "kind": "reminder"})),
+    ).lastrowid
+    conn.execute("UPDATE jobs SET status = 'running' WHERE id = ?", (old_reminder["id"],))
+    conn.commit()
+
+    moved = "2031-02-02 14:00"
+    assert reschedule_by_token(conn, settings, token=original["token"], new_slot=moved) is True
+    assert reschedule_by_token(
+        conn, settings, token=original["token"], new_slot=original["starts_at"]
+    ) is True
+    conn.commit()
+
+    jobs = _notification_jobs(conn, original["id"])
+    assert next(job for job in jobs if job["id"] == old_reminder["id"])["status"] == "running"
+    superseded = [job for job in jobs if job["status"] == "done"]
+    assert superseded and all(job["payload"]["superseded"] for job in superseded)
+    assert next(job for job in jobs if job["id"] == legacy_id)["status"] == "done"
+    active = [job for job in jobs if job["status"] == "queued"]
+    assert len(active) == 2
+    assert {job["payload"]["kind"] for job in active} == {"confirm", "reminder"}
+    assert {job["payload"]["expected_starts_at"] for job in active} == {original["starts_at"]}
+    assert len({job["payload"]["notification_generation"] for job in active}) == 1
+
+    # The old A-generation was already claimed, so superseding could not rewrite it.
+    # Even after A→B→A makes its expected time look current again, generation binding
+    # must keep it from sending.
+    _notify(settings, old_reminder["payload"])
+    assert list_emails(conn, t["id"]) == []
+
+    newest_reminder = next(job for job in active if job["payload"]["kind"] == "reminder")
+    conn.execute("UPDATE jobs SET run_at = datetime('now') WHERE id = ?", (newest_reminder["id"],))
+    conn.commit()
+    drain(settings.db_path, settings)
+    messages = list_emails(conn, t["id"])
+    assert len([msg for msg in messages if msg["subject"].startswith("Confirmed:")]) == 1
+    assert len([msg for msg in messages if msg["subject"].startswith("Reminder:")]) == 1
+
+
+def test_reschedule_superseding_is_tenant_scoped(conn, settings):
+    first = _tenant(conn, "First")
+    second = _tenant(conn, "Second")
+    first_appt = _confirmed(conn, first["id"])
+    same_tenant_appt = _confirmed(conn, first["id"], at="2031-03-03 15:00")
+    second_appt = _confirmed(conn, second["id"])
+    conn.commit()
+
+    assert reschedule_by_token(
+        conn, settings, token=first_appt["token"], new_slot="2031-02-02 14:00"
+    ) is True
+    assert {job["status"] for job in _notification_jobs(conn, same_tenant_appt["id"])} == {"queued"}
+    assert {job["status"] for job in _notification_jobs(conn, second_appt["id"])} == {"queued"}
 
 
 # ── HTTP ─────────────────────────────────────────────────────────────────────
@@ -134,6 +227,37 @@ def test_http_reschedule_rejects_taken_slot(client, app):
     conn = connect(app.state.settings.db_path)
     try:
         assert get_appointment(conn, tid, aid)["starts_at"] == "2031-01-01 10:00"   # unchanged
+    finally:
+        conn.close()
+
+
+def test_http_same_time_retry_redirects_without_side_effects(client, app):
+    creds = onboard_studio(client, email="resc_same@example.com")
+    login_owner(client, creds)
+    _open_all_week(client)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tid = _tid_of(conn, creds["email"])
+        appointment = _confirmed(conn, tid)
+        conn.commit()
+        before_jobs = [dict(row) for row in conn.execute("SELECT * FROM jobs ORDER BY id")]
+        before_audit = list_audit(conn, tid)
+        before_email = list_emails(conn, tid)
+    finally:
+        conn.close()
+
+    public = CSRFClient(app)
+    response = public.post(
+        f"/book/{appointment['token']}/reschedule",
+        data={"slot": appointment["starts_at"]},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    conn = connect(app.state.settings.db_path)
+    try:
+        assert [dict(row) for row in conn.execute("SELECT * FROM jobs ORDER BY id")] == before_jobs
+        assert list_audit(conn, tid) == before_audit
+        assert list_emails(conn, tid) == before_email
     finally:
         conn.close()
 

@@ -51,7 +51,8 @@ Each item is a vertical slice through the tenant → client → project → gall
 4. ✅ **Questionnaires / intake forms** wired public inquiry → CRM lead (`studio` → `crm`).
 
 ### Phase 2 — Scheduling + automations (kill the busywork)
-5. ✅ **Scheduler** with client self-booking + automated confirm/reminder emails (calendar seam).
+5. ✅ **Scheduler** with client self-booking + schedule-bound confirm/reminder emails;
+   reschedules supersede the queued pair and same-time retries are side-effect-free.
 6. ✅ **Workflow engine** — event-triggered (contract signed, payment paid, delivered, booked,
    appointment confirmed), with scheduled delays (the retention loop is the same engine + a delay).
 

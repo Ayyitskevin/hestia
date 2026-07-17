@@ -4,6 +4,14 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+### Fixed
+
+- Made gallery publication a one-way claim so retried POSTs preserve the original
+  publication timestamp and cannot duplicate activity or client automations.
+- Reconciled appointment notifications on reschedule: queued confirmation/reminder
+  rows are retained as superseded history, one fresh schedule generation replaces
+  them, and exact same-time retries create no alerts, audits, or jobs.
+
 ### Security
 
 - Raised the optional image-processing floor to the current audited Pillow 12.3

@@ -9,9 +9,12 @@ with exponential backoff on failure. Two things drain the queue:
 - an inline :func:`drain` kicked off as a request ``BackgroundTask`` right after a
   job is enqueued, so work starts immediately and tests stay synchronous.
 
-Both call the same :func:`run_next`; the claim is atomic, so a job never double-runs.
-Handlers register with ``@register("kind")`` and receive ``(settings, payload)``.
-All timestamps use SQLite's ``datetime('now')`` so comparisons stay consistent.
+Both call the same :func:`run_next`; the claim is atomic, so two healthy drainers do
+not claim the same queued state concurrently. The queue is still at-least-once: stale
+``running`` work is reclaimed after a crash, so handlers must tolerate a repeated
+external action. Handlers register with ``@register("kind")`` and receive
+``(settings, payload)``. All timestamps use SQLite's ``datetime('now')`` so
+comparisons stay consistent.
 """
 
 from __future__ import annotations

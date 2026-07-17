@@ -37,6 +37,15 @@ immediate drain, and a worker thread (started in the app lifespan) is the durabl
 backstop — it retries with backoff and reclaims jobs orphaned by a crash, so a
 run survives a restart. See [`jobs.py`](../hestia/jobs.py).
 
+Appointment confirmations and reminders are schedule-bound durable jobs. A real
+reschedule retains any still-queued pair as terminal, explicitly superseded history,
+then creates one fresh generation for the new time. An exact same-time retry changes
+nothing. New-format handlers verify both the expected time and newest generation, so
+already-running stale work no-ops even across an A→B→A move; pre-rollout marker-less
+jobs retain the legacy confirmed/canceled check. This is queue idempotency, not an
+exactly-once email claim: a crash after SMTP accepts a message but before job completion
+can still repeat an external send.
+
 ## Pluggable seams (mock by default, real on config)
 
 | Seam | Env | mock (default) | real |
@@ -139,13 +148,19 @@ once each (see `db.py`).
 | `audit_log` | tenant lifecycle events (surfaced at /settings/activity) |
 | `schema_migrations` | applied-migration ledger |
 
-## Idempotency (a deliberate fix)
+## Idempotency (deliberate fixes)
 
 The real Plutus mints a fresh share link on every call — re-processing a gallery
 duplicates the client offer. Hestia guarantees the opposite: `pipeline_runs` and
 `offers` are both unique on `(tenant, gallery)`, with the public token created once
 and **reused** on every re-run. Proven in
 `tests/test_app.py::test_double_process_one_offer_over_http`.
+
+Gallery publication is also a one-way, tenant-scoped claim. Only the first
+`draft → published` transition stamps `published_at`, emits `gallery.published`,
+and writes the audit event; a retried POST is a no-op. Appointment rescheduling
+uses an old-value claim, supersedes the prior queued notification generation, and
+makes an exact same-time POST response-idempotent without re-alerting either party.
 
 ## Security posture
 
@@ -161,6 +176,7 @@ and **reused** on every re-run. Proven in
 |---------|----------|
 | Vision / offer error | run → `error` at that step; no offer minted |
 | Job handler raises | recorded on the job, retried with backoff, then `error` |
-| Worker crash mid-job | the job is reclaimed and re-queued on next boot |
-| Real backend (Stripe/SMTP/xAI) error | degrades to the safe path; never 500s the request |
+| Worker crash mid-job | the job is reclaimed and re-queued; the queue is at-least-once |
+| SMTP send error | recorded on the email outbox; the handler returns, so the job is `done` rather than retried |
+| Real backend (Stripe/xAI) error | degrades to the safe path; never 500s the request |
 | Re-process | reuses the completed vision + the single offer token |

@@ -49,6 +49,7 @@ No existing feature needs to be removed to do this work.
 | Live-vision resilience | **Landed** | Vision chat responses and result fields are bounded before persistence. Typed xAI failures roll back all partial live rows, recompute the whole gallery with the deterministic mock, label the fallback, preserve offer creation, and retry live under the same offer token on reprocess. |
 | Vision calibration snapshot | **Landed; benchmark open** | Every authenticated studio gallery view exports one spreadsheet-safe row per frame with model scores, derived decisions, current weak labels, and blank reviewer columns. It includes no images or capability URLs. Analyses are latest-state only and exact model/prompt/style-at-run provenance is not yet persisted, so a labeled paid/live quality benchmark remains human-gated. |
 | Storage footprint visibility | **Landed; pricing open** | Owner Account and master-admin System views expose tenant-matched, overflow-safe original-image and project-file byte metadata with anomaly counts and explicit derived-object/provider-cost exclusions. It is a planning denominator only: dollars, quotas, and billing remain human-gated. |
+| Publication and schedule idempotency | **Landed** | Gallery publication is a guarded one-way transition, so retries preserve the original timestamp and emit one audit/automation event. A real appointment reschedule supersedes queued confirmation/reminder history and binds one fresh pair to the new time/generation; same-time retries are side-effect-free. This does not claim exactly-once SMTP delivery. |
 | Restore and artifact evidence | **Partial** | PRs #212 and #213 added restore/artifact evidence. Offsite-sync freshness, media-backend integration, and Caddy adaptation evidence remain open. |
 | Release and license truth | **Open - human gate** | License choice, tag history, and release metadata still require a legal/product decision. |
 
@@ -59,16 +60,16 @@ No existing feature needs to be removed to do this work.
   and deployments may disable the subsidy); decide media capability scope; validate
   Stripe settlement semantics; design the original-0065/checksum migration path; define
   offsite-sync freshness evidence; and review the public Caddy custom-domain edge.
-- **Medium - autonomous GREEN:** make gallery publication idempotency and reminder
-  rescheduling behavior explicit with regressions; keep provider result validation
-  domain-local; update competitive claims whenever shipped depth changes.
+- **Medium - autonomous GREEN:** keep provider result validation domain-local and
+  update competitive claims whenever shipped depth changes.
 - **Medium - human-gated after design:** subscription terminal-state ordering,
   fulfillment retry/payment semantics, gallery-PIN authorization/rate limiting,
   timezone/calendar schema, repository rulesets, and release/license metadata.
 - **Completed since the previous refresh:** Pillow floor coverage, strict content result
   validation, product-render validation, xAI image-contract correction, live-vision
   whole-gallery resilience, the studio calibration snapshot, tracked storage
-  visibility, and availability slot deduplication.
+  visibility, availability slot deduplication, one-way gallery publication, and
+  schedule-bound reschedule notifications.
 
 ## Historical verified baseline (frozen 2026-07-13)
 
