@@ -48,13 +48,12 @@ No existing feature needs to be removed to do this work.
 | Pillow runtime and compatibility | **Landed** | Pillow 12.3 is a core runtime dependency, its exact floor remains hash-locked, and hosted CI checks the focused perceptual-duplicate and media-delivery paths at that floor. |
 | Live-vision resilience | **Landed** | Vision chat responses and result fields are bounded before persistence. Typed xAI failures roll back all partial live rows, recompute the whole gallery with the deterministic mock, label the fallback, preserve offer creation, and retry live under the same offer token on reprocess. |
 | Vision calibration snapshot | **Landed; benchmark open** | Every authenticated studio gallery view exports one spreadsheet-safe row per frame with model scores, derived decisions, current weak labels, and blank reviewer columns. It includes no images or capability URLs. Analyses are latest-state only and exact model/prompt/style-at-run provenance is not yet persisted, so a labeled paid/live quality benchmark remains human-gated. |
+| Storage footprint visibility | **Landed; pricing open** | Owner Account and master-admin System views expose tenant-matched, overflow-safe original-image and project-file byte metadata with anomaly counts and explicit derived-object/provider-cost exclusions. It is a planning denominator only: dollars, quotas, and billing remain human-gated. |
 | Restore and artifact evidence | **Partial** | PRs #212 and #213 added restore/artifact evidence. Offsite-sync freshness, media-backend integration, and Caddy adaptation evidence remain open. |
 | Release and license truth | **Open - human gate** | License choice, tag history, and release metadata still require a legal/product decision. |
 
 ### Current priority map
 
-- **High - autonomous GREEN:** add per-tenant storage/unit-cost observability without
-  enforcing quotas.
 - **High - human-gated:** decide the public pricing/BYOK story (the configurable hosted
   subsidy defaults to one live gallery up to 150 images; a studio key takes precedence,
   and deployments may disable the subsidy); decide media capability scope; validate
@@ -68,8 +67,8 @@ No existing feature needs to be removed to do this work.
   timezone/calendar schema, repository rulesets, and release/license metadata.
 - **Completed since the previous refresh:** Pillow floor coverage, strict content result
   validation, product-render validation, xAI image-contract correction, live-vision
-  whole-gallery resilience, the studio calibration snapshot, and availability slot
-  deduplication.
+  whole-gallery resilience, the studio calibration snapshot, tracked storage
+  visibility, and availability slot deduplication.
 
 ## Historical verified baseline (frozen 2026-07-13)
 
@@ -263,9 +262,10 @@ superseded by the remaining sequence below.
 2. ✅ **Vision calibration snapshot (GREEN)** - export one safe review row per image with
    current inputs, decisions, weak labels, and blank reviewer columns. Historical run
    provenance, a paid API benchmark, or customer photography remain separately human-gated.
-3. **Storage economics visibility (GREEN)** - expose tenant-scoped byte totals and
-   operator rollups from existing metadata, clearly naming thumbnail/S3-overhead
-   exclusions; do not enforce quotas without a pricing decision.
+3. ✅ **Storage footprint visibility (GREEN)** - tenant-scoped byte totals and operator
+   rollups now use existing metadata with anomaly counts and explicit thumbnail,
+   generated-render, and provider-cost exclusions. No quota or dollar estimate is
+   enforced without a pricing decision.
 4. **Product and risk decisions** - obtain human decisions for AI subsidy/BYOK
    disclosure, media-token scope, Stripe settlement semantics, fulfillment depth,
    timezone/calendar schema, migration integrity, and the public edge.

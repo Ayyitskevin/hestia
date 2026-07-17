@@ -108,8 +108,10 @@ The hosted beta subsidy defaults to one live xAI gallery per studio, capped at 1
 images. A studio-owned key takes precedence and removes those caps; a deployment may
 also disable the subsidy, leaving its configured live provider uncapped. Before public
 pricing copy promises every module and AI inside $40, the owner must choose and
-disclose a sustainable hosted-AI, BYOK, or metered policy. Per-tenant storage/cost
-observability should precede any quota or packaging decision.
+disclose a sustainable hosted-AI, BYOK, or metered policy. Hestia now exposes a
+per-tenant tracked storage footprint and operator rollup without pretending that
+metadata is a provider bill; quotas, dollar costs, and packaging remain product and
+financial decisions.
 
 ## Caveats & open follow-ups
 

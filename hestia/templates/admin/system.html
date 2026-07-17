@@ -134,6 +134,41 @@
 </div>
 
 <div class="card stack" style="margin-top:18px">
+  <h3>Tracked storage metadata</h3>
+  <p class="muted">{{ info.storage_usage.tracked_display }} across
+    {{ info.storage_usage.tenant_count }} studio{{ '' if info.storage_usage.tenant_count == 1 else 's' }}
+    from {{ info.storage_usage.tracked_object_rows }}/{{ info.storage_usage.object_rows }}
+    known gallery-original and project-file byte fields.</p>
+  {% if info.storage_usage.unknown_object_rows %}
+    <div class="alert warn">{{ info.storage_usage.unknown_object_rows }} upload record{{ '' if info.storage_usage.unknown_object_rows == 1 else 's' }}
+      have missing or untrusted size/storage-key metadata and are excluded.</div>
+  {% endif %}
+  <table>
+    <thead>
+      <tr><th>Studio</th><th>Gallery originals</th><th>Project files</th>
+        <th>Tracked total</th><th>Unknown rows</th></tr>
+    </thead>
+    <tbody>
+      {% for row in info.storage_usage.tenants %}
+      <tr>
+        <td><a href="/admin/tenants/{{ row.tenant_id }}">{{ row.name }}</a>
+          <div class="mono muted">{{ row.slug }}</div></td>
+        <td>{{ row.gallery_originals.display }}<div class="muted">{{ row.gallery_originals.tracked_objects }}/{{ row.gallery_originals.objects }} records with known bytes</div></td>
+        <td>{{ row.project_files.display }}<div class="muted">{{ row.project_files.tracked_objects }}/{{ row.project_files.objects }} records with known bytes</div></td>
+        <td>{{ row.tracked_display }}<div class="mono muted">{{ row.tracked_bytes }} bytes</div></td>
+        <td>{{ row.unknown_object_rows }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">Top {{ info.storage_usage.tenants|length }} studios by tracked bytes.
+    No quota, invoice, or physical-object-store total is derived here. Thumbnails,
+    generated renders, overhead/versioning/replication, orphaned objects, requests,
+    retrieval, and transfer remain outside this metadata ledger. Relationship-inconsistent
+    rows are excluded and belong in Integrity.</p>
+</div>
+
+<div class="card stack" style="margin-top:18px">
   <h3>Migrations</h3>
   <table>
     <thead><tr><th>Version</th><th>Name</th><th>Applied</th></tr></thead>

@@ -8,6 +8,7 @@ from fastapi.responses import RedirectResponse
 from ..auth import ADMIN
 from ..billing import PLANS, plan_status
 from ..domains import custom_domain_summary, set_custom_domain, verify_custom_domain_dns
+from ..storage_usage import tenant_storage_usage
 from ..subscriptions import (
     SubscriptionError,
     apply_plan,
@@ -54,6 +55,7 @@ def account(request: Request, dns: str = ""):
         sub = get_subscription(conn, tenant["id"])
         owner_email = _owner_email(conn, tenant["id"])
         custom_domain = custom_domain_summary(settings, tenant)
+        storage_usage = tenant_storage_usage(conn, tenant["id"])
     studio_url = f"{settings.public_url.rstrip('/')}/studio/{tenant['slug']}"
     dns_messages = {
         "verified": "DNS verified — your custom domain is live.",
@@ -75,6 +77,7 @@ def account(request: Request, dns: str = ""):
         studio_url=studio_url,
         hosted_url=_hosted_url(settings, tenant),
         custom_domain=custom_domain,
+        storage_usage=storage_usage,
         domain_error="",
         dns_message=dns_messages.get(dns, ""),
     )
@@ -98,6 +101,7 @@ def account_domain(request: Request, custom_domain: str = Form("")):
             tenant = get_tenant(conn, auth.tenant["id"])
             sub = get_subscription(conn, tenant["id"])
             owner_email = _owner_email(conn, tenant["id"])
+            storage_usage = tenant_storage_usage(conn, tenant["id"])
             studio_url = f"{settings.public_url.rstrip('/')}/studio/{tenant['slug']}"
             return render(
                 request,
@@ -111,6 +115,7 @@ def account_domain(request: Request, custom_domain: str = Form("")):
                 studio_url=studio_url,
                 hosted_url=_hosted_url(settings, tenant),
                 custom_domain=custom_domain_summary(settings, tenant),
+                storage_usage=storage_usage,
                 domain_error="Enter a valid domain you control, like photos.example.com.",
                 dns_message="",
                 status_code=400,

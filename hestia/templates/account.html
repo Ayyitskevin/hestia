@@ -111,6 +111,37 @@
       <p class="hint">Test mode. Stripe portal opens when <span class="mono">HESTIA_SUBSCRIPTION_BACKEND=stripe</span> is configured.</p>
       {% endif %}
     </div>
+
+    <div class="card stack">
+      <h3 style="margin:0">Tracked storage footprint</h3>
+      <div>
+        <div class="label">Known upload metadata</div>
+        <div style="font-size:1.5rem; font-weight:700">{{ storage_usage.tracked_display }}</div>
+        <div class="mono muted">{{ storage_usage.tracked_bytes }} bytes ·
+          {{ storage_usage.tracked_gib_display }} measurement basis</div>
+      </div>
+      <div>
+        <div class="label">Gallery originals</div>
+        <div>{{ storage_usage.gallery_originals.display }} ·
+          {{ storage_usage.gallery_originals.tracked_objects }}/{{ storage_usage.gallery_originals.objects }}
+          record{{ '' if storage_usage.gallery_originals.objects == 1 else 's' }} with known bytes</div>
+      </div>
+      <div>
+        <div class="label">Project files</div>
+        <div>{{ storage_usage.project_files.display }} ·
+          {{ storage_usage.project_files.tracked_objects }}/{{ storage_usage.project_files.objects }}
+          record{{ '' if storage_usage.project_files.objects == 1 else 's' }} with known bytes</div>
+      </div>
+      {% if storage_usage.unknown_object_rows %}
+      <div class="alert warn">{{ storage_usage.unknown_object_rows }} records have missing or
+        untrusted size/storage-key metadata and are excluded from the total.</div>
+      {% endif %}
+      <p class="hint" style="margin:0">No storage quota or billing is enforced. This is tracked
+        upload metadata, not verified physical storage. This total excludes thumbnails,
+        generated product renders, object-store overhead/versioning/replication, orphaned
+        objects, requests, retrieval, and transfer. Relationship-inconsistent rows are
+        excluded and surfaced separately under Data integrity.</p>
+    </div>
   </div>
 </div>
 {% endblock %}

@@ -32,6 +32,7 @@ SPINE_TESTS=(
   tests/test_payments.py
   tests/test_webhooks.py
   tests/test_subscriptions.py
+  tests/test_storage_usage.py
   tests/test_subscription_dunning.py
   tests/test_fulfillment_lab.py
   tests/test_vision.py

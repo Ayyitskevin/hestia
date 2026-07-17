@@ -38,6 +38,7 @@ from ..launch import (
     send_beta_launch_nudge,
 )
 from ..ratelimit import enforce
+from ..storage_usage import operator_storage_summary
 from ..tenants import (
     create_tenant,
     create_tenant_api_key,
@@ -345,6 +346,7 @@ def system(request: Request):
             "signup_enabled": settings.signup_enabled,
             "warnings": settings.config_warnings,
             "ai_usage": operator_usage_summary(conn),
+            "storage_usage": operator_storage_summary(conn),
         }
     return render(request, "admin/system.html", auth=auth, info=info)
 

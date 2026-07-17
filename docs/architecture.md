@@ -59,8 +59,9 @@ mock before continuing to the idempotent offer. The stored summary explicitly re
 `fallback_from=xai` and `fallback_scope=whole_gallery`; reprocessing that run retries
 live vision and still reuses the existing offer token.
 
-Each authenticated studio gallery view can export a spreadsheet-safe vision calibration snapshot with one
-row per frame, including unanalyzed frames, bounded scores/text, backend/fallback state,
+Each authenticated studio gallery view can export a spreadsheet-safe vision
+calibration snapshot with one row per frame, including unanalyzed frames, bounded
+scores/text, backend/fallback state,
 derived keeper/cull flags, current hidden/cover/favorite context, and blank reviewer
 columns. It deliberately excludes images, storage keys, media URLs, capability tokens,
 comments, and dedicated client fields, and the response is private/no-store. Gallery
@@ -68,6 +69,17 @@ titles, filenames, keywords, and alt text can still contain names or identifying
 so the CSV remains potentially sensitive. Analyses are overwritten on reprocess and
 hidden/cover/favorite state has no historical provenance, making this current labeling
 context rather than an accuracy claim; paid/live benchmarking remains human-gated.
+
+Storage-footprint visibility is metadata-backed and read-only. The owner account and
+master-admin System view sum only valid byte fields for gallery originals and project
+attachments, require child and parent tenant IDs to agree, and preserve exact integer
+totals outside SQLite aggregation. The number is deliberately labeled a tracked
+footprint rather than physical or billable storage: thumbnails, generated product
+renders, invalid/missing metadata, orphaned or missing objects, provider overhead,
+versioning/replication, requests, retrieval, transfer, DB/WAL, and backups are outside
+the ledger. Relationship-inconsistent rows are excluded from attribution and remain
+the integrity surface's responsibility. No quota, dollar estimate, or billing behavior
+is derived from the footprint.
 
 Product-photo edits use xAI's JSON data-URI contract. Source and rendered images
 are byte, side, and pixel bounded and fully decoded with Pillow, and the shared
@@ -85,6 +97,7 @@ source data URI is reused across the preset set for an image.
 | `tenants.py` | studios, users, API keys |
 | `auth.py` / `csrf.py` | session + bearer auth; CSRF tokens for form POSTs |
 | `galleries.py` + `storage.py` | native gallery + image hosting (local/S3) |
+| `storage_usage.py` | tenant/operator tracked upload-byte footprint (no enforcement) |
 | `vision.py` | cull / keyword / hero scoring (pluggable) |
 | `sales.py` | print/album bundles + idempotent client offers |
 | `albums.py` / `products.py` / `content.py` | album spreads, packshot variants, marketing copy |

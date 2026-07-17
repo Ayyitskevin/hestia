@@ -8,7 +8,8 @@ page.
 ## The one-glance health check
 
 - **`/admin/system`** — version, queue depth, failed/stale jobs, applied migrations,
-  backend seams (which are live vs mock), and config warnings. Your daily glance.
+  backend seams (which are live vs mock), tracked upload metadata, and config warnings.
+  Your daily glance.
 - **`/admin/integrity`** — per-tenant data-integrity overview.
 - **`GET /healthz`** (liveness) and **`GET /readyz`** (DB + migrations + storage).
 
@@ -49,6 +50,21 @@ tenant-serving path end-to-end.)
       images, model output, exception detail, or API keys.
 - [ ] Requeue any genuinely-stuck failed jobs from `/admin/system` after reading why
       they failed.
+
+### Reading the storage footprint
+
+`/settings/account` shows an owner the studio's tracked upload footprint;
+`/admin/system` shows the operator total and top studios. The denominator is the exact
+known byte metadata for gallery originals and project attachments. An untrusted-row
+warning means missing, impossible, or invalid size/storage-key metadata was excluded.
+Relationship-inconsistent rows are excluded from attribution and reported separately
+under Integrity. Investigate either warning before using the number for planning.
+
+This is not a bucket inventory or provider bill. It does not include thumbnails,
+generated product renders, orphaned/missing objects, filesystem/object-store overhead,
+versioning/replication, requests, retrieval, transfer, the SQLite DB/WAL, or backups.
+No quota or invoice decision is made from this view. Dollar rates, limits, and
+packaging remain owner-approved product/financial decisions.
 
 ## Monthly
 
