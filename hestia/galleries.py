@@ -136,19 +136,28 @@ def list_galleries(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     return out
 
 
-def publish_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> None:
-    conn.execute(
+def publish_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> bool:
+    """Publish a tenant's draft gallery exactly once.
+
+    The guarded update is the claim: only the first ``draft -> published``
+    transition stamps ``published_at`` and emits downstream automations. A
+    retried request, a stale page, or a foreign tenant is a side-effect-free
+    no-op and returns ``False``.
+    """
+    cur = conn.execute(
         "UPDATE galleries SET status = 'published', published_at = datetime('now') "
-        "WHERE id = ? AND tenant_id = ?",
+        "WHERE id = ? AND tenant_id = ? AND status = 'draft'",
         (gallery_id, tenant_id),
     )
+    if cur.rowcount != 1:
+        return False
     g = conn.execute(
         "SELECT title, project_id FROM galleries WHERE id = ? AND tenant_id = ?",
         (gallery_id, tenant_id),
     ).fetchone()
-    if g:
-        emit_event(conn, tenant_id=tenant_id, event="gallery.published",
-                   context={"project_id": g["project_id"], "title": g["title"]})
+    emit_event(conn, tenant_id=tenant_id, event="gallery.published",
+               context={"project_id": g["project_id"], "title": g["title"]})
+    return True
 
 
 def submit_selections(conn: sqlite3.Connection, *, tenant_id: str, gallery_id: int) -> bool:

@@ -357,9 +357,9 @@ def gallery_publish(request: Request, gallery_id: int):
         gallery = get_gallery(conn, auth.tenant["id"], gallery_id)
         if not gallery:
             return RedirectResponse("/galleries", status_code=303)
-        publish_gallery(conn, auth.tenant["id"], gallery_id)
-        audit(conn, actor="owner", action="gallery.published",
-              tenant_id=auth.tenant["id"], detail=gallery["title"])
+        if publish_gallery(conn, auth.tenant["id"], gallery_id):
+            audit(conn, actor="owner", action="gallery.published",
+                  tenant_id=auth.tenant["id"], detail=gallery["title"])
     return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
 
