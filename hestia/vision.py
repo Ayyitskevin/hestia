@@ -709,3 +709,279 @@ def hero_suggestions(conn: sqlite3.Connection, tenant_id: str, gallery_id: int, 
         (tenant_id, gallery_id),
     ).fetchall()
     return [r["image_id"] for r in rows if r["image_id"] not in culled][:limit]
+
+
+VISION_CALIBRATION_COLUMNS = (
+    "gallery_id",
+    "gallery_title",
+    "vision_backend",
+    "fallback_from",
+    "fallback_scope",
+    "style_applied",
+    "vision_completed_at",
+    "image_id",
+    "position",
+    "filename",
+    "content_type",
+    "width",
+    "height",
+    "bytes",
+    "analysis_status",
+    "keywords",
+    "shot_type",
+    "alt_text",
+    "keeper_score",
+    "keeper_decision_at_0_70",
+    "hero_potential",
+    "pipeline_hero",
+    "eyes_closed",
+    "blink_flag_at_0_85",
+    "duplicate_flag",
+    "exposure",
+    "sharpness",
+    "quality_flags",
+    "cull_apply_action",
+    "hidden_current",
+    "cover_current",
+    "client_favorite_current",
+    "review_keep",
+    "review_reason",
+    "review_notes",
+)
+
+
+def _yes_no(value: bool | None) -> str:
+    if value is None:
+        return ""
+    return "yes" if value else "no"
+
+
+def _strict_bool(value) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in {0, 1}:
+        return bool(value)
+    return None
+
+
+def _optional_score(value) -> float | None:
+    score = _as_float(value, math.nan)
+    if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+        return None
+    return score
+
+
+def _canonical_dup_key(value) -> str | None:
+    if not isinstance(value, str) or len(value) != 18 or value[:2] not in {"d_", "p_"}:
+        return None
+    try:
+        int(value[2:], 16)
+    except ValueError:
+        return None
+    return value
+
+
+def _stored_shot_type(value) -> str:
+    shot_type = _bounded_text(value, max_chars=64).lower()
+    return shot_type if shot_type in SHOT_TYPES else ""
+
+
+def _stored_vision_state(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    gallery_id: int,
+) -> tuple[dict, str]:
+    row = conn.execute(
+        "SELECT substr(steps_json, 1, 131072) AS steps_json FROM pipeline_runs "
+        "WHERE tenant_id = ? AND source = 'gallery' AND source_id = ?",
+        (tenant_id, str(gallery_id)),
+    ).fetchone()
+    if not row:
+        return {}, ""
+    try:
+        steps = json.loads(row["steps_json"] or "[]")
+    except (TypeError, ValueError):
+        return {}, ""
+    if not isinstance(steps, list):
+        return {}, ""
+    for step in steps:
+        if not isinstance(step, dict) or step.get("name") != "vision":
+            continue
+        if step.get("status") != "done":
+            return {}, ""
+        output = step.get("output")
+        summary = output.get("summary") if isinstance(output, dict) else None
+        finished_at = _bounded_text(step.get("finished_at"), max_chars=64)
+        return (summary if isinstance(summary, dict) else {}), finished_at
+    return {}, ""
+
+
+def gallery_calibration_rows(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    gallery_id: int,
+) -> list[dict]:
+    """One latest-snapshot review row per frame, including scores and weak labels.
+
+    The export is a calibration aid, not a new source of truth: blank review columns let
+    the studio label each row offline. Current hidden/cover/favorite fields are context,
+    not independent historical ground truth. The explicit tenant predicate and matched
+    joins keep the read safe even if inconsistent foreign rows reach the database.
+    """
+    gallery = conn.execute(
+        "SELECT id, substr(title, 1, 200) AS title, cover_image_id FROM galleries "
+        "WHERE id = ? AND tenant_id = ?",
+        (gallery_id, tenant_id),
+    ).fetchone()
+    if not gallery:
+        return []
+
+    cover_id = gallery["cover_image_id"]
+    cover_known = cover_id is None or (
+        isinstance(cover_id, int) and not isinstance(cover_id, bool)
+    )
+    summary, vision_completed_at = _stored_vision_state(conn, tenant_id, gallery_id)
+    backend = _bounded_text(summary.get("backend"), max_chars=64)
+    fallback_from = _bounded_text(summary.get("fallback_from"), max_chars=64)
+    fallback_scope = _bounded_text(summary.get("fallback_scope"), max_chars=64)
+    style_value = summary.get("style_applied")
+    style_applied = _yes_no(style_value if isinstance(style_value, bool) else None)
+    raw_hero_ids = summary.get("hero_image_ids")
+    hero_ids_known = (
+        isinstance(raw_hero_ids, list)
+        and len(raw_hero_ids) <= 1000
+        and all(
+            isinstance(value, int) and not isinstance(value, bool) and value > 0
+            for value in raw_hero_ids
+        )
+    )
+    hero_ids = set(raw_hero_ids) if hero_ids_known else set()
+    records = conn.execute(
+        "SELECT i.id AS image_id, i.position, substr(i.filename, 1, 1024) AS filename, "
+        "substr(i.content_type, 1, 128) AS content_type, i.width, "
+        "i.height, i.bytes, i.hidden, a.id AS analysis_id, "
+        "substr(a.keywords_json, 1, 4096) AS keywords_json, "
+        "a.keeper_score, a.hero_potential, substr(a.shot_type, 1, 128) AS shot_type, "
+        "substr(a.alt_text, 1, 1000) AS alt_text, a.eyes_closed, "
+        "substr(a.dup_key, 1, 128) AS dup_key, a.exposure, a.sharpness, "
+        "f.id IS NOT NULL AS client_favorite "
+        "FROM images i LEFT JOIN image_analyses a ON a.image_id = i.id "
+        "AND a.gallery_id = i.gallery_id AND a.tenant_id = i.tenant_id "
+        "LEFT JOIN image_favorites f ON f.image_id = i.id AND f.gallery_id = i.gallery_id "
+        "AND f.tenant_id = i.tenant_id "
+        "WHERE i.tenant_id = ? AND i.gallery_id = ? ORDER BY i.position, i.id",
+        (tenant_id, gallery_id),
+    ).fetchall()
+
+    normalized: dict[int, dict] = {}
+    duplicate_inputs: list[tuple[int, str, float]] = []
+    duplicate_evidence_complete = True
+    for record in records:
+        if record["analysis_id"] is None:
+            continue
+        keeper_score = _optional_score(record["keeper_score"])
+        values = {
+            "keeper_score": keeper_score,
+            "hero_potential": _optional_score(record["hero_potential"]),
+            "eyes_closed": _optional_score(record["eyes_closed"]),
+            "exposure": _optional_score(record["exposure"]),
+            "sharpness": _optional_score(record["sharpness"]),
+            "dup_key": _canonical_dup_key(record["dup_key"]),
+        }
+        normalized[record["image_id"]] = values
+        if values["dup_key"] is not None:
+            if keeper_score is None:
+                duplicate_evidence_complete = False
+            else:
+                duplicate_inputs.append(
+                    (record["image_id"], values["dup_key"], keeper_score)
+                )
+    duplicate_ids = (
+        cluster_duplicate_ids(duplicate_inputs) if duplicate_evidence_complete else set()
+    )
+
+    rows: list[dict] = []
+    for record in records:
+        analyzed = record["analysis_id"] is not None
+        values = normalized.get(record["image_id"], {})
+        try:
+            raw_keywords = (
+                json.loads((record["keywords_json"] or "")[:4096]) if analyzed else []
+            )
+        except (TypeError, ValueError):
+            raw_keywords = []
+        keywords = _keywords(raw_keywords)
+        quality_flags = (
+            _quality_flags(values.get("exposure"), values.get("sharpness"))
+            if analyzed
+            else []
+        )
+        keeper_score = values.get("keeper_score")
+        hero_potential = values.get("hero_potential")
+        eyes_closed = values.get("eyes_closed")
+        duplicate = (
+            record["image_id"] in duplicate_ids
+            if analyzed
+            and values.get("dup_key") is not None
+            and duplicate_evidence_complete
+            else None
+        )
+        blink = eyes_closed >= BLINK_THRESHOLD if eyes_closed is not None else None
+        if duplicate is True or blink is True:
+            cull_action = "hide"
+        elif duplicate is False and blink is False:
+            cull_action = "no_change"
+        else:
+            cull_action = ""
+        rows.append(
+            {
+                "gallery_id": gallery["id"],
+                "gallery_title": gallery["title"],
+                "vision_backend": backend,
+                "fallback_from": fallback_from,
+                "fallback_scope": fallback_scope,
+                "style_applied": style_applied,
+                "vision_completed_at": vision_completed_at,
+                "image_id": record["image_id"],
+                "position": record["position"],
+                "filename": record["filename"],
+                "content_type": record["content_type"],
+                "width": record["width"] if record["width"] is not None else "",
+                "height": record["height"] if record["height"] is not None else "",
+                "bytes": record["bytes"] if record["bytes"] is not None else "",
+                "analysis_status": "analyzed" if analyzed else "not_analyzed",
+                "keywords": "|".join(keywords),
+                "shot_type": (
+                    _stored_shot_type(record["shot_type"]) if analyzed else ""
+                ),
+                "alt_text": (
+                    _bounded_text(record["alt_text"], max_chars=_MAX_ALT_TEXT_CHARS)
+                    if analyzed
+                    else ""
+                ),
+                "keeper_score": keeper_score if keeper_score is not None else "",
+                "keeper_decision_at_0_70": _yes_no(
+                    keeper_score >= KEEPER_THRESHOLD if keeper_score is not None else None
+                ),
+                "hero_potential": hero_potential if hero_potential is not None else "",
+                "pipeline_hero": _yes_no(
+                    record["image_id"] in hero_ids if hero_ids_known and analyzed else None
+                ),
+                "eyes_closed": eyes_closed if eyes_closed is not None else "",
+                "blink_flag_at_0_85": _yes_no(blink),
+                "duplicate_flag": _yes_no(duplicate),
+                "exposure": values.get("exposure") if values.get("exposure") is not None else "",
+                "sharpness": values.get("sharpness") if values.get("sharpness") is not None else "",
+                "quality_flags": "|".join(quality_flags),
+                "cull_apply_action": cull_action,
+                "hidden_current": _yes_no(_strict_bool(record["hidden"])),
+                "cover_current": _yes_no(
+                    record["image_id"] == cover_id if cover_known else None
+                ),
+                "client_favorite_current": _yes_no(bool(record["client_favorite"])),
+                "review_keep": "",
+                "review_reason": "",
+                "review_notes": "",
+            }
+        )
+    return rows

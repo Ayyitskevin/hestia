@@ -23,6 +23,8 @@
         {% include "_csrf.html" %}
         <button class="btn ai" type="submit">⚡ Process — vision → offer</button>
       </form>
+      <a class="btn secondary" href="/galleries/{{ gallery.id }}/vision-calibration.csv"
+         title="Latest AI scores plus blank review columns; no image files are included">Export AI review (.csv)</a>
       {% if album %}
         <a class="btn secondary" href="/albums/{{ album.id }}">Album ({{ album.spreads|length }} spreads)</a>
         {% if album.approved_at %}<span class="pill on" title="Client approved the album">approved ✓</span>

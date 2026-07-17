@@ -47,13 +47,14 @@ No existing feature needs to be removed to do this work.
 | Product-render validation | **Landed** | Commit `25029d1` validates JPEG/PNG sources and provider output, exercises normal provider-sized rasters against every real preset, requires retained alpha for transparent output, and canonically crops/resizes/re-encodes before storage. |
 | Pillow runtime and compatibility | **Landed** | Pillow 12.3 is a core runtime dependency, its exact floor remains hash-locked, and hosted CI checks the focused perceptual-duplicate and media-delivery paths at that floor. |
 | Live-vision resilience | **Landed** | Vision chat responses and result fields are bounded before persistence. Typed xAI failures roll back all partial live rows, recompute the whole gallery with the deterministic mock, label the fallback, preserve offer creation, and retry live under the same offer token on reprocess. |
+| Vision calibration snapshot | **Landed; benchmark open** | Every authenticated studio gallery view exports one spreadsheet-safe row per frame with model scores, derived decisions, current weak labels, and blank reviewer columns. It includes no images or capability URLs. Analyses are latest-state only and exact model/prompt/style-at-run provenance is not yet persisted, so a labeled paid/live quality benchmark remains human-gated. |
 | Restore and artifact evidence | **Partial** | PRs #212 and #213 added restore/artifact evidence. Offsite-sync freshness, media-backend integration, and Caddy adaptation evidence remain open. |
 | Release and license truth | **Open - human gate** | License choice, tag history, and release metadata still require a legal/product decision. |
 
 ### Current priority map
 
-- **High - autonomous GREEN:** add an owner-facing vision calibration/export packet,
-  then per-tenant storage/unit-cost observability without enforcing quotas.
+- **High - autonomous GREEN:** add per-tenant storage/unit-cost observability without
+  enforcing quotas.
 - **High - human-gated:** decide the public pricing/BYOK story (the configurable hosted
   subsidy defaults to one live gallery up to 150 images; a studio key takes precedence,
   and deployments may disable the subsidy); decide media capability scope; validate
@@ -67,7 +68,8 @@ No existing feature needs to be removed to do this work.
   timezone/calendar schema, repository rulesets, and release/license metadata.
 - **Completed since the previous refresh:** Pillow floor coverage, strict content result
   validation, product-render validation, xAI image-contract correction, live-vision
-  whole-gallery resilience, and availability slot deduplication.
+  whole-gallery resilience, the studio calibration snapshot, and availability slot
+  deduplication.
 
 ## Historical verified baseline (frozen 2026-07-13)
 
@@ -258,9 +260,9 @@ superseded by the remaining sequence below.
 1. ✅ **Live-vision resilience (GREEN)** - response bytes and result fields are bounded;
    one clearly labeled whole-gallery mock fallback preserves offer creation and token
    idempotency when xAI fails, while reprocess retries live vision.
-2. **Vision calibration evidence (GREEN)** - export one review row per image with the
-   inputs and decisions needed to compare culling quality. A paid API benchmark or use of
-   customer photography remains separately human-gated.
+2. ✅ **Vision calibration snapshot (GREEN)** - export one safe review row per image with
+   current inputs, decisions, weak labels, and blank reviewer columns. Historical run
+   provenance, a paid API benchmark, or customer photography remain separately human-gated.
 3. **Storage economics visibility (GREEN)** - expose tenant-scoped byte totals and
    operator rollups from existing metadata, clearly naming thumbnail/S3-overhead
    exclusions; do not enforce quotas without a pricing decision.

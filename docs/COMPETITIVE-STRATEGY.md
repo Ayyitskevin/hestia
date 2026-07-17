@@ -26,8 +26,9 @@ inward; Hestia owns the business-OS side it doesn't touch.
 **The credibility hole has moved:** Hestia's booking-side table stakes are built on
 `main`, and blink scoring, perceptual duplicate clustering, cull application, hero
 selection, style profiles, bounded live-provider results, and explicit whole-gallery
-fallback already exist. The remaining vision gap is evidence: owner-reviewable
-calibration data and a labeled/live quality benchmark. Two product-truth gaps matter
+fallback and a studio-reviewable calibration snapshot already exist. The remaining
+vision gap is evidence: historical model/prompt/style-at-run provenance and an actually
+labeled live-quality benchmark. Two product-truth gaps matter
 just as much: the print-lab module is still a provider seam without shipping/selected
 print semantics, and the flat $40 promise does not yet explain the one-gallery hosted
 AI subsidy limit.
@@ -40,7 +41,8 @@ Each item is a vertical slice through the tenant → client → project → gall
 > `main`. This records code presence, not production-depth parity. Item 9 has a
 > structured mock-first/configurable HTTP lab seam, but not a lab-specific adapter or
 > selected-image/options/shipping capture. Item 10 is partially delivered; live-provider
-> resilience is built, while calibration and live-quality evidence remain open.
+> resilience and a safe offline-labeling snapshot are built, while historical provenance
+> and labeled live-quality evidence remain open.
 
 ### Phase 1 — Contract-to-cash credibility (makes Hestia a real studio CRM)
 1. ✅ **Contracts + e-signature** on the client/project spine (`crm`) — biggest table-stakes gap.
@@ -65,9 +67,9 @@ Each item is a vertical slice through the tenant → client → project → gall
 ### Phase 4 — AI compounding + retention (the durable moat)
 10. 🟡 **Deepen `vision`** — blink scoring, perceptual duplicate clustering, cull
     application, hero selection, style profiles, bounded live-result validation, and
-    explicit whole-gallery fallback exist. Next: owner calibration export and a
-    labeled/live quality benchmark. Paid API calls and real/customer photography remain
-    human-gated.
+    explicit whole-gallery fallback exist. A studio CSV now provides one current review
+    row per frame with blank labels. Next: historical run provenance and a labeled/live
+    quality benchmark. Paid API calls and real/customer photography remain human-gated.
 11. ✅ **Retention/upsell automations** (anniversary re-book, review requests, welcome) — delayed rules.
 12. ✅ **Mobile-responsive** client + photographer surfaces.
 

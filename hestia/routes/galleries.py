@@ -16,6 +16,7 @@ from ..campaigns import (
     launch_gallery_sales_campaign,
 )
 from ..crm import assign_gallery_to_project, get_client, get_project, list_projects
+from ..csv_export import csv_response
 from ..db import audit
 from ..delivery import delivery_url, enable_delivery, regenerate_delivery_token, set_delivery_expiry
 from ..email import notify
@@ -45,7 +46,13 @@ from ..proofing import (
 )
 from ..sales import get_offer_for_gallery, offer_public_url
 from ..tenants import get_tenant, tenant_flags
-from ..vision import cull_summary, gallery_analysis_map, hero_suggestions
+from ..vision import (
+    VISION_CALIBRATION_COLUMNS,
+    cull_summary,
+    gallery_analysis_map,
+    gallery_calibration_rows,
+    hero_suggestions,
+)
 from .deps import db_conn, render, settings_of, storage_of
 
 router = APIRouter(prefix="/galleries")
@@ -158,6 +165,29 @@ def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
                   flagged_pending=flagged_pending, too_large=too_large,
                   cover_id=gallery.get("cover_image_id"), delivery_link=delivery_link,
                   ai_usage=ai_usage, ai_subsidy=ai_subsidy)
+
+
+@router.get("/{gallery_id}/vision-calibration.csv")
+def gallery_vision_calibration(request: Request, gallery_id: int):
+    """Download a studio-labelable, spreadsheet-safe vision review packet."""
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        # SQLite SELECTs do not open a transaction in legacy mode. Start one
+        # explicitly so run metadata and image-analysis rows come from one WAL
+        # snapshot while a background reprocess may be committing new results.
+        conn.execute("BEGIN")
+        if not get_gallery(conn, auth.tenant["id"], gallery_id):
+            return RedirectResponse("/galleries", status_code=303)
+        calibration = gallery_calibration_rows(conn, auth.tenant["id"], gallery_id)
+    response = csv_response(
+        f"vision-calibration-{gallery_id}.csv",
+        VISION_CALIBRATION_COLUMNS,
+        ([row[column] for column in VISION_CALIBRATION_COLUMNS] for row in calibration),
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 @router.get("/{gallery_id}/selects.txt")

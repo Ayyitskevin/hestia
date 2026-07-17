@@ -36,6 +36,7 @@ SPINE_TESTS=(
   tests/test_fulfillment_lab.py
   tests/test_vision.py
   tests/test_vision_deepening.py
+  tests/test_vision_calibration_export.py
   tests/test_vision_prompt.py
   tests/test_xai_transport.py
   tests/test_custom_domains.py
