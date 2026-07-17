@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import math
 import sqlite3
 from dataclasses import dataclass, field
 
@@ -41,6 +42,15 @@ DUP_HAMMING_THRESHOLD = 5
 SHARP_THRESHOLD = 0.40    # softer than this → "soft" (likely out of focus / motion-blurred)
 DARK_THRESHOLD = 0.35     # darker than this → "dark" (underexposed)
 BRIGHT_THRESHOLD = 0.90   # brighter than this → "bright" (overexposed / blown highlights)
+
+# Bound every model-controlled text field before it reaches SQLite, templates,
+# search facets, or logs. The provider prompt asks for 3-6 short tokens and one
+# descriptive sentence; larger output is malformed, not additional product value.
+_MAX_KEYWORDS = 6
+_MAX_KEYWORD_CANDIDATES = 24
+_MAX_KEYWORD_CHARS = 64
+_MAX_ALT_TEXT_CHARS = 500
+MAX_VISION_RESPONSE_BYTES = 64 * 1024
 
 
 def content_dup_key(data: bytes) -> str:
@@ -201,13 +211,22 @@ class VisionError(RuntimeError):
     pass
 
 
+class VisionProviderError(VisionError):
+    """A live-provider/configuration/result failure eligible for safe fallback."""
+
+
 def _as_float(value, default: float = 0.0) -> float:
     """Coerce a model-supplied field to float, defaulting on junk. A live LLM may
     return a string ("high"), null, or omit the key — none of which should crash."""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, str) and len(value) > 64:
+        return default
     try:
-        return float(value)
+        result = float(value)
     except (TypeError, ValueError):
         return default
+    return result if math.isfinite(result) else default
 
 
 def _score(value) -> float:
@@ -222,19 +241,48 @@ def _score_or(value, default: float) -> float:
     return min(1.0, max(0.0, _as_float(value, default)))
 
 
+def _bounded_text(value, *, max_chars: int) -> str:
+    if not isinstance(value, str):
+        return ""
+    # Bound before splitting so pathological provider strings cannot force
+    # unbounded temporary lists just to normalize whitespace.
+    candidate = value[: max_chars * 2]
+    candidate = "".join(
+        "\ufffd" if 0xD800 <= ord(char) <= 0xDFFF else char for char in candidate
+    )
+    return " ".join(candidate.split())[:max_chars]
+
+
+def _keywords(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[str] = []
+    for raw in value[:_MAX_KEYWORD_CANDIDATES]:
+        keyword = _bounded_text(raw, max_chars=_MAX_KEYWORD_CHARS).lower()
+        if keyword and keyword not in normalized:
+            normalized.append(keyword)
+        if len(normalized) == _MAX_KEYWORDS:
+            break
+    return normalized
+
+
 def _result_from_parsed(parsed: dict) -> VisionResult:
     """Build a VisionResult from a model's parsed JSON, tolerating imperfect output
     (a string/null where a number was asked for, a non-list ``keywords``). This is
     the seam between an unpredictable LLM and the rest of the pipeline — it must
     never raise on shape, or one frame's odd response strands the whole run in
     'running'."""
-    raw_kw = parsed.get("keywords")
+    if not isinstance(parsed, dict):
+        return VisionResult()
+    shot_type = _bounded_text(parsed.get("shot_type"), max_chars=64).lower()
+    if shot_type not in SHOT_TYPES:
+        shot_type = "candid"
     return VisionResult(
-        keywords=[str(k) for k in raw_kw][:6] if isinstance(raw_kw, list) else [],
+        keywords=_keywords(parsed.get("keywords")),
         keeper_score=_score(parsed.get("keeper_score")),
         hero_potential=_score(parsed.get("hero_potential")),
-        shot_type=str(parsed.get("shot_type") or "candid"),
-        alt_text=str(parsed.get("alt_text") or ""),
+        shot_type=shot_type,
+        alt_text=_bounded_text(parsed.get("alt_text"), max_chars=_MAX_ALT_TEXT_CHARS),
         eyes_closed=_score(parsed.get("eyes_closed")),
         exposure=_score_or(parsed.get("exposure"), 0.5),
         sharpness=_score_or(parsed.get("sharpness"), 0.5),
@@ -316,7 +364,7 @@ class XaiVisionProvider:
         import base64
 
         if not self.settings.xai_api_key:
-            raise VisionError("HESTIA_XAI_API_KEY not set for xai vision backend")
+            raise VisionProviderError("HESTIA_XAI_API_KEY not set for xai vision backend")
         b64 = base64.b64encode(data).decode()
         prompt = vision_prompt(style)
         messages = [
@@ -333,19 +381,19 @@ class XaiVisionProvider:
             content = self.transport.chat_content(
                 messages=messages,
                 temperature=0.2,
+                max_response_bytes=MAX_VISION_RESPONSE_BYTES,
             )
             parsed = json.loads(_extract_json(content))
+            if not isinstance(parsed, dict):
+                raise ValueError("xai vision response must be a JSON object")
+            return _result_from_parsed(parsed)
         except Exception as exc:  # noqa: BLE001 - degrade to a usable result
-            raise VisionError(f"xai vision failed: {exc}") from exc
-        # Coercion lives in _result_from_parsed so a junk field (string/null where a
-        # number was asked for) degrades to a default instead of raising past the
-        # pipeline's VisionError handler and stranding the run in 'running'.
-        return _result_from_parsed(parsed)
+            raise VisionProviderError(f"xai vision failed: {exc}") from exc
 
 
 def _extract_json(text: str) -> str:
     start, end = text.find("{"), text.rfind("}")
-    return text[start : end + 1] if start >= 0 and end > start else "{}"
+    return text[start : end + 1] if start >= 0 and end > start else text.strip()
 
 
 def build_provider(settings: Settings):

@@ -25,7 +25,7 @@ from .jobs import register
 from .sales import create_or_update_offer, offer_public_url
 from .storage import build_storage
 from .tenants import get_tenant
-from .vision import VisionError, analyze_gallery
+from .vision import MockVisionProvider, VisionError, VisionProviderError, analyze_gallery
 
 STEP_DEFS = [
     {"name": "vision", "label": "Vision — understand every frame"},
@@ -160,9 +160,14 @@ def execute_run(
         # 1. vision -----------------------------------------------------------
         vision = _find_step(run, "vision")
         summary = (vision.get("output") or {}).get("summary")
-        if vision["status"] != "done" or not summary:
+        retry_live_after_fallback = (
+            isinstance(summary, dict) and summary.get("fallback_from") == "xai"
+        )
+        if vision["status"] != "done" or not summary or retry_live_after_fallback:
             _begin(vision)
             _save_run(conn, run)
+            subsidy_note = None
+            fallback_note = None
             try:
                 from .ai_usage import resolve_vision_provider
                 provider, subsidy_note = resolve_vision_provider(
@@ -173,7 +178,43 @@ def execute_run(
                     conn, storage, settings, tenant_id=tenant["id"],
                     gallery_id=gallery["id"], hero_count=flags.hero_count, provider=provider,
                 )
+            except VisionProviderError:
+                # A live provider can fail after some frame upserts. Roll the entire
+                # attempt back, then recompute every frame with one deterministic
+                # provider so persisted analyses never mix live and mock results.
+                conn.rollback()
+                try:
+                    summary = analyze_gallery(
+                        conn,
+                        storage,
+                        settings,
+                        tenant_id=tenant["id"],
+                        gallery_id=gallery["id"],
+                        hero_count=flags.hero_count,
+                        provider=MockVisionProvider(),
+                    )
+                except Exception as fallback_exc:  # noqa: BLE001 - persist a terminal run
+                    conn.rollback()
+                    failure_type = type(fallback_exc).__name__
+                    _finish(
+                        vision,
+                        status="error",
+                        detail=f"deterministic mock fallback failed ({failure_type})",
+                    )
+                    return _fail(conn, run, f"vision fallback failed ({failure_type})")
+                summary["fallback_from"] = "xai"
+                summary["fallback_scope"] = "whole_gallery"
+                fallback_note = "xAI unavailable · deterministic mock used for the whole gallery"
+                audit(
+                    conn,
+                    actor="pipeline",
+                    action="pipeline.vision_fallback",
+                    tenant_id=tenant["id"],
+                    detail=f"run {run_id} gallery {gallery['id']}: xai -> mock whole_gallery",
+                )
+                conn.commit()
             except VisionError as exc:
+                conn.rollback()
                 _finish(vision, status="error", detail=str(exc))
                 return _fail(conn, run, f"vision failed: {exc}")
             detail = (
@@ -182,6 +223,8 @@ def execute_run(
             )
             if subsidy_note:
                 detail = f"{detail} · {subsidy_note}"
+            if fallback_note:
+                detail = f"{detail} · {fallback_note}"
             _finish(vision, status="done", detail=detail, output={"summary": summary})
             _save_run(conn, run)
 

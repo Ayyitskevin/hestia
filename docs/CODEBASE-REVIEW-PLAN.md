@@ -3,7 +3,8 @@
 - **Original review:** 2026-07-13
 - **Historical baseline:** `a3f31b9c722554ddbdfcd26882c19eabcb95ad75` (`main`)
 - **Status refreshed:** 2026-07-17
-- **Status base:** `25029d1552b4e8012241f61eaaeb01e90d517dc6` (`main`)
+- **Status base:** current branch at this document revision (includes `25029d1` and
+  the 2026-07-17 live-vision resilience slice)
 - **Scope:** preserve every product capability; improve correctness, security,
   reproducibility, maintainability, and launch confidence without changing Hestia's
   modular-monolith doctrine.
@@ -45,16 +46,14 @@ No existing feature needs to be removed to do this work.
 | Shared xAI transport | **Landed; paid canary open** | PR #211 consolidated the repeated transport/error seam. Commit `25029d1` added bounded streaming for image responses, the current JSON/data-URI edit contract, and a configurable current image model. A paid live canary still needs explicit approval and a bounded test image. |
 | Product-render validation | **Landed** | Commit `25029d1` validates JPEG/PNG sources and provider output, exercises normal provider-sized rasters against every real preset, requires retained alpha for transparent output, and canonically crops/resizes/re-encodes before storage. |
 | Pillow runtime and compatibility | **Landed** | Pillow 12.3 is a core runtime dependency, its exact floor remains hash-locked, and hosted CI checks the focused perceptual-duplicate and media-delivery paths at that floor. |
+| Live-vision resilience | **Landed** | Vision chat responses and result fields are bounded before persistence. Typed xAI failures roll back all partial live rows, recompute the whole gallery with the deterministic mock, label the fallback, preserve offer creation, and retry live under the same offer token on reprocess. |
 | Restore and artifact evidence | **Partial** | PRs #212 and #213 added restore/artifact evidence. Offsite-sync freshness, media-backend integration, and Caddy adaptation evidence remain open. |
 | Release and license truth | **Open - human gate** | License choice, tag history, and release metadata still require a legal/product decision. |
 
 ### Current priority map
 
-- **High - autonomous GREEN:** make live vision results bounded and normalize malformed
-  provider fields; on a transport failure, perform one explicit whole-gallery mock
-  fallback that still mints the idempotent offer. Then add an owner-facing vision
-  calibration/export packet and per-tenant storage/unit-cost observability without
-  enforcing quotas.
+- **High - autonomous GREEN:** add an owner-facing vision calibration/export packet,
+  then per-tenant storage/unit-cost observability without enforcing quotas.
 - **High - human-gated:** decide the public pricing/BYOK story (the configurable hosted
   subsidy defaults to one live gallery up to 150 images; a studio key takes precedence,
   and deployments may disable the subsidy); decide media capability scope; validate
@@ -67,8 +66,8 @@ No existing feature needs to be removed to do this work.
   fulfillment retry/payment semantics, gallery-PIN authorization/rate limiting,
   timezone/calendar schema, repository rulesets, and release/license metadata.
 - **Completed since the previous refresh:** Pillow floor coverage, strict content result
-  validation, product-render validation, xAI image-contract correction, and availability
-  slot deduplication.
+  validation, product-render validation, xAI image-contract correction, live-vision
+  whole-gallery resilience, and availability slot deduplication.
 
 ## Historical verified baseline (frozen 2026-07-13)
 
@@ -256,9 +255,9 @@ superseded by the remaining sequence below.
 
 ## Remaining execution sequence
 
-1. **Live-vision resilience (GREEN)** - normalize bounded result fields and make one
-   clearly labeled whole-gallery mock fallback preserve offer creation and token
-   idempotency when xAI transport fails.
+1. ✅ **Live-vision resilience (GREEN)** - response bytes and result fields are bounded;
+   one clearly labeled whole-gallery mock fallback preserves offer creation and token
+   idempotency when xAI fails, while reprocess retries live vision.
 2. **Vision calibration evidence (GREEN)** - export one review row per image with the
    inputs and decisions needed to compare culling quality. A paid API benchmark or use of
    customer photography remains separately human-gated.

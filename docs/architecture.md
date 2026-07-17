@@ -51,6 +51,14 @@ run survives a restart. See [`jobs.py`](../hestia/jobs.py).
 Every seam keeps the whole flow testable in CI with no keys, and degrades safely
 when a real backend errors.
 
+Live vision hard-caps the provider response before JSON parsing, normalizes bounded
+scores and surrogate-safe text, and isolates provider/configuration/result failures
+from gallery-domain errors. If xAI fails mid-gallery, the pipeline rolls back every
+partial live analysis and recomputes the whole gallery once with the deterministic
+mock before continuing to the idempotent offer. The stored summary explicitly records
+`fallback_from=xai` and `fallback_scope=whole_gallery`; reprocessing that run retries
+live vision and still reuses the existing offer token.
+
 Product-photo edits use xAI's JSON data-URI contract. Source and rendered images
 are byte, side, and pixel bounded and fully decoded with Pillow, and the shared
 xAI transport enforces a response limit while streaming before JSON parsing.

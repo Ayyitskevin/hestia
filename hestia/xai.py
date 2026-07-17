@@ -115,10 +115,12 @@ class XaiTransport:
         messages: list[dict],
         temperature: float,
         timeout: float = 60,
+        max_response_bytes: int | None = None,
     ) -> str:
         response = self.post(
             "/chat/completions",
             timeout=timeout,
+            max_response_bytes=max_response_bytes,
             json={
                 "model": self._model,
                 "messages": messages,

@@ -15,7 +15,12 @@ from hestia.albums import XaiArranger
 from hestia.config import Settings
 from hestia.content import MockContent, XaiContent
 from hestia.products import PRESETS, XaiRenderer
-from hestia.vision import VisionError, XaiVisionProvider
+from hestia.vision import (
+    MAX_VISION_RESPONSE_BYTES,
+    VisionError,
+    VisionProviderError,
+    XaiVisionProvider,
+)
 from hestia.xai import XaiTransport
 
 
@@ -191,10 +196,93 @@ def test_vision_xai_contract(monkeypatch, settings):
 
     assert result.keywords == ["couple"]
     assert result.keeper_score == 0.8
-    kwargs = _assert_request(calls, response, path="/chat/completions", timeout=60)
+    kwargs = _assert_request(
+        calls,
+        response,
+        path="/chat/completions",
+        timeout=60,
+        method="stream",
+    )
     assert kwargs["json"]["model"] == "grok-test"
     image = kwargs["json"]["messages"][0]["content"][1]["image_url"]["url"]
     assert image == f"data:image/jpeg;base64,{base64.b64encode(b'jpeg').decode()}"
+
+
+def test_vision_xai_normalizes_and_bounds_malformed_fields(monkeypatch, settings, conn):
+    _capture_client(monkeypatch, {
+        "choices": [{"message": {"content": json.dumps({
+            "keywords": [
+                "  GOLDEN   HOUR  ",
+                "golden hour",
+                7,
+                "",
+                "x" * 100,
+                " Detail ",
+                "CANDID",
+                "extra",
+            ],
+            "shot_type": "not-a-shot",
+            "alt_text": "  A   product \ud800 " + (" description " * 100),
+            "keeper_score": True,
+            "hero_potential": "1.5",
+            "eyes_closed": "-0.2",
+            "exposure": "NaN",
+            "sharpness": "Infinity",
+        })}}],
+    })
+
+    result = XaiVisionProvider(_live(settings)).analyze(filename="frame.jpg", data=b"jpeg")
+
+    assert result.keywords == [
+        "golden hour",
+        "x" * 64,
+        "detail",
+        "candid",
+        "extra",
+    ]
+    assert result.shot_type == "candid"
+    assert len(result.alt_text) == 500
+    assert "  " not in result.alt_text
+    assert "\ud800" not in result.alt_text
+    assert "\ufffd" in result.alt_text
+    assert conn.execute("SELECT ?", (result.alt_text,)).fetchone()[0] == result.alt_text
+    assert result.keeper_score == 0.0
+    assert result.hero_potential == 1.0
+    assert result.eyes_closed == 0.0
+    assert result.exposure == 0.5
+    assert result.sharpness == 0.5
+
+
+@pytest.mark.parametrize("content", ["[]", "null", '"text"'])
+def test_vision_xai_non_object_json_is_typed_provider_failure(
+    monkeypatch, settings, content
+):
+    _capture_client(monkeypatch, {
+        "choices": [{"message": {"content": content}}],
+    })
+
+    with pytest.raises(VisionProviderError, match="JSON object"):
+        XaiVisionProvider(_live(settings)).analyze(filename="frame.jpg", data=b"jpeg")
+
+
+@pytest.mark.parametrize(
+    "headers, content",
+    [
+        ({"Content-Length": str(MAX_VISION_RESPONSE_BYTES + 1)}, "{}"),
+        ({}, "x" * MAX_VISION_RESPONSE_BYTES),
+    ],
+)
+def test_vision_xai_bounds_response_before_json_parsing(
+    monkeypatch, settings, headers, content
+):
+    _capture_client(
+        monkeypatch,
+        {"choices": [{"message": {"content": content}}]},
+        headers=headers,
+    )
+
+    with pytest.raises(VisionProviderError, match="transport size limit"):
+        XaiVisionProvider(_live(settings)).analyze(filename="frame.jpg", data=b"jpeg")
 
 
 def _image_bytes(

@@ -49,7 +49,7 @@ def test_xai_result_tolerates_junk_model_output():
     assert r.keywords == [] and r.shot_type == "candid"        # non-list / null → no crash
     # well-formed output still parses through unchanged
     good = _result_from_parsed({"keeper_score": 0.8, "hero_potential": 0.6, "eyes_closed": 0.1,
-                                "keywords": ["a", "b"], "shot_type": "portrait"})
+                                "keywords": ["a", "b"], "shot_type": " Portrait "})
     assert good.keeper_score == 0.8 and good.keywords == ["a", "b"] and good.shot_type == "portrait"
 
 
