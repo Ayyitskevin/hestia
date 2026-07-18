@@ -264,6 +264,11 @@ def _score_lead(row: dict) -> dict:
     row["intent_value"] = money(int(row.get("intent_cents") or 0))
     row["href"] = f"/projects/{row['id']}"
     row["client_href"] = f"/clients/{row['client_id']}" if row.get("client_id") else ""
+    row["action_href"] = (
+        f"{row['client_href']}/edit"
+        if not (row.get("client_email") or "").strip() and row["client_href"]
+        else row["href"]
+    )
     return row
 
 

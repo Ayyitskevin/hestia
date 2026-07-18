@@ -5,6 +5,7 @@
 <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; font-size:.72rem; color:var(--ink-3)">
   <a href="/clients" style="color:var(--ink-2)">Clients</a><span>/</span><span style="color:var(--ink); font-weight:600">{{ client.name }}</span>
   <div style="margin-left:auto; display:flex; gap:8px">
+    <a class="btn secondary" href="/clients/{{ client.id }}/edit">Edit client</a>
     <a class="btn secondary" href="/clients/{{ client.id }}/statement">Statement</a>
     {% if client.email %}<a class="btn secondary" href="/clients/{{ client.id }}/email">Email client</a>{% endif %}
     <a class="btn" href="/projects/new?client_id={{ client.id }}">+ New project</a>
@@ -20,7 +21,7 @@
       <span class="avatar lg">{{ (_cw[:2] | map('first') | join) | upper }}</span>
       <div>
         <div class="profile-name">{{ client.name }}</div>
-        <div class="profile-sub">{{ client.email or "no email" }}{% if client.phone %} · {{ client.phone }}{% endif %}</div>
+        <div class="profile-sub">{% if client.email %}{{ client.email }}{% else %}<a href="/clients/{{ client.id }}/edit">Add email</a>{% endif %}{% if client.phone %} · {{ client.phone }}{% endif %}</div>
       </div>
     </div>
 

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ client.name }} — Hestia{% endblock %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="card stack">
+  <h1>Edit client</h1>
+  <p class="muted" style="margin:0">Correct contact details without losing linked projects, messages, or history.</p>
+  <form method="post" action="/clients/{{ client.id }}/edit">
+    {% include "_csrf.html" %}
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" value="{{ client.name }}" maxlength="200" required autofocus>
+    <label for="email">Email <span class="muted">(optional)</span></label>
+    <input type="email" id="email" name="email" value="{{ client.email }}" maxlength="254">
+    <label for="phone">Phone <span class="muted">(optional)</span></label>
+    <input type="text" id="phone" name="phone" value="{{ client.phone }}" maxlength="40">
+    <label for="notes">Notes <span class="muted">(optional)</span></label>
+    <textarea id="notes" name="notes" rows="5" maxlength="20000">{{ client.notes }}</textarea>
+    <div class="form-actions">
+      <button class="btn" type="submit">Save client</button>
+      <a class="btn ghost" href="/clients/{{ client.id }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

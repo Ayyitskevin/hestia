@@ -50,6 +50,29 @@ def get_client(conn: sqlite3.Connection, tenant_id: str, client_id: int) -> dict
     return dict(row) if row else None
 
 
+def update_client(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    client_id: int,
+    *,
+    name: str,
+    email: str = "",
+    phone: str = "",
+    notes: str = "",
+) -> bool:
+    """Update one studio-owned client using the same field bounds as creation."""
+    name = (name or "").strip()
+    if not name:
+        return False
+    cur = conn.execute(
+        "UPDATE clients SET name = ?, email = ?, phone = ?, notes = ? "
+        "WHERE id = ? AND tenant_id = ?",
+        (name[:200], (email or "").strip()[:254], (phone or "").strip()[:40],
+         (notes or "").strip()[:20000], client_id, tenant_id),
+    )
+    return cur.rowcount == 1
+
+
 def import_clients(conn: sqlite3.Connection, *, tenant_id: str, rows: list[dict]) -> dict:
     """Bulk-create clients from parsed rows (each a dict with name/email/phone/notes and
     an optional ``tags`` list). A blank-name row is skipped; a row whose email already

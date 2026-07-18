@@ -32,6 +32,7 @@ from ..crm import (
     search_crm,
     set_project_status,
     tags_for_client,
+    update_client,
 )
 from ..csv_export import csv_response
 from ..db import audit
@@ -306,6 +307,32 @@ def client_detail(request: Request, client_id: int):
                   projects=projects, timeline=timeline, tags=tags, portal_link=portal_link,
                   refer_link=refer_link, credits=credits, messages=messages,
                   credit_balance_display=money(balance), credit_balance=balance)
+
+
+@router.get("/clients/{client_id}/edit")
+def client_edit(request: Request, client_id: int):
+    with db_conn(request) as conn:
+        auth = tenant_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        client = get_client(conn, auth.tenant["id"], client_id)
+        if not client:
+            return RedirectResponse("/clients", status_code=303)
+    return render(request, "crm/client_edit.html", auth=auth, client=client)
+
+
+@router.post("/clients/{client_id}/edit")
+def client_update(request: Request, client_id: int, name: str = Form(...),
+                  email: str = Form(""), phone: str = Form(""), notes: str = Form("")):
+    with db_conn(request) as conn:
+        auth = tenant_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+        if update_client(conn, auth.tenant["id"], client_id, name=name, email=email,
+                         phone=phone, notes=notes):
+            audit(conn, actor="owner", action="client.updated", tenant_id=auth.tenant["id"],
+                  detail=f"client #{client_id}")
+    return RedirectResponse(f"/clients/{client_id}", status_code=303)
 
 
 @router.get("/clients/{client_id}/statement")

@@ -83,7 +83,7 @@
     <div class="spotlight-title"><a href="{{ top_lead.href }}" style="color:inherit; text-decoration:none">{{ top_lead.name }}</a>{% if top_lead.client_name %} <span class="muted" style="font-size:.85rem; font-weight:normal">· {{ top_lead.client_name }}</span>{% endif %}{% if top_lead.intent_value %} — <span class="accent">{{ top_lead.intent_value }} open intent</span>{% endif %}</div>
     <div class="spotlight-sub">{{ top_lead.priority }} · score {{ top_lead.score }} — {{ top_lead.reason_line }}. Next: {{ top_lead.next_action }}.</div>
     <div class="spotlight-actions">
-      <a class="btn" href="{{ top_lead.href }}">{{ top_lead.next_action }}</a>
+      <a class="btn" href="{{ top_lead.action_href }}">{{ top_lead.next_action }}</a>
       <a class="btn secondary" href="{{ top_lead.href }}">View lead</a>
     </div>
     {% else %}

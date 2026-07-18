@@ -125,6 +125,7 @@ def test_hot_leads_rank_sales_signals_and_explain_score(conn, settings):
     assert "Confirmed session" in top["reasons"]
     assert "Retainer open" in top["reasons"]
     assert leads[1]["next_action"] == "Add an email before follow-up"
+    assert leads[1]["action_href"] == f"/clients/{c_cold['id']}/edit"
     assert leads[1]["score"] < top["score"]
 
 
@@ -173,6 +174,7 @@ def test_dashboard_page_shows_attention(client, app):
     page = client.get("/dashboard")
     assert page.status_code == 200
     assert "Needs attention" in page.text and "New inquiry" in page.text
+    assert f'href="/clients/{c["id"]}/edit">Add an email before follow-up</a>' in page.text
 
 
 def test_dashboard_page_shows_lead_intelligence(client, app):

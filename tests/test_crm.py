@@ -7,10 +7,12 @@ from hestia.crm import (
     create_client,
     create_project,
     galleries_for_project,
+    get_client,
     get_project,
     list_clients,
     list_projects,
     set_project_status,
+    update_client,
 )
 from hestia.galleries import create_gallery
 from hestia.tenants import create_tenant
@@ -30,6 +32,42 @@ def test_client_crud_and_project_count(conn):
     assert len(rows) == 1 and rows[0]["project_count"] == 0
     create_project(conn, tenant_id=t["id"], name="Wedding", client_id=c["id"])
     assert list_clients(conn, t["id"])[0]["project_count"] == 1
+
+
+def test_update_client_is_bounded_clearable_and_tenant_scoped(conn):
+    owner = _tenant(conn, "Owner")
+    other = _tenant(conn, "Other")
+    c = create_client(
+        conn,
+        tenant_id=owner["id"],
+        name="Original",
+        email="old@example.com",
+        phone="555-0100",
+        notes="Original note",
+    )
+
+    assert update_client(
+        conn,
+        owner["id"],
+        c["id"],
+        name="  " + ("N" * 205),
+        email="e" * 260,
+        phone="1" * 45,
+        notes="x" * 20_005,
+    )
+    updated = get_client(conn, owner["id"], c["id"])
+    assert len(updated["name"]) == 200
+    assert len(updated["email"]) == 254
+    assert len(updated["phone"]) == 40
+    assert len(updated["notes"]) == 20_000
+
+    assert not update_client(conn, other["id"], c["id"], name="Hijacked")
+    assert get_client(conn, owner["id"], c["id"])["name"] == "N" * 200
+    assert not update_client(conn, owner["id"], c["id"], name="   ")
+    assert update_client(conn, owner["id"], c["id"], name="Corrected")
+    cleared = get_client(conn, owner["id"], c["id"])
+    assert cleared["name"] == "Corrected"
+    assert cleared["email"] == cleared["phone"] == cleared["notes"] == ""
 
 
 def test_project_join_and_status(conn):
@@ -100,3 +138,35 @@ def test_http_create_client_and_project_and_link(client):
     client.post("/galleries", data={"title": "Campaign Gallery", "project_id": pid})
     page = client.get(f"/projects/{pid}")
     assert "Campaign Gallery" in page.text  # gallery shows under its project
+
+
+def test_http_edit_client_recovers_missing_contact_details(client):
+    creds = onboard_studio(client, email="client-edit@example.com")
+    login_owner(client, creds)
+    created = client.post("/clients", data={"name": "Tyop Name"})
+    client_id = created.url.path.rstrip("/").split("/")[-1]
+
+    detail = client.get(f"/clients/{client_id}")
+    assert f'href="/clients/{client_id}/edit"' in detail.text
+    edit = client.get(f"/clients/{client_id}/edit")
+    assert edit.status_code == 200
+    assert 'value="Tyop Name"' in edit.text
+
+    saved = client.post(
+        f"/clients/{client_id}/edit",
+        data={
+            "name": "Taylor Name",
+            "email": "taylor@example.com",
+            "phone": "555-0199",
+            "notes": "Corrected after the inquiry.",
+        },
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    assert saved.headers["location"] == f"/clients/{client_id}"
+    updated = client.get(saved.headers["location"])
+    assert "Taylor Name" in updated.text
+    assert "taylor@example.com" in updated.text
+    assert "555-0199" in updated.text
+    assert "Corrected after the inquiry." in updated.text
+    assert f'href="/clients/{client_id}/email"' in updated.text
