@@ -2,9 +2,8 @@
 
 - **Original review:** 2026-07-13
 - **Historical baseline:** `a3f31b9c722554ddbdfcd26882c19eabcb95ad75` (`main`)
-- **Status refreshed:** 2026-07-17
-- **Status base:** `465c6b45abdb46e9ddce64d9d4b8fdbcd5a6fa1d` plus the Unreleased
-  migration-evidence and decision-documentation slice described below
+- **Status refreshed:** 2026-07-18
+- **Status base:** `804523fc469f8e2f2a8b5ed685273aa97baf47f8` (`main`)
 - **Scope:** preserve every product capability; improve correctness, security,
   reproducibility, maintainability, and launch confidence without changing Hestia's
   modular-monolith doctrine.
@@ -52,6 +51,8 @@ No existing feature needs to be removed to do this work.
 | Vision calibration snapshot | **Landed; benchmark open** | Every authenticated studio gallery view exports one spreadsheet-safe row per frame with model scores, derived decisions, current weak labels, and blank reviewer columns. It includes no images or capability URLs. Analyses are latest-state only and exact model/prompt/style-at-run provenance is not yet persisted, so a labeled paid/live quality benchmark remains human-gated. |
 | Storage footprint visibility | **Landed; pricing open** | Owner Account and master-admin System views expose tenant-matched, overflow-safe original-image and project-file byte metadata with anomaly counts and explicit derived-object/provider-cost exclusions. It is a planning denominator only: dollars, quotas, and billing remain human-gated. |
 | Publication and schedule idempotency | **Landed** | Gallery publication is a guarded one-way transition, so retries preserve the original timestamp and emit one audit/automation event. A real appointment reschedule supersedes queued confirmation/reminder history and binds one fresh pair to the new time/generation; same-time retries are side-effect-free. This does not claim exactly-once SMTP delivery. |
+| Workflow correction | **Landed** | Booking-side effects now follow a real tenant-owned status transition, studios can correct client contact details without losing linked history, and a successful proofing revision atomically reopens selection submission while unchanged retries remain inert. |
+| Exception-path capability redaction | **Open - human gate** | Normal request logs use the private-surface registry, but the generic exception handler still records the raw request path. A forced 500 on a capability URL can therefore persist its token. Reuse the canonical redactor and add exception regressions only after the security change is approved. |
 | Restore and artifact evidence | **Partial** | PRs #212 and #213 added restore/artifact evidence. Offsite-sync freshness, media-backend integration, and Caddy adaptation evidence remain open. |
 | Release and license truth | **Open - human gate** | License choice, tag history, and release metadata still require a legal/product decision. |
 
@@ -64,11 +65,14 @@ not an approval record.
 - **High - human-gated:** decide D1-D5 in
   [`HUMAN-DECISIONS.md`](HUMAN-DECISIONS.md), approve the non-bypassable hosted hold
   design for preflight/Admin Launch/signup/invites/client Checkout/invoice webhook/media,
-  then review the public Caddy custom-domain edge separately.
+  approve exception-path capability redaction, then review the public Caddy custom-domain
+  edge separately.
 - **High - autonomous evidence:** verify the production SQLite runtime contains the
   WAL-reset fix or a documented vendor backport before proposing any runtime change.
-- **Medium - autonomous GREEN:** keep provider result validation domain-local and
-  update competitive claims whenever shipped depth changes.
+- **Medium - autonomous GREEN:** repair gallery-to-project association after creation,
+  replace dashboard all-gallery double hydration with bounded count/recent queries, then
+  bound future availability reads. Keep provider validation domain-local and update
+  competitive claims whenever shipped depth changes.
 - **Medium - human-gated after design:** subscription terminal-state ordering,
   fulfillment retry/payment semantics, timezone/calendar schema, repository rulesets,
   and release/license metadata.
@@ -274,12 +278,15 @@ superseded by the remaining sequence below.
    rollups now use existing metadata with anomaly counts and explicit thumbnail,
    generated-render, and provider-cost exclusions. No quota or dollar estimate is
    enforced without a pricing decision.
-4. **Product and risk decisions** - obtain D1-D5 from
+4. **Workflow continuity and bounded reads (GREEN)** - let studios attach, move, or
+   clear a gallery's project after creation with portal propagation; then add dedicated
+   dashboard count/recent-gallery queries and a bounded availability horizon.
+5. **Product and risk decisions** - obtain D1-D5 from
    [`HUMAN-DECISIONS.md`](HUMAN-DECISIONS.md), then separately decide fulfillment depth,
-   timezone/calendar schema, and the public edge.
-5. **Approved corrections** - implement money, security, schema, and infrastructure
+   timezone/calendar schema, exception-path capability redaction, and the public edge.
+6. **Approved corrections** - implement money, security, schema, and infrastructure
    changes only inside their approved designs and with their stronger gates.
-6. **Release truth** - reconcile license, tags, and release metadata only after the
+7. **Release truth** - reconcile license, tags, and release metadata only after the
    owner chooses the actual legal and packaging posture.
 
 ## Autonomous working contract

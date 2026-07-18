@@ -74,6 +74,75 @@ Each item is a vertical slice through the tenant → client → project → gall
 11. ✅ **Retention/upsell automations** (anniversary re-book, review requests, welcome) — delayed rules.
 12. ✅ **Mobile-responsive** client + photographer surfaces.
 
+## 90-day execution plan — 2026-07-18
+
+The repository is already broad enough. The next quarter should deepen the transitions
+that make the breadth feel like one product, not add another module. The exact planning
+base is `804523fc469f8e2f2a8b5ed685273aa97baf47f8`.
+
+The competitive bar moved again: HoneyBook now ships native galleries and mini sessions,
+while also pushing two-way texting and Tap to Pay; Pixieset and Pic-Time remain much deeper
+in gallery presentation, storage, store, and automatic fulfillment; Aftershoot now joins
+culling, retouching, proofing, galleries, and print sales. Hestia therefore cannot win on
+feature-count parity. It must make the client-to-cash loop unusually continuous and turn
+its shared vision/favorites signal into measurable post-shoot revenue.
+
+### Release lane — held until owner decisions
+
+Keep public ingress, live client payments, and public media closed until D1-D5 and the
+separate committed runtime-release boundary are approved, implemented, and verified.
+The same security review should close raw capability paths in exception logs. Custom-domain
+edge activation, SQLite WAL-reset patch evidence, subscription event ordering, and
+license/release truth remain independent gates; a green deterministic CI run does not
+substitute for them.
+
+### Days 0–30 — one client home and complete booking state
+
+1. Finish the autonomous continuity queue: repair gallery/project association after
+   creation, add bounded dashboard gallery read models, and bound future availability
+   reads.
+2. Make the client action room the canonical destination. Once its token contract is
+   approved, create and send it intentionally, return clients there after sign/pay/form/
+   gallery/album actions, and add proposal creation to the project hub.
+3. Stop fragmenting repeat clients. Design normalized-email matching plus an explicit
+   duplicate-review/merge tool; do not silently merge records from public input.
+4. After the money contract is approved, enforce `package total = deposit + scheduled
+   balance(s)` for booking, proposal, and mini-session paths.
+
+### Days 31–60 — a delivery experience clients remember
+
+1. Surface the proofing URL immediately after publication and make its send/automation
+   context explicit. Do not widen anonymous media authority before D3 is closed.
+2. Build a gallery lightbox with large-image navigation, favorites and notes in context,
+   mobile gestures, branded cover/story controls, and a clear proofing-to-final-download
+   transition.
+3. Add client-selectable proposal collections/add-ons and typed questionnaire fields
+   before pursuing generalized document-builder depth.
+4. Define timezone ownership and external-busy synchronization. Implement it after the
+   schema/integration design is approved, because outbound floating-time ICS is not
+   protection against real Google/Outlook conflicts.
+
+### Days 61–90 — selection-to-sale pilot
+
+Pilot one narrow, real print path: AI heroes plus client favorites become an editable
+photographer-approved recommendation; the client selects frames/options, reviews crop,
+provides shipping, pays through the approved connected-account path, and one chosen lab
+fulfills with observable retry/reconciliation. Measure gallery-to-offer, offer-to-cart,
+cart-to-paid, order margin, fulfillment failure, and time-to-resolution. This is the
+defensible wedge. General content publishing, broad marketplace product variants, and a
+large lab catalog wait until the pilot earns revenue.
+
+### Parity gaps to track without losing the wedge
+
+| Surface | Current depth | Next proof of credibility |
+|---|---|---|
+| Client home | Ranked action room exists but enable/send and return context are fragmented | One intentional portal lifecycle and uninterrupted booking checklist |
+| Booking economics | Deposits exist; remaining package balance is not consistently created | Total/deposit/balance invariant with approved settlement semantics |
+| Gallery delivery | Upload, publish, proofing, favorites, comments, cull, offer, and download exist | Owner-visible proof link plus lightbox-quality client presentation |
+| Communication/calendar | Outbound email and calendar subscription exist | Approved two-way messaging and timezone-aware external-busy sync |
+| Print commerce | Stable offers, orders, and a generic lab seam exist | Selected frames/options/shipping, one real lab, and reconciliation |
+| AI moat | Vision and favorites already curate offers | Historical provenance, labeled benchmark, editable recommendation, measured sales lift |
+
 ## Where AI is a wedge vs a gimmick
 
 - **Genuine & defensible:** AI wired *into the revenue loop* — auto-curating sellable
