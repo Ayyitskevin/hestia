@@ -141,6 +141,14 @@ def search_crm(conn: sqlite3.Connection, tenant_id: str, query: str, *, limit: i
     return {"clients": clients, "projects": projects}
 
 
+def client_count(conn: sqlite3.Connection, tenant_id: str) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM clients WHERE tenant_id = ?",
+        (tenant_id,),
+    ).fetchone()
+    return int(row["n"])
+
+
 def list_clients(conn: sqlite3.Connection, tenant_id: str, *, tag: str | None = None) -> list[dict]:
     sql = (
         "SELECT c.*, COUNT(DISTINCT p.id) AS project_count, "
@@ -240,6 +248,14 @@ def get_project(conn: sqlite3.Connection, tenant_id: str, project_id: int) -> di
         (project_id, tenant_id),
     ).fetchone()
     return dict(row) if row else None
+
+
+def project_count(conn: sqlite3.Connection, tenant_id: str) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM projects WHERE tenant_id = ?",
+        (tenant_id,),
+    ).fetchone()
+    return int(row["n"])
 
 
 def list_projects(conn: sqlite3.Connection, tenant_id: str, *, client_id: int | None = None) -> list[dict]:

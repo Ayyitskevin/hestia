@@ -6,7 +6,13 @@ from conftest import login_owner, onboard_studio
 
 from hestia.booking import create_booking_type
 from hestia.contracts import create_contract, send_contract
-from hestia.crm import assign_gallery_to_project, create_client, create_project
+from hestia.crm import (
+    assign_gallery_to_project,
+    client_count,
+    create_client,
+    create_project,
+    project_count,
+)
 from hestia.dashboard import (
     hot_leads,
     money_snapshot,
@@ -38,6 +44,110 @@ from hestia.routes import web as web_routes
 from hestia.sales import create_or_update_offer
 from hestia.subscriptions import apply_plan, get_subscription
 from hestia.tenants import create_tenant
+
+
+def test_dashboard_crm_counts_are_direct_and_tenant_scoped(conn):
+    studio = create_tenant(conn, name="Count Studio", shoot_type="wedding")
+    other = create_tenant(conn, name="Other Count Studio", shoot_type="portrait")
+    empty = create_tenant(conn, name="Empty Count Studio", shoot_type="food")
+    clients = [
+        create_client(conn, tenant_id=studio["id"], name=f"Client {index}")
+        for index in range(3)
+    ]
+    create_project(
+        conn,
+        tenant_id=studio["id"],
+        name="Linked project",
+        client_id=clients[0]["id"],
+    )
+    create_project(conn, tenant_id=studio["id"], name="Unlinked project")
+    foreign_client = create_client(conn, tenant_id=other["id"], name="Foreign client")
+    create_project(
+        conn,
+        tenant_id=other["id"],
+        name="Foreign project",
+        client_id=foreign_client["id"],
+    )
+    conn.commit()
+
+    assert client_count(conn, other["id"]) == 1
+    assert project_count(conn, other["id"]) == 1
+    assert client_count(conn, empty["id"]) == 0
+    assert project_count(conn, empty["id"]) == 0
+
+    statements: list[str] = []
+    conn.set_trace_callback(statements.append)
+    try:
+        counts = (
+            client_count(conn, studio["id"]),
+            project_count(conn, studio["id"]),
+        )
+    finally:
+        conn.set_trace_callback(None)
+
+    selects = [
+        " ".join(sql.upper().split())
+        for sql in statements
+        if sql.lstrip().upper().startswith("SELECT")
+    ]
+    assert counts == (3, 2)
+    assert len(selects) == 2
+    assert any("FROM CLIENTS WHERE TENANT_ID" in sql for sql in selects)
+    assert any("FROM PROJECTS WHERE TENANT_ID" in sql for sql in selects)
+    assert all(" JOIN " not in sql and "(SELECT" not in sql for sql in selects)
+
+
+def test_dashboard_route_uses_direct_crm_counts(client, app, monkeypatch):
+    credentials = onboard_studio(
+        client,
+        name="CRM Count Dashboard",
+        email="crm-count-dashboard@example.com",
+    )
+    login_owner(client, credentials)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tenant_id = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        clients = [
+            create_client(conn, tenant_id=tenant_id, name=f"Dashboard client {index}")
+            for index in range(3)
+        ]
+        create_project(
+            conn,
+            tenant_id=tenant_id,
+            name="Dashboard project 1",
+            client_id=clients[0]["id"],
+        )
+        create_project(conn, tenant_id=tenant_id, name="Dashboard project 2")
+        conn.commit()
+    finally:
+        conn.close()
+
+    calls = []
+    real_client_count = web_routes.client_count
+    real_project_count = web_routes.project_count
+
+    def observed_client_count(conn, observed_tenant_id):
+        calls.append(("clients", observed_tenant_id))
+        return real_client_count(conn, observed_tenant_id)
+
+    def observed_project_count(conn, observed_tenant_id):
+        calls.append(("projects", observed_tenant_id))
+        return real_project_count(conn, observed_tenant_id)
+
+    def obsolete_full_hydration(*_args, **_kwargs):
+        raise AssertionError("dashboard must not hydrate every CRM row")
+
+    monkeypatch.setattr(web_routes, "client_count", observed_client_count)
+    monkeypatch.setattr(web_routes, "project_count", observed_project_count)
+    monkeypatch.setattr(web_routes, "list_clients", obsolete_full_hydration, raising=False)
+    monkeypatch.setattr(web_routes, "list_projects", obsolete_full_hydration, raising=False)
+
+    page = client.get("/dashboard")
+
+    assert page.status_code == 200
+    assert calls == [("clients", tenant_id), ("projects", tenant_id)]
+    assert '<span class="svc">3</span> <span class="url">clients</span>' in page.text
+    assert '<span class="svc">2</span> <span class="url">projects</span>' in page.text
 
 
 def test_recent_galleries_are_bounded_ordered_and_tenant_scoped(conn):

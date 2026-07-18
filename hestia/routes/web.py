@@ -17,7 +17,7 @@ from ..auth import (
 from ..billing import plan_status
 from ..booking import list_booking_types
 from ..campaigns import gallery_sales_opportunities
-from ..crm import list_clients, list_projects
+from ..crm import client_count, project_count
 from ..dashboard import (
     hot_leads,
     money_snapshot,
@@ -574,8 +574,8 @@ def dashboard(request: Request):
             (tenant["id"],),
         ).fetchone()["n"]
         counts = {
-            "clients": len(list_clients(conn, tenant["id"])),
-            "projects": len(list_projects(conn, tenant["id"])),
+            "clients": client_count(conn, tenant["id"]),
+            "projects": project_count(conn, tenant["id"]),
             "galleries": gallery_count(conn, tenant["id"]),
             "unpaid": unpaid,
         }

@@ -25,6 +25,9 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Fixed
 
+- Replaced the dashboard's full client and project list hydration with direct,
+  tenant-scoped counts. Rich CRM rows remain available to their dedicated screens
+  without materializing every client, invoice, tag, project, or gallery relationship.
 - Bounded booking and reschedule conflict reads to their generated availability horizon,
   including the final slot's next-day buffer. Far-future appointments are no longer
   hydrated or compared for every candidate slot, and the indexed timestamp column is
