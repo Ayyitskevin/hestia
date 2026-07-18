@@ -236,12 +236,22 @@ def list_projects(conn: sqlite3.Connection, tenant_id: str, *, client_id: int | 
 
 
 def set_project_status(conn: sqlite3.Connection, tenant_id: str, project_id: int, status: str) -> None:
+    """Apply one real tenant-owned status transition and then emit its effects.
+
+    The guarded update is the claim: a retry of the current value, a missing project,
+    or another tenant's project changes no row and therefore cannot enqueue booking
+    automations. A later transition away and back to ``booked`` is a new decision and
+    may emit again.
+    """
     if status not in PROJECT_STATUSES:
         return
-    conn.execute(
-        "UPDATE projects SET status = ? WHERE id = ? AND tenant_id = ?",
-        (status, project_id, tenant_id),
+    cur = conn.execute(
+        "UPDATE projects SET status = ? "
+        "WHERE id = ? AND tenant_id = ? AND status <> ?",
+        (status, project_id, tenant_id, status),
     )
+    if cur.rowcount != 1:
+        return
     if status == "booked":
         emit_event(conn, tenant_id=tenant_id, event="project.booked",
                    context={"project_id": project_id})

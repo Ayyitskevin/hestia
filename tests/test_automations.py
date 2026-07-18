@@ -99,6 +99,60 @@ def test_project_booked_resolves_client_from_project(conn, settings):
     assert any("Engagement" in m["subject"] for m in list_emails(conn, t["id"]))
 
 
+def test_project_booked_identical_retry_does_not_duplicate_client_email(conn, settings):
+    t = _tenant(conn)
+    c = create_client(conn, tenant_id=t["id"], name="Sarah", email="sarah@example.com")
+    p = create_project(conn, tenant_id=t["id"], name="Wedding", client_id=c["id"])
+    create_automation(
+        conn,
+        tenant_id=t["id"],
+        name="welcome",
+        trigger="project.booked",
+        subject="Welcome to {project_name}",
+        body="Yay {client_name}!",
+    )
+    conn.commit()
+
+    set_project_status(conn, t["id"], p["id"], "booked")
+    assert conn.execute("SELECT COUNT(*) AS n FROM jobs").fetchone()["n"] == 1
+    set_project_status(conn, t["id"], p["id"], "booked")
+    assert conn.execute("SELECT COUNT(*) AS n FROM jobs").fetchone()["n"] == 1
+    conn.commit()
+
+    drain(settings.db_path, settings)
+    sent = [m for m in list_emails(conn, t["id"]) if m["subject"] == "Welcome to Wedding"]
+    assert len(sent) == 1
+    assert len(list_runs(conn, t["id"])) == 1
+
+
+def test_project_booked_effects_follow_real_status_transitions(conn):
+    t = _tenant(conn)
+    p = create_project(conn, tenant_id=t["id"], name="Wedding")
+    create_automation(conn, tenant_id=t["id"], name="welcome", trigger="project.booked",
+                      subject="Welcome", body="Welcome")
+    conn.commit()
+
+    set_project_status(conn, t["id"], p["id"], "booked")
+    set_project_status(conn, t["id"], p["id"], "shooting")
+    set_project_status(conn, t["id"], p["id"], "booked")
+
+    assert conn.execute("SELECT COUNT(*) AS n FROM jobs").fetchone()["n"] == 2
+
+
+def test_project_booked_missing_or_foreign_project_emits_nothing(conn):
+    owner = _tenant(conn, "Owner")
+    other = _tenant(conn, "Other")
+    foreign = create_project(conn, tenant_id=other["id"], name="Other project")
+    create_automation(conn, tenant_id=owner["id"], name="welcome", trigger="project.booked",
+                      subject="Welcome", body="Welcome")
+    conn.commit()
+
+    set_project_status(conn, owner["id"], foreign["id"], "booked")
+    set_project_status(conn, owner["id"], foreign["id"] + 10_000, "booked")
+
+    assert conn.execute("SELECT COUNT(*) AS n FROM jobs").fetchone()["n"] == 0
+
+
 def test_no_client_email_is_skipped_not_failed(conn, settings):
     t = _tenant(conn)
     c = create_client(conn, tenant_id=t["id"], name="No Email")  # no email
