@@ -98,8 +98,8 @@ substitute for them.
 
 ### Days 0–30 — one client home and complete booking state
 
-1. Continue the autonomous continuity queue: gallery/project association repair is
-   landed; next add bounded dashboard gallery read models and bound future availability
+1. Continue the autonomous continuity queue: gallery/project association repair and
+   bounded dashboard gallery read models are landed; next bound future availability
    reads.
 2. Make the client action room the canonical destination. Once its token contract is
    approved, create and send it intentionally, return clients there after sign/pay/form/

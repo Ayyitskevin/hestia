@@ -33,6 +33,7 @@ _INLINE_IMAGE_TYPES = frozenset({
 # bounded so one upload can't read an unbounded blob into memory and OOM the shared
 # container (a multi-tenant availability risk — one studio must not sink the others).
 _MAX_IMAGE_BYTES = 75_000_000   # 75 MB/image
+_MAX_RECENT_GALLERIES = 100
 
 _GALLERY_WITH_PROJECT_CLIENT = (
     "SELECT g.*, c.name AS project_client_name FROM galleries g "
@@ -135,6 +136,51 @@ def cover_storage_key(conn: sqlite3.Connection, tenant_id: str, gallery: dict) -
         (gallery["id"], tenant_id),
     ).fetchone()
     return row["storage_key"] if row else None
+
+
+def gallery_count(conn: sqlite3.Connection, tenant_id: str) -> int:
+    """Total galleries owned by one studio without hydrating gallery details."""
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM galleries WHERE tenant_id = ?",
+        (tenant_id,),
+    ).fetchone()
+    return row["n"] if row else 0
+
+
+def recent_galleries(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    *,
+    limit: int = 6,
+) -> list[dict]:
+    """Bounded five-field gallery summaries for the owner dashboard."""
+    safe_limit = min(_MAX_RECENT_GALLERIES, max(0, limit))
+    rows = conn.execute(
+        """
+        SELECT g.id,
+               g.title,
+               COALESCE(c.name, g.client_name) AS client_name,
+               g.status,
+               (
+                   SELECT COUNT(*)
+                     FROM images i
+                    WHERE i.gallery_id = g.id
+                      AND i.tenant_id = g.tenant_id
+               ) AS image_count
+          FROM galleries g
+          LEFT JOIN projects p
+            ON p.id = g.project_id
+           AND p.tenant_id = g.tenant_id
+          LEFT JOIN clients c
+            ON c.id = p.client_id
+           AND c.tenant_id = g.tenant_id
+         WHERE g.tenant_id = ?
+         ORDER BY g.created_at DESC, g.id DESC
+         LIMIT ?
+        """,
+        (tenant_id, safe_limit),
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def list_galleries(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:

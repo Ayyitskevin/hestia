@@ -17,7 +17,13 @@ from hestia.dashboard import (
 from hestia.db import connect
 from hestia.delivery import enable_delivery
 from hestia.features import flags_for
-from hestia.galleries import add_image, create_gallery, publish_gallery
+from hestia.galleries import (
+    add_image,
+    create_gallery,
+    gallery_count,
+    publish_gallery,
+    recent_galleries,
+)
 from hestia.invoices import create_invoice, send_invoice
 from hestia.packages import create_package
 from hestia.proposals import (
@@ -28,9 +34,204 @@ from hestia.proposals import (
     send_proposal,
 )
 from hestia.questionnaires import create_questionnaire, send_questionnaire
+from hestia.routes import web as web_routes
 from hestia.sales import create_or_update_offer
 from hestia.subscriptions import apply_plan, get_subscription
 from hestia.tenants import create_tenant
+
+
+def test_recent_galleries_are_bounded_ordered_and_tenant_scoped(conn):
+    studio = create_tenant(conn, name="Recent Studio", shoot_type="wedding")
+    other = create_tenant(conn, name="Other Studio", shoot_type="portrait")
+    empty = create_tenant(conn, name="Empty Studio", shoot_type="food")
+    galleries = [
+        create_gallery(conn, tenant_id=studio["id"], title=f"Gallery {index}")
+        for index in range(8)
+    ]
+    for gallery in galleries:
+        conn.execute(
+            "UPDATE galleries SET created_at = '2030-01-01 12:00:00' WHERE id = ?",
+            (gallery["id"],),
+        )
+    foreign = create_gallery(conn, tenant_id=other["id"], title="Foreign gallery")
+    conn.commit()
+
+    recent = recent_galleries(conn, studio["id"], limit=6)
+
+    assert gallery_count(conn, studio["id"]) == 8
+    assert gallery_count(conn, other["id"]) == 1
+    assert gallery_count(conn, empty["id"]) == 0
+    assert [gallery["id"] for gallery in recent] == [
+        gallery["id"] for gallery in reversed(galleries[-6:])
+    ]
+    assert foreign["id"] not in {gallery["id"] for gallery in recent}
+    assert recent_galleries(conn, empty["id"], limit=6) == []
+    assert recent_galleries(conn, studio["id"], limit=-1) == []
+
+
+def test_recent_galleries_preserve_dashboard_summary_semantics(conn, storage):
+    studio = create_tenant(conn, name="Summary Studio", shoot_type="wedding")
+    other = create_tenant(conn, name="Other Summary Studio", shoot_type="portrait")
+    client = create_client(conn, tenant_id=studio["id"], name="Current Client")
+    project = create_project(
+        conn,
+        tenant_id=studio["id"],
+        name="Current project",
+        client_id=client["id"],
+    )
+    linked = create_gallery(
+        conn,
+        tenant_id=studio["id"],
+        title="Linked gallery",
+        client_name="Legacy Client",
+    )
+    legacy = create_gallery(
+        conn,
+        tenant_id=studio["id"],
+        title="Legacy gallery",
+        client_name="Unlinked Client",
+    )
+    assert assign_gallery_to_project(conn, studio["id"], linked["id"], project["id"])
+    add_image(
+        conn,
+        storage,
+        tenant_id=studio["id"],
+        gallery_id=linked["id"],
+        filename="visible.jpg",
+        fileobj=BytesIO(b"visible"),
+        content_type="image/jpeg",
+    )
+    hidden = add_image(
+        conn,
+        storage,
+        tenant_id=studio["id"],
+        gallery_id=linked["id"],
+        filename="hidden.jpg",
+        fileobj=BytesIO(b"hidden"),
+        content_type="image/jpeg",
+    )
+    conn.execute("UPDATE images SET hidden = 1 WHERE id = ?", (hidden["id"],))
+    conn.execute(
+        "INSERT INTO images "
+        "(gallery_id, tenant_id, filename, storage_key, content_type, position) "
+        "VALUES (?, ?, 'foreign.jpg', 'foreign/object.jpg', 'image/jpeg', 99)",
+        (linked["id"], other["id"]),
+    )
+    conn.commit()
+
+    by_id = {
+        gallery["id"]: gallery
+        for gallery in recent_galleries(conn, studio["id"], limit=6)
+    }
+
+    assert set(by_id[linked["id"]]) == {
+        "id",
+        "title",
+        "client_name",
+        "status",
+        "image_count",
+    }
+    assert by_id[linked["id"]]["client_name"] == "Current Client"
+    assert by_id[linked["id"]]["image_count"] == 2
+    assert by_id[legacy["id"]]["client_name"] == "Unlinked Client"
+
+
+def test_dashboard_gallery_summary_is_two_selects_without_n_plus_one(conn):
+    studio = create_tenant(conn, name="Query Studio", shoot_type="wedding")
+    for index in range(12):
+        gallery = create_gallery(
+            conn,
+            tenant_id=studio["id"],
+            title=f"Query gallery {index}",
+        )
+        conn.execute(
+            "INSERT INTO images "
+            "(gallery_id, tenant_id, filename, storage_key, content_type, position) "
+            "VALUES (?, ?, ?, ?, 'image/jpeg', 0)",
+            (gallery["id"], studio["id"], f"{index}.jpg", f"query/{index}.jpg"),
+        )
+    conn.commit()
+    statements: list[str] = []
+    conn.set_trace_callback(statements.append)
+
+    try:
+        count = gallery_count(conn, studio["id"])
+        recent = recent_galleries(conn, studio["id"], limit=6)
+    finally:
+        conn.set_trace_callback(None)
+
+    selects = [
+        sql for sql in statements if sql.lstrip().upper().startswith(("SELECT", "WITH"))
+    ]
+    normalized = [" ".join(sql.upper().split()) for sql in selects]
+    assert count == 12
+    assert len(recent) == 6
+    assert [gallery["image_count"] for gallery in recent] == [1] * 6
+    assert len(selects) == 2
+    assert sum("LIMIT 6" in sql for sql in normalized) == 1
+    assert all("ALBUMS" not in sql for sql in normalized)
+
+
+def test_dashboard_shows_full_gallery_count_and_only_six_recent_titles(
+    client,
+    app,
+    monkeypatch,
+):
+    credentials = onboard_studio(
+        client,
+        name="Gallery Dashboard Studio",
+        email="gallery-dashboard@example.com",
+    )
+    login_owner(client, credentials)
+    conn = connect(app.state.settings.db_path)
+    try:
+        tenant_id = conn.execute("SELECT id FROM tenants LIMIT 1").fetchone()["id"]
+        titles = []
+        for index in range(8):
+            title = f"Dashboard gallery {index:02d}"
+            gallery = create_gallery(conn, tenant_id=tenant_id, title=title)
+            conn.execute(
+                "UPDATE galleries SET created_at = ? WHERE id = ?",
+                (f"2030-01-{index + 1:02d} 12:00:00", gallery["id"]),
+            )
+            titles.append(title)
+        conn.commit()
+    finally:
+        conn.close()
+
+    calls = []
+    real_count = web_routes.gallery_count
+    real_recent = web_routes.recent_galleries
+
+    def observed_count(conn, observed_tenant_id):
+        calls.append(("count", observed_tenant_id))
+        return real_count(conn, observed_tenant_id)
+
+    def observed_recent(conn, observed_tenant_id, *, limit):
+        calls.append(("recent", observed_tenant_id, limit))
+        return real_recent(conn, observed_tenant_id, limit=limit)
+
+    def obsolete_full_hydration(*_args, **_kwargs):
+        raise AssertionError("dashboard must not hydrate every gallery")
+
+    monkeypatch.setattr(web_routes, "gallery_count", observed_count)
+    monkeypatch.setattr(web_routes, "recent_galleries", observed_recent)
+    monkeypatch.setattr(
+        web_routes,
+        "list_galleries",
+        obsolete_full_hydration,
+        raising=False,
+    )
+
+    page = client.get("/dashboard")
+
+    assert page.status_code == 200
+    assert calls == [("recent", tenant_id, 6), ("count", tenant_id)]
+    assert '<span class="svc">8</span> <span class="url">galleries</span>' in page.text
+    expected = list(reversed(titles[-6:]))
+    positions = [page.text.index(title) for title in expected]
+    assert positions == sorted(positions)
+    assert all(title not in page.text for title in titles[:2])
 
 
 def test_needs_attention_empty(conn):

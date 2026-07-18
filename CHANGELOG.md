@@ -25,6 +25,9 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Fixed
 
+- Replaced the dashboard's duplicate full-gallery hydration with one tenant-scoped
+  total and one SQL-limited recent summary. The two reads preserve current project
+  client identity and hidden-image counts without cover or album N+1 lookups.
 - Tightened migration-audit identity to the immutable 0001 data spine, rejected malformed
   ledger timestamps by exact UTC shape and calendar semantics, added the missing
   pre-0065/gap/name/non-Hestia fixtures, and made the scratch-copy recipe unpredictable.

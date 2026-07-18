@@ -31,7 +31,7 @@ from ..db import audit
 from ..demo import demo_nav, demo_tour
 from ..email import notify
 from ..founder_demo import live_demo_studio_url
-from ..galleries import list_galleries
+from ..galleries import gallery_count, recent_galleries
 from ..hosted import tenant_from_custom_domain, tenant_slug_from_request
 from ..interest import (
     find_beta_interest_invite,
@@ -564,7 +564,7 @@ def dashboard(request: Request):
             return RedirectResponse("/login", status_code=303)
         tenant = get_tenant(conn, auth.tenant["id"])
         flags = tenant_flags(tenant)
-        galleries = list_galleries(conn, tenant["id"])[:6]
+        galleries = recent_galleries(conn, tenant["id"], limit=6)
         runs = list_runs(conn, tenant["id"], limit=6)
         plan = plan_status(tenant, subscription_backend=settings.subscription_backend)
         unpaid = conn.execute(
@@ -576,7 +576,7 @@ def dashboard(request: Request):
         counts = {
             "clients": len(list_clients(conn, tenant["id"])),
             "projects": len(list_projects(conn, tenant["id"])),
-            "galleries": len(list_galleries(conn, tenant["id"])),
+            "galleries": gallery_count(conn, tenant["id"]),
             "unpaid": unpaid,
         }
         profile = get_profile(conn, tenant["id"])

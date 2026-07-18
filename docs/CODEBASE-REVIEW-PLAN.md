@@ -280,8 +280,9 @@ superseded by the remaining sequence below.
    enforced without a pricing decision.
 4. 🟡 **Workflow continuity and bounded reads (GREEN)** - studios can now attach, move,
    or clear a gallery's project after creation with immediate portal propagation and
-   idempotent auditing. Next, add dedicated dashboard count/recent-gallery queries and a
-   bounded availability horizon.
+   idempotent auditing. The dashboard now gets its gallery total and six recent summaries
+   in two tenant-scoped SQL reads without rich-gallery N+1 hydration. Next, bound the
+   availability horizon.
 5. **Product and risk decisions** - obtain D1-D5 from
    [`HUMAN-DECISIONS.md`](HUMAN-DECISIONS.md), then separately decide fulfillment depth,
    timezone/calendar schema, exception-path capability redaction, and the public edge.
