@@ -106,16 +106,20 @@ def _parse_dt(s: str) -> datetime.datetime | None:
     return None
 
 
-def _busy_intervals(conn: sqlite3.Connection, tenant_id: str,
-                    today: datetime.date) -> list[tuple[datetime.datetime, datetime.datetime]]:
+def _busy_intervals(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    today: datetime.date,
+    before: datetime.date,
+) -> list[tuple[datetime.datetime, datetime.datetime]]:
     """(start, end) of sessions that occupy time — proposed/confirmed appointments and
-    personal blocks — from today onward, skipping any with an unparseable start."""
+    personal blocks — inside the date-only [today, before) range, skipping any with an
+    unparseable start."""
     rows = conn.execute(
         "SELECT starts_at, duration_minutes FROM appointments "
         "WHERE tenant_id = ? AND status IN ('proposed', 'confirmed') "
-        "  AND starts_at IS NOT NULL AND TRIM(starts_at) != '' "
-        "  AND date(starts_at) >= date(?)",
-        (tenant_id, today.isoformat()),
+        "  AND starts_at >= ? AND starts_at < ?",
+        (tenant_id, today.isoformat(), before.isoformat()),
     ).fetchall()
     out = []
     for r in rows:
@@ -149,8 +153,16 @@ def _generate(conn: sqlite3.Connection, tenant_id: str, *, duration_minutes: int
     # cutoff (a slot exactly at `now` is excluded, as before).
     earliest = now + datetime.timedelta(hours=min_notice)
     buffer_td = datetime.timedelta(minutes=buffer_min)
+    # Slots can run through midnight after the final generated date. A busy session
+    # after that midnight can still overlap once its leading buffer is applied, so
+    # round any buffer up to whole date-bound days before setting the exclusive limit.
+    buffer_days = (buffer_min + 24 * 60 - 1) // (24 * 60)
+    busy_before = today + datetime.timedelta(days=max(0, days) + 1 + buffer_days)
     # pad each busy interval by the buffer so slots can't butt right up against a session
-    busy = [(bs - buffer_td, be + buffer_td) for bs, be in _busy_intervals(conn, tenant_id, today)]
+    busy = [
+        (bs - buffer_td, be + buffer_td)
+        for bs, be in _busy_intervals(conn, tenant_id, today, busy_before)
+    ]
     # Repeated or aligned windows can describe the same start. That is one
     # bookable option, and duplicates must not consume the display limit.
     slots: set[datetime.datetime] = set()

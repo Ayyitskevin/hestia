@@ -69,10 +69,10 @@ not an approval record.
   edge separately.
 - **High - autonomous evidence:** verify the production SQLite runtime contains the
   WAL-reset fix or a documented vendor backport before proposing any runtime change.
-- **Medium - autonomous GREEN:** gallery-to-project association repair is landed; next,
-  replace dashboard all-gallery double hydration with bounded count/recent queries, then
-  bound future availability reads. Keep provider validation domain-local and update
-  competitive claims whenever shipped depth changes.
+- **Medium - autonomous GREEN:** gallery-to-project association repair plus bounded
+  dashboard gallery and booking-availability reads are landed; next, replace dashboard
+  client/project list hydration with direct tenant-scoped counts. Keep provider
+  validation domain-local and update competitive claims whenever shipped depth changes.
 - **Medium - human-gated after design:** subscription terminal-state ordering,
   fulfillment retry/payment semantics, timezone/calendar schema, repository rulesets,
   and release/license metadata.
@@ -281,8 +281,10 @@ superseded by the remaining sequence below.
 4. 🟡 **Workflow continuity and bounded reads (GREEN)** - studios can now attach, move,
    or clear a gallery's project after creation with immediate portal propagation and
    idempotent auditing. The dashboard now gets its gallery total and six recent summaries
-   in two tenant-scoped SQL reads without rich-gallery N+1 hydration. Next, bound the
-   availability horizon.
+   in two tenant-scoped SQL reads without rich-gallery N+1 hydration. Booking and
+   reschedule conflict reads now stop at the generated horizon while retaining the final
+   slot's next-day buffer. Next, replace dashboard client/project list hydration with
+   direct counts.
 5. **Product and risk decisions** - obtain D1-D5 from
    [`HUMAN-DECISIONS.md`](HUMAN-DECISIONS.md), then separately decide fulfillment depth,
    timezone/calendar schema, exception-path capability redaction, and the public edge.

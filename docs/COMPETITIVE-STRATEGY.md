@@ -98,9 +98,9 @@ substitute for them.
 
 ### Days 0–30 — one client home and complete booking state
 
-1. Continue the autonomous continuity queue: gallery/project association repair and
-   bounded dashboard gallery read models are landed; next bound future availability
-   reads.
+1. Continue the autonomous continuity queue: gallery/project association repair plus
+   bounded dashboard gallery and booking-availability reads are landed; next replace
+   dashboard client/project list hydration with direct tenant-scoped counts.
 2. Make the client action room the canonical destination. Once its token contract is
    approved, create and send it intentionally, return clients there after sign/pay/form/
    gallery/album actions, and add proposal creation to the project hub.

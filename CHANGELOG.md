@@ -25,6 +25,10 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Fixed
 
+- Bounded booking and reschedule conflict reads to their generated availability horizon,
+  including the final slot's next-day buffer. Far-future appointments are no longer
+  hydrated or compared for every candidate slot, and the indexed timestamp column is
+  queried without a date-function wrapper.
 - Replaced the dashboard's duplicate full-gallery hydration with one tenant-scoped
   total and one SQL-limited recent summary. The two reads preserve current project
   client identity and hidden-image counts without cover or album N+1 lookups.

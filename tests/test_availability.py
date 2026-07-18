@@ -5,6 +5,7 @@ import datetime
 
 from conftest import CSRFClient, login_owner, onboard_studio
 
+from hestia import availability as availability_module
 from hestia.availability import (
     add_window,
     available_slots,
@@ -16,7 +17,7 @@ from hestia.availability import (
 from hestia.booking import list_booking_types
 from hestia.db import connect
 from hestia.scheduler import create_block, list_appointments
-from hestia.tenants import create_tenant, slugify
+from hestia.tenants import create_tenant, set_booking_rules, slugify
 
 
 def _tenant(conn, name="Avail Studio"):
@@ -151,6 +152,110 @@ def test_conflict_excludes_overlapping_slot(conn):
     conn.commit()
     slots = _flat(available_slots(conn, t["id"], duration_minutes=60, days=6, today=_DAY, now=_MIDNIGHT))
     assert slots == ["2030-06-03 09:00"]                         # 10:00 slot is taken
+
+
+def test_slot_generation_does_not_hydrate_far_future_appointments(conn, monkeypatch):
+    t = _tenant(conn)
+    add_window(conn, tenant_id=t["id"], weekday=_WD, start_minute=540, end_minute=660)
+    near = create_block(
+        conn,
+        tenant_id=t["id"],
+        title="Near busy",
+        starts_at="2030-06-03 10:00",
+        duration_minutes=60,
+    )
+    conn.execute(
+        "UPDATE appointments SET starts_at = '2030-06-03T10:00' WHERE id = ?",
+        (near["id"],),
+    )
+    create_block(
+        conn,
+        tenant_id=t["id"],
+        title="Far busy",
+        starts_at="2099-01-01 10:00",
+        duration_minutes=60,
+    )
+    conn.commit()
+    parsed = []
+    real_parse = availability_module._parse_dt
+
+    def observed_parse(value):
+        parsed.append(value)
+        return real_parse(value)
+
+    monkeypatch.setattr(availability_module, "_parse_dt", observed_parse)
+
+    statements = []
+    conn.set_trace_callback(statements.append)
+    try:
+        slots = _flat(
+            available_slots(
+                conn,
+                t["id"],
+                duration_minutes=60,
+                days=6,
+                today=_DAY,
+                now=_MIDNIGHT,
+            )
+        )
+    finally:
+        conn.set_trace_callback(None)
+
+    assert slots == ["2030-06-03 09:00"]
+    assert "2030-06-03T10:00" in parsed
+    assert "2099-01-01 10:00" not in parsed
+    appointment_reads = [
+        " ".join(statement.lower().split())
+        for statement in statements
+        if "select starts_at, duration_minutes from appointments" in statement.lower()
+    ]
+    assert len(appointment_reads) == 1
+    assert "starts_at >= '2030-06-03'" in appointment_reads[0]
+    assert "starts_at < '2030-06-10'" in appointment_reads[0]
+    assert "date(starts_at)" not in appointment_reads[0]
+
+
+def test_horizon_keeps_next_day_buffer_conflict(conn):
+    t = _tenant(conn)
+    add_window(
+        conn,
+        tenant_id=t["id"],
+        weekday=_WD,
+        start_minute=23 * 60,
+        end_minute=24 * 60,
+    )
+    create_block(
+        conn,
+        tenant_id=t["id"],
+        title="After-midnight busy",
+        starts_at="2030-06-04 00:30",
+        duration_minutes=60,
+    )
+    conn.commit()
+
+    set_booking_rules(conn, t["id"], min_notice_hours=0, buffer_minutes=0)
+    assert _flat(
+        available_slots(
+            conn,
+            t["id"],
+            duration_minutes=60,
+            days=0,
+            today=_DAY,
+            now=_MIDNIGHT,
+        )
+    ) == ["2030-06-03 23:00"]
+
+    set_booking_rules(conn, t["id"], min_notice_hours=0, buffer_minutes=60)
+    assert _flat(
+        available_slots(
+            conn,
+            t["id"],
+            duration_minutes=60,
+            days=0,
+            today=_DAY,
+            now=_MIDNIGHT,
+        )
+    ) == []
 
 
 def test_is_slot_open_rechecks(conn):
