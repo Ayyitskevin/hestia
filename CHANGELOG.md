@@ -6,6 +6,9 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Added
 
+- Studios can now attach, move, or clear a gallery's project after creation. The
+  tenant-scoped, idempotent repair updates client portal visibility immediately and
+  records only real association changes in the audit trail.
 - Added a sidecar-free, immutable read-only migration audit with a committed checksum
   manifest, exact current/original migration-0065 schema signatures, malformed-ledger
   detection, stable JSON output, and installed-wheel validation. It fingerprints the

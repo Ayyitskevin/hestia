@@ -293,14 +293,20 @@ def set_project_status(conn: sqlite3.Connection, tenant_id: str, project_id: int
 
 def assign_gallery_to_project(
     conn: sqlite3.Connection, tenant_id: str, gallery_id: int, project_id: int | None
-) -> None:
-    # Validate the project belongs to the tenant (or clear the link).
+) -> bool:
+    """Attach, move, or clear one studio-owned gallery's project.
+
+    The null-safe guarded update makes retries inert and returns whether a real change
+    happened. A target project from another tenant is rejected before the write.
+    """
     if project_id is not None and not get_project(conn, tenant_id, project_id):
-        return
-    conn.execute(
-        "UPDATE galleries SET project_id = ? WHERE id = ? AND tenant_id = ?",
-        (project_id, gallery_id, tenant_id),
+        return False
+    cur = conn.execute(
+        "UPDATE galleries SET project_id = ? "
+        "WHERE id = ? AND tenant_id = ? AND project_id IS NOT ?",
+        (project_id, gallery_id, tenant_id, project_id),
     )
+    return cur.rowcount == 1
 
 
 def galleries_for_project(conn: sqlite3.Connection, tenant_id: str, project_id: int) -> list[dict]:

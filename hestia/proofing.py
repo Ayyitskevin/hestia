@@ -167,8 +167,13 @@ def selection_packet(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) 
     a richer handoff without another status table to maintain.
     """
     gallery = conn.execute(
-        "SELECT id, title, client_name, selections_submitted_at "
-        "FROM galleries WHERE id = ? AND tenant_id = ?",
+        "SELECT g.id, g.title, "
+        "       CASE WHEN c.id IS NOT NULL THEN c.name ELSE g.client_name END AS client_name, "
+        "       g.selections_submitted_at "
+        "FROM galleries g "
+        "LEFT JOIN projects p ON p.id = g.project_id AND p.tenant_id = g.tenant_id "
+        "LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = g.tenant_id "
+        "WHERE g.id = ? AND g.tenant_id = ?",
         (gallery_id, tenant_id),
     ).fetchone()
     if not gallery:

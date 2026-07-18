@@ -12,7 +12,7 @@
     </div>
     <div class="muted" style="font-size:.72rem; margin-top:2px">
       {% if project %}<a href="/projects/{{ project.id }}">{{ project.name }}</a> · {% endif %}
-      {{ gallery.client_name or "No client set" }} ·
+      {% if project and project.client_name %}{{ project.client_name }}{% else %}{{ gallery.client_name or "No client set" }}{% endif %} ·
       {{ images|length }} image{{ '' if images|length == 1 else 's' }}
       {% if gallery.pin %} · PIN set{% endif %}
     </div>
@@ -52,6 +52,25 @@
       </form>
     {% endif %}
   </div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <form method="post" action="/galleries/{{ gallery.id }}/project"
+        style="display:flex; gap:10px; align-items:end; flex-wrap:wrap"
+        data-confirm="Change this gallery's project? Published galleries move between client portals immediately.">
+    {% include "_csrf.html" %}
+    <div style="flex:1; min-width:220px">
+      <label for="gallery-project">Linked project</label>
+      <select id="gallery-project" name="project_id">
+        <option value="" {{ 'selected' if not gallery.project_id else '' }}>— no project —</option>
+        {% for p in projects %}
+          <option value="{{ p.id }}" {{ 'selected' if gallery.project_id == p.id else '' }}>{{ p.name }}{% if p.client_name %} — {{ p.client_name }}{% endif %}</option>
+        {% endfor %}
+      </select>
+      <p class="hint" style="margin:5px 0 0">Attach, move, or clear the gallery without recreating it. Client portal visibility follows this link.</p>
+    </div>
+    <button class="btn secondary" type="submit">Save project</button>
+  </form>
 </div>
 
 {% if offer %}

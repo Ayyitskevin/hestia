@@ -56,6 +56,20 @@ from ..vision import (
 from .deps import db_conn, render, settings_of, storage_of
 
 router = APIRouter(prefix="/galleries")
+_SQLITE_INT64_MAX = (1 << 63) - 1
+
+
+def _parse_optional_project_id(value: str) -> int | None:
+    """Parse one form project id without accepting Unicode or oversized integers."""
+    raw = value.strip()
+    if not raw:
+        return None
+    if not raw.isascii() or not raw.isdecimal() or len(raw) > 19:
+        raise ValueError("invalid project id")
+    project_id = int(raw)
+    if not 1 <= project_id <= _SQLITE_INT64_MAX:
+        raise ValueError("invalid project id")
+    return project_id
 
 
 def _require_user(request: Request, conn):
@@ -107,8 +121,12 @@ def gallery_create(
             return RedirectResponse("/login", status_code=303)
         gallery = create_gallery(conn, tenant_id=auth.tenant["id"], title=title,
                                  client_name=client_name, pin=pin.strip() or None)
-        if project_id.strip().isdigit():
-            assign_gallery_to_project(conn, auth.tenant["id"], gallery["id"], int(project_id))
+        try:
+            target_id = _parse_optional_project_id(project_id)
+        except ValueError:
+            target_id = None
+        if target_id is not None:
+            assign_gallery_to_project(conn, auth.tenant["id"], gallery["id"], target_id)
     return RedirectResponse(f"/galleries/{gallery['id']}", status_code=303)
 
 
@@ -129,6 +147,7 @@ def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
         ).fetchone()
         flags = tenant_flags(get_tenant(conn, auth.tenant["id"]))
         project = get_project(conn, auth.tenant["id"], gallery["project_id"]) if gallery.get("project_id") else None
+        projects = list_projects(conn, auth.tenant["id"])
         album = get_album_for_gallery(conn, auth.tenant["id"], gallery_id)
         product_set = get_set_for_gallery(conn, auth.tenant["id"], gallery_id)
         favorites = favorite_image_ids(conn, gallery_id, tenant_id=auth.tenant["id"])
@@ -158,6 +177,7 @@ def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
     return render(request, "gallery_detail.html", auth=auth, gallery=gallery, images=images,
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
                   storage=storage_of(request), flags=flags, project=project, album=album,
+                  projects=projects,
                   product_set=product_set, favorites=favorites, comments=comments,
                   selection_packet=packet, campaign=campaign,
                   sales_opportunity=sales_opportunity, orders=orders, fulfillments=fulfillments,
@@ -165,6 +185,42 @@ def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
                   flagged_pending=flagged_pending, too_large=too_large,
                   cover_id=gallery.get("cover_image_id"), delivery_link=delivery_link,
                   ai_usage=ai_usage, ai_subsidy=ai_subsidy)
+
+
+@router.post("/{gallery_id}/project")
+def gallery_project_update(request: Request, gallery_id: int, project_id: str = Form("")):
+    """Repair a gallery's project link after creation.
+
+    Portal membership is derived from the current tenant-matched project/client join,
+    so a successful move or clear takes effect there immediately.
+    """
+    with db_conn(request) as conn:
+        auth = _require_user(request, conn)
+        if not auth:
+            return RedirectResponse("/login", status_code=303)
+
+        try:
+            target_id = _parse_optional_project_id(project_id)
+        except ValueError:
+            return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
+
+        # Serialize the read, guarded move, and audit row so concurrent owner actions
+        # record the actual transition chain rather than two stale "from" projects.
+        conn.execute("BEGIN IMMEDIATE")
+        gallery = get_gallery(conn, auth.tenant["id"], gallery_id)
+        if not gallery:
+            return RedirectResponse("/galleries", status_code=303)
+        if assign_gallery_to_project(conn, auth.tenant["id"], gallery_id, target_id):
+            previous = f"#{gallery['project_id']}" if gallery.get("project_id") else "none"
+            target = f"#{target_id}" if target_id is not None else "none"
+            audit(
+                conn,
+                actor="owner",
+                action="gallery.project_changed",
+                tenant_id=auth.tenant["id"],
+                detail=f"gallery #{gallery_id} · project {previous} -> {target}",
+            )
+    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
 
 
 @router.get("/{gallery_id}/vision-calibration.csv")

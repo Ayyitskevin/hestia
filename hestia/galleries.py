@@ -34,6 +34,21 @@ _INLINE_IMAGE_TYPES = frozenset({
 # container (a multi-tenant availability risk — one studio must not sink the others).
 _MAX_IMAGE_BYTES = 75_000_000   # 75 MB/image
 
+_GALLERY_WITH_PROJECT_CLIENT = (
+    "SELECT g.*, c.name AS project_client_name FROM galleries g "
+    "LEFT JOIN projects p ON p.id = g.project_id AND p.tenant_id = g.tenant_id "
+    "LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = g.tenant_id "
+)
+
+
+def _gallery_row(row: sqlite3.Row) -> dict:
+    """Prefer the current linked project's client while retaining the legacy fallback."""
+    gallery = dict(row)
+    project_client_name = gallery.pop("project_client_name")
+    if project_client_name is not None:
+        gallery["client_name"] = project_client_name
+    return gallery
+
 
 def safe_inline_type(content_type: str | None) -> str:
     """The media type to serve INLINE for a stored image. Real raster types pass
@@ -75,16 +90,18 @@ def create_gallery(
 
 def get_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -> dict | None:
     row = conn.execute(
-        "SELECT * FROM galleries WHERE id = ? AND tenant_id = ?", (gallery_id, tenant_id)
+        _GALLERY_WITH_PROJECT_CLIENT + "WHERE g.id = ? AND g.tenant_id = ?",
+        (gallery_id, tenant_id),
     ).fetchone()
-    return dict(row) if row else None
+    return _gallery_row(row) if row else None
 
 
 def get_gallery_by_slug(conn: sqlite3.Connection, tenant_id: str, slug: str) -> dict | None:
     row = conn.execute(
-        "SELECT * FROM galleries WHERE tenant_id = ? AND slug = ?", (tenant_id, slug)
+        _GALLERY_WITH_PROJECT_CLIENT + "WHERE g.tenant_id = ? AND g.slug = ?",
+        (tenant_id, slug),
     ).fetchone()
-    return dict(row) if row else None
+    return _gallery_row(row) if row else None
 
 
 def record_gallery_view(conn: sqlite3.Connection, gallery_id: int) -> None:
@@ -122,13 +139,14 @@ def cover_storage_key(conn: sqlite3.Connection, tenant_id: str, gallery: dict) -
 
 def list_galleries(conn: sqlite3.Connection, tenant_id: str) -> list[dict]:
     rows = conn.execute(
-        "SELECT * FROM galleries WHERE tenant_id = ? ORDER BY created_at DESC", (tenant_id,)
+        _GALLERY_WITH_PROJECT_CLIENT + "WHERE g.tenant_id = ? ORDER BY g.created_at DESC",
+        (tenant_id,),
     ).fetchall()
     from .albums import album_status_for_gallery  # lazy: albums imports galleries
 
     out = []
     for r in rows:
-        g = dict(r)
+        g = _gallery_row(r)
         g["image_count"] = image_count(conn, g["id"])
         g["cover_key"] = cover_storage_key(conn, tenant_id, g)
         g["album_status"] = album_status_for_gallery(conn, tenant_id, g["id"])
