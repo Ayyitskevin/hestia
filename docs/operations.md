@@ -38,10 +38,11 @@ tenant-serving path end-to-end.)
 - [ ] Confirm backups are current — `/admin/system` (or `hosted-preflight.sh --url …`
       `backup freshness` check) should never be stale. Artifacts live at
       `/data/backups/hestia-*.db.gz`.
-- [ ] Confirm the **off-site** copy actually ran — `scripts/offsite-sync.sh` (cron'd a
-      few minutes after the daily backup) pushes both the DB backups **and** the media
-      directory off the box. One machine is zero backups, and the galleries are the half
-      you can't rebuild. See `docs/backup-restore.md`.
+- [ ] Confirm the approved **D5 evidence**, not only that `scripts/offsite-sync.sh`
+      exited zero: verify the fresh receipt, the newest version-retained remote DB
+      artifact, and required media scope. The current script reports transfer commands
+      as unverified and cannot satisfy this check until receipt/remote verification lands.
+      One machine is zero backups. See `docs/backup-restore.md`.
 - [ ] Skim access logs for anomalies (auth failures, 5xx spikes) — structured JSON,
       one line per request, no client tokens (they're redacted).
 - [ ] When an xAI backend is live, filter for logger `hestia.xai` and action
@@ -83,19 +84,26 @@ packaging remain owner-approved product/financial decisions.
 ## Quarterly
 
 - [ ] **Restore drill** — the whole point of backups. Follow `docs/backup-restore.md`
-      on a scratch `HESTIA_DATA_DIR` (or staging), restoring a real artifact from the
-      live volume; confirm `integrity_check: ok` and a known studio is present. Never
-      let production be your first-ever restore.
+      on a scratch `HESTIA_DATA_DIR` (or staging), starting from a real versioned
+      artifact downloaded from the approved remote. Recover required media from that
+      remote too; confirm `integrity_check: ok` and one known gallery's bytes/rendering.
+      A live-volume artifact is not the quarterly D5 source.
+- [ ] Run `python -m hestia.migration_audit` against the restored scratch DB. Read every
+      finding; exit 1 needs the D4 owner decision, and exits 2–3 are holds. The command
+      must never target the live WAL path. See `docs/backup-restore.md`.
 - [ ] Re-run the full preflight against the live domain and read every line:
       `bash scripts/hosted-preflight.sh --url "https://$HESTIA_DOMAIN"`.
-- [ ] Delete stale `pre-restore-*.db` safety copies after a successful drill.
+- [ ] Review `pre-restore-*.db` safety copies under the owner-approved retention policy;
+      do not delete recovery evidence automatically.
 
 ## Deploying a change
 
 1. `bash scripts/ci-smoke.sh` locally (ruff → pytest → boot → privacy invariants).
-2. `git pull` on the box, `docker compose up -d --build`.
-3. `bash scripts/hosted-preflight.sh --url "https://$HESTIA_DOMAIN"` → zero fails.
-4. Migrations apply automatically on boot (forward-only, ledgered); `/readyz` turns
+2. When packaged migration SQL, its manifest, or the runner changes, audit a restored
+   real-backup snapshot and stop on any unapproved state; never inspect the live path.
+3. `git pull` on the box, `docker compose up -d --build`.
+4. `bash scripts/hosted-preflight.sh --url "https://$HESTIA_DOMAIN"` → zero fails.
+5. Migrations apply automatically on boot (forward-only, ledgered); `/readyz` turns
    green when the schema is current.
 
 ## Incident quick-reference
@@ -105,6 +113,7 @@ have ready-to-send answers in `docs/support.md` — this table is for the box it
 
 | Symptom | First look | Runbook |
 |---------|-----------|---------|
+| Migration audit is decision-required/inconsistent | restored backup copy; audit JSON findings | `docs/backup-restore.md`, D4 in `docs/HUMAN-DECISIONS.md` |
 | Site down / 502 | `docker compose ps`, `docker compose logs hestia` | restart: `docker compose restart hestia` |
 | `backup` container restarting | `docker compose logs backup` (missing DB? bad dir?) | `docs/backup-restore.md` |
 | Payments not completing | Stripe dashboard → webhook delivery; `/webhooks/stripe` reachable? | `docs/deploy-wiring.md` |

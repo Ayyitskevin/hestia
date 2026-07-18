@@ -20,12 +20,13 @@ from the session, never from a request parameter. Foreign-key joins are tenant-m
 so a stray cross-tenant id is dropped, not surfaced. Storage blobs are tenant-prefixed
 (`<tenant>/…`) with a path-traversal guard. *Tests: `test_tenant_isolation.py`.*
 
-**Client links are unguessable capability tokens.** Delivery, portal, pay, sign,
-album-review, questionnaire, offer, and per-image `/media` links are gated by 256-bit
-tokens — the token is the credential. Auth-link tokens (verify/reset/invite) are stored
-**hashed** with a pepper, single-use, and expiring. Minting is idempotent and race-safe;
-rotation instantly revokes the prior link. *Tests: `test_seo_privacy.py`,
-`test_resets.py`, `test_interest.py`.*
+**Client links use unguessable capability tokens.** Delivery, portal, pay, sign,
+album-review, questionnaire, offer, and per-image `/media` links use high-entropy
+tokens—the token is the credential. Auth-link tokens (verify/reset/invite) are stored
+**hashed** with a pepper, single-use, and expiring. Per-image media tokens are separate
+from the gallery delivery token; they do not currently inherit a configured gallery PIN
+or rotate with that delivery link. That D3 limitation is a public-launch hold. *Tests:
+`test_seo_privacy.py`, `test_resets.py`, `test_interest.py`.*
 
 **Private surfaces never get indexed.** `robots.txt` disallows every token prefix and
 each token page carries `noindex`; sensitive and authenticated responses also carry
@@ -36,13 +37,16 @@ hardening, log redaction, robots output, hosted preflight, and CI all consume it
 *Tests: `test_csp.py`, `test_seo_privacy.py`, `test_obs.py`;
 enforced by `scripts/ci-smoke.sh`.*
 
-**Media can't execute or enumerate.** Uploaded images are served with a raster-type
+**Media can't execute or enumerate, but authorization parity is held.** Uploaded images
+are served with a raster-type
 allowlist (a stored `text/html`/SVG downloads as octet-stream, never runs). Public
-image URLs are per-image capability tokens; the enumerable storage-key path is
-owner-only. S3 media must remain private and is served with short-lived presigned URLs;
-boot and hosted preflight reject the legacy public/CDN base URL configuration. Culled
-or hidden frames never resurface to a client. Uploads are size-bounded (75 MB/image,
-bounded read) so one studio can't OOM the box. *Tests: `test_storage_s3.py`,
+image URLs are per-image capability tokens authorized from publication state, not the
+gallery PIN/unlock session; the enumerable storage-key path is owner-only. S3 media must
+remain private but browser delivery uses one-hour presigned provider URLs that cannot be
+revoked immediately. Boot and hosted preflight reject the legacy public/CDN base URL
+configuration. Keep public ingress closed until D3 defines and verifies same-origin
+authorization/revocation. Uploads are size-bounded (75 MB/image, bounded read) so one
+studio can't OOM the box. *Tests: `test_storage_s3.py`,
 `test_upload_hardening.py`, `test_tenant_isolation.py`.*
 
 **Passwords & sessions.** Passwords are PBKDF2-HMAC-SHA256 at the OWASP-current work
@@ -52,11 +56,13 @@ constant-time master-token compare; owner sessions can't reach admin. Every user
 must still match an existing user, tenant, and role; malformed or stale session rows are
 revoked. *Tests: `test_auth_context.py`, `test_auth_kdf.py`.*
 
-**Money is server-authoritative and idempotent.** Order/invoice amounts are recomputed
-server-side (the client's posted price is never trusted). The Stripe webhook verifies
-the HMAC signature + replay window before acting, is idempotent (a redelivered event
-never double-settles), acknowledges unknown-tenant events with 200 (no retry storm), and
-only a **payment-mode** checkout settles an invoice. *Tests: `test_webhooks.py`,
+**Local money guards exist; end-to-end client payment is held.** Order/invoice amounts
+are recomputed server-side (the client's posted price is never trusted). The Stripe
+webhook verifies the HMAC signature + replay window and prevents one event from
+double-settling local state. D2 remains open because Checkout creation lacks the approved
+attempt/account/idempotency binding and the webhook does not yet bind account, session,
+amount, currency, and live mode to that attempt. Do not describe local replay safety as
+end-to-end settlement idempotency. *Tests: `test_webhooks.py`,
 `test_subscriptions.py`, `test_payments.py`.*
 
 **Input is bounded & injection-safe.** Public free-text is length-capped at the data

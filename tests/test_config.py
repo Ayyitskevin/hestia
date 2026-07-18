@@ -2,10 +2,17 @@
 
 import dataclasses
 
+from hestia.config import Settings
+
 
 def test_clean_config_has_no_warnings(settings):
     # the test settings are all-mock with real secrets → nothing to shout about
     assert settings.config_warnings == []
+
+
+def test_unconfigured_saas_mode_default_remains_fail_closed(monkeypatch):
+    monkeypatch.delenv("HESTIA_SAAS_MODE", raising=False)
+    assert Settings.from_env().saas_mode is True
 
 
 def test_stripe_payments_without_key_warns(settings):

@@ -48,12 +48,14 @@ PYTHONPATH="$SITE" python -c '
 import os
 from pathlib import Path
 import hestia
+from hestia.migration_audit import _source_inventory
 
 root = Path(hestia.__file__).resolve().parent
 site = Path(os.environ["SITE"]).resolve()
 assert root.is_relative_to(site), f"imported source tree instead of wheel: {root}"
 required = (
     root / "migrations" / "0001_baseline.sql",
+    root / "migrations" / "manifest.json",
     root / "templates" / "base.html",
     root / "static" / "hestia.css",
     root / "static" / "og-cover.png",
@@ -63,6 +65,9 @@ assert not missing, f"wheel missing runtime files: {missing}"
 actual = len(tuple((root / "migrations").glob("*.sql")))
 expected = int(os.environ["EXPECTED_MIGRATIONS"])
 assert actual == expected, f"wheel has {actual}/{expected} migrations"
+source = _source_inventory(root / "migrations")
+assert source["repository_state"] == "manifest_clean"
+assert source["count"] == expected
 print(f"installed package: {root} ({actual} migrations)")
 '
 

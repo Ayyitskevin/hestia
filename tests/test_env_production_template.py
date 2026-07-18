@@ -1,8 +1,10 @@
 """Guard .env.production.example against drift.
 
-The production env template is what a founder copies on go-live day. If it ever
-reverts a money/email backend to `mock`, or ships a real-looking secret, or names a
-key the app doesn't read, that's a silent launch footgun. Pin the load-bearing bits.
+The hosted env template is a deliberately held release candidate. It pins observable
+signup and client-payment holds; mock payments remain capable of local settlement, so
+this is configuration intent rather than technical route disablement. It also rejects
+real-looking secrets and names only settings the app reads. Pin those load-bearing
+properties.
 """
 
 import re
@@ -23,15 +25,18 @@ def _parse(path: Path) -> dict[str, str]:
     return out
 
 
-def test_production_template_pins_live_backends():
+def test_production_template_pins_release_candidate_backends():
     env = _parse(TEMPLATE)
-    # The backends that would silently break a launch if left on mock.
+    # Subscription and email seams are configured for private rehearsal. Signup off,
+    # test-mode Stripe, and mock invoices are observable holds, not route disablement.
     assert env["HESTIA_SAAS_MODE"] == "true"
+    assert env["HESTIA_SIGNUP_ENABLED"] == "false"
     assert env["HESTIA_SUBSCRIPTION_BACKEND"] == "stripe"
-    assert env["HESTIA_PAYMENTS_BACKEND"] == "stripe"   # else invoices settle for $0
-    assert env["HESTIA_EMAIL_BACKEND"] == "smtp"         # else no verification mail
+    assert env["HESTIA_PAYMENTS_BACKEND"] == "mock"
+    assert env["HESTIA_STRIPE_SECRET_KEY"].startswith("sk_test_")
+    assert env["HESTIA_EMAIL_BACKEND"] == "smtp"
     assert env["HESTIA_PUBLIC_URL"].startswith("https://")
-    assert env["HESTIA_TRIAL_DAYS"] == "14"              # preflight locks 14
+    assert env["HESTIA_TRIAL_DAYS"] == "14"
 
 
 def test_production_template_ships_no_real_secrets():
@@ -43,6 +48,9 @@ def test_production_template_ships_no_real_secrets():
     assert "CHANGE_ME" in env["HESTIA_STRIPE_SECRET_KEY"]
     assert "CHANGE_ME" in env["HESTIA_STRIPE_WEBHOOK_SECRET"]
     assert not re.match(r"sk_live_[A-Za-z0-9]{20,}", env["HESTIA_STRIPE_SECRET_KEY"])
+    xai_key = env["HESTIA_XAI_API_KEY"]
+    assert not xai_key or "CHANGE_ME" in xai_key
+    assert not re.match(r"xai-[A-Za-z0-9_-]{20,}", xai_key)
 
 
 def test_production_template_keys_are_all_real_settings():

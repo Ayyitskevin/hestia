@@ -1,47 +1,63 @@
-# Deployment wiring: Stripe, SMTP, storage
+# Release-candidate wiring: studio billing, SMTP, storage
 
-The exact external-service setup for a live Hestia box, distilled from the code so
-it's copy-paste, not guesswork. Pairs with `.env.production.example` and
-`docs/launch-checklist.md`.
+This describes the current external-service seams; it is not authorization for a live
+launch. Pair it with `.env.production.example`, `docs/launch-checklist.md`, and the
+D1-D5 holds in [`HUMAN-DECISIONS.md`](HUMAN-DECISIONS.md). Client-invoice payments,
+anonymous media authorization, and durability evidence remain held until their approved
+contracts are implemented and verified.
 
 ## Stripe
 
-Hestia uses Stripe for **two** money paths, both behind the same API keys:
+Hestia currently contains two money paths behind the same platform API key, but only
+studio subscriptions are in the release-candidate operating scope:
 
-- **Studio subscriptions** — each studio pays $40/month (`HESTIA_SUBSCRIPTION_BACKEND=stripe`).
-- **Client invoice payments** — a studio's clients pay invoices via Stripe Checkout
-  (`HESTIA_PAYMENTS_BACKEND=stripe`). Leaving this on `mock` marks invoices paid with
-  nothing charged, so preflight **fails** on it.
+- **Studio subscriptions** charge each studio $40/month through
+  `HESTIA_SUBSCRIPTION_BACKEND=stripe`.
+- **Client invoice payments** currently create platform-account Checkout Sessions
+  without connected-account routing or a stored attempt binding. The mock path marks
+  invoices paid without charging.
 
-### Keys
+**Release-candidate boundary:** keep `HESTIA_PAYMENTS_BACKEND=mock` so preflight stays
+red. Mock checkout is still routable and settles locally, so keep the entire candidate
+behind loopback, SSH, or source-allowlisted ingress. D2 targets Stripe Connect direct
+charges; there are no live client-invoice verification steps until that implementation
+is separately approved and lands.
 
-1. Dashboard → Developers → API keys → copy the **live** secret key (`sk_live_…`) into
-   `HESTIA_STRIPE_SECRET_KEY`.
+### Studio subscription keys
 
-### Webhook (required — it's what completes every payment)
+1. Use a Stripe **test** secret (`sk_test_…`) in `HESTIA_STRIPE_SECRET_KEY` for the
+   private rehearsal. Switch to a live key only after the complete Day-7 gate—not merely
+   D1-D5 implementation evidence—is complete.
 
-2. Dashboard → Developers → Webhooks → **Add endpoint**.
-   - URL: `https://YOUR_DOMAIN/webhooks/stripe`
-   - Events to send (exactly these — Hestia ignores the rest):
+### Studio subscription webhook
+
+2. In test mode, forward Stripe test events to `/webhooks/stripe` inside the private
+   boundary. Do not register the public live-domain endpoint until Day 7.
+   - Events needed by the current subscription path:
      | Event | What it drives |
      |-------|----------------|
-     | `checkout.session.completed` | marks an invoice paid + fulfills its order; activates a studio's subscription |
+     | `checkout.session.completed` | activates a studio subscription; the current invoice branch remains held |
      | `customer.subscription.updated` | syncs trial → active, and active → past_due (failed card) |
      | `customer.subscription.deleted` | downgrades a canceled studio to the free Beta plan |
-3. Copy that endpoint's **Signing secret** (`whsec_…`) into `HESTIA_STRIPE_WEBHOOK_SECRET`.
-   Without it the webhook returns `503` and no payment ever completes.
+3. Copy the test-forwarder's **Signing secret** (`whsec_…`) into
+   `HESTIA_STRIPE_WEBHOOK_SECRET`; without it, subscriptions cannot activate.
 
-The endpoint verifies the `Stripe-Signature` (HMAC-SHA256, constant-time, replay
-window) before acting, is idempotent (a redelivered event never double-settles), and
-returns `200` for events about unknown tenants so Stripe won't retry forever.
+The endpoint verifies the `Stripe-Signature` with a bounded replay window before
+acting. The same handler still parses invoice metadata and can mark and fulfill a
+current platform-charge invoice; that branch has no D2 Connect attempt binding and
+remains outside the authorized release-candidate scope. Events for unknown tenants are
+acknowledged so Stripe does not retry them forever.
 
-### Verify
+### Verify the subscription path
 
-- `bash scripts/hosted-preflight.sh` → `subscription backend`, `stripe secrets`, and
-  `invoice payments` all **pass**; `stripe mode` reads **live**.
-- Stripe dashboard → send a test `checkout.session.completed` → endpoint returns `200`.
-- End-to-end: subscribe a test studio with a real card, confirm it goes `active` and
-  the receipt email arrives; then refund/cancel and confirm the downgrade lands.
+- `bash scripts/hosted-preflight.sh`: subscription and Stripe-secret checks pass;
+  test-key `stripe mode` warns; self-service signup and invoice payments fail.
+- Send a subscription-shaped `checkout.session.completed` test event and confirm the
+  endpoint returns `200` with the expected studio subscription transition.
+- Inside the private boundary, subscribe a controlled tenant with a Stripe test card;
+  confirm activation and receipt, then cancel/refund in test mode.
+- Restore signup to false and do not create a client invoice. Client-payment
+  verification begins only after the approved D2 Connect implementation exists.
 
 ## SMTP
 
@@ -55,20 +71,28 @@ new studio can never verify its email and activate.
 - Use a sender on your own domain with **SPF + DKIM** published, or verification mail
   lands in spam and studios can't onboard.
 
-Verify: preflight `email backend` + `smtp config` pass; then sign up with a real
-personal inbox and confirm the verification link actually arrives.
+For a private SMTP rehearsal, temporarily enable signup, use a controlled personal
+inbox, confirm the verification link arrives, then restore
+`HESTIA_SIGNUP_ENABLED=false`.
 
 ## Storage
 
-- **local** (default): the `hestia-data` Docker volume. Backed up daily by the compose
-  `backup` service; restore drill in `docs/backup-restore.md`. Good for launch.
-- **s3** (`HESTIA_STORAGE_BACKEND=s3` + `HESTIA_S3_BUCKET`, plus AWS creds via the
-  standard chain): use a **private** bucket so images are served by short-lived
-  presigned URLs. `HESTIA_S3_PUBLIC_BASE_URL` must stay blank: Hestia now rejects
-  public/CDN object URLs at boot and in preflight because they expose enumerable
-  storage keys outside gallery visibility and capability-token checks.
+- **local** (default) persists in the `hestia-data` Docker volume. The compose backup
+  service makes daily SQLite artifacts; local DB and media on one host are not launch
+  durability. D5 must add and verify an off-site DB+required-media copy.
+- **s3** (`HESTIA_STORAGE_BACKEND=s3` + `HESTIA_S3_BUCKET`, plus AWS credentials via
+  the standard chain) must use a **private** bucket.
+  `HESTIA_S3_PUBLIC_BASE_URL` stays blank because public/CDN object URLs expose
+  enumerable keys outside gallery visibility and capability-token checks. Current
+  browser rendering still emits presigned provider URLs, so D3 same-origin
+  authorization/revocation parity must land before this becomes the launch path.
+- **D5 evidence, regardless of backend:** use a non-deleting copy for the database and
+  every required gallery-media object, with destination-side versioning, object lock,
+  or equivalent same-path retention. Verify the newest DB remotely, write a fresh
+  non-secret receipt only after both scopes succeed, and recover SQLite plus a known
+  gallery's media from a real remote artifact.
 
 ## Reminder
 
-`chmod 600 .env` — it holds live Stripe and SMTP secrets. It's git-ignored; keep it
-off every shared drive.
+`chmod 600 .env` — it holds Stripe and SMTP secrets (test during private rehearsal,
+live only after the Day-7 gate). It is git-ignored; keep it off every shared drive.

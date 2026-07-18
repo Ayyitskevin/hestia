@@ -1,5 +1,9 @@
 # Beta email pack
 
+> **HOLD — DRAFT ONLY.** Do not send, publish, or run invite actions from this file until
+> the complete Day-7 public release gate passes. D1 AI packaging and D2 client-payment
+> semantics are not approved; later copy is positioning material, not a shipped contract.
+
 Copy-paste templates for the first Hestia beta cohort. Pair with
 [`docs/beta-onboarding.md`](beta-onboarding.md) for admin UI steps and funnel tracking.
 
@@ -106,15 +110,16 @@ Send from your address when **Admin → Trials** shows verified but no activatio
 
 ---
 
-## 4. Day ~7 personal — activated, no money link yet
+## 4. Day ~7 personal — private test-mode rehearsal only
 
-Send when they have a processed gallery but no invoice or client payment yet.
+Do not send this to a beta studio while D2 is held. It is a founder-only test-mode
+rehearsal after an explicit test policy is available.
 
 **Subject:** getting paid through [studio]
 
-> Hey [name] — your galleries look great. The next ten-minute win: **Invoices → New**,
-> send yourself a test payment link, and open `/pay/…` to see exactly what your client sees.
-> After that, real client money is one click. Want a hand setting up deposits or payment plans?
+> Private test only: create an invoice and inspect `/pay/…` without real funds. This
+> proves the UI, not settlement. Do not send a client link until the approved D2 Connect
+> path and its webhook/idempotency evidence are live.
 
 **Variant (portrait / print-heavy):**
 
@@ -141,7 +146,7 @@ add a personal line, email *after* the automated nudge (respect cooldown — che
 
 ---
 
-## 6. X launch thread (5 posts)
+## 6. X launch thread (5 posts — draft, do not publish)
 
 ### Post 1
 
@@ -181,8 +186,8 @@ gallery host, invoice app, AI helper, and retention spreadsheet just to look pro
 | "I already use HoneyBook + Pixieset" | Hestia replaces both *and* wires gallery vision into print offers — Pixieset can't auto-curate bundles from your cull. Flat $40 vs. stacked subscriptions. |
 | "Aftershoot does AI culling" | Aftershoot is attacking from the edit side inward. Hestia owns inquiry → contract → invoice → offer as one idempotent system. Different buyer moment. |
 | "I don't trust AI culling" | Mock runs deterministic in CI; live xAI is optional. You approve every cull; blink/duplicate flags are advisory. Re-process is idempotent. |
-| "$40 is too cheap to be real" | Solo-founder hosted launch — one plan, no commission on prints, no seat games. Price goes up when support load does. |
-| "What about my print lab?" | Orders settle to invoices today; fulfillment seam is mock-first with lab HTTP wiring next. You still get paid through Stripe checkout now. |
+| "$40 is too cheap to be real" | Draft positioning only. Do not promise AI scope, print commissions, or future pricing until D1/D2 and the public offer are approved. |
+| "What about my print lab?" | Current fulfillment is mock-first and client-payment settlement is held by D2. Do not claim live Stripe payout or lab fulfillment yet. |
 
 ---
 
@@ -197,10 +202,12 @@ gallery host, invoice app, AI helper, and retention spreadsheet just to look pro
 
 ## 9. After you ship this pack
 
-Follow [`launch-week1.md`](launch-week1.md) day-by-day. Quick version:
+Do not use the superseded `launch-week1.md` plan. Resolve D1-D5 and every separate
+Day-7 gate, then follow [`launch-checklist.md`](launch-checklist.md). Before Day 7,
+private preparation only:
 
-1. Seed demos: **Admin → Launch → Seed founder demo studios**
-2. Set live AI (optional): `HESTIA_VISION_BACKEND=xai` + key in `.env`
-3. Set your prices: **Settings → Offers** (`/settings/offers`)
-4. Watch usage: **Admin → System → AI usage ledger**
-5. Track funnel: **Admin → Launch → Export CSV** at day 7 and day 30
+1. Keep ingress private, signup off, Stripe in test mode, and client invoices held.
+2. Seed and inspect demos only through the private boundary.
+3. Set your prices: **Settings → Offers** (`/settings/offers`).
+4. Watch usage: **Admin → System → AI usage ledger**.
+5. Do not share copy or invite a cohort until the current checklist's Day-7 gate passes.

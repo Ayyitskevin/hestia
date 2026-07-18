@@ -8,4 +8,4 @@ if [ ! -f .env ]; then
   echo "  cp .env.example .env && chmod 600 .env" >&2
 fi
 
-exec uvicorn hestia.main:app --host "${HESTIA_HOST:-0.0.0.0}" --port "${HESTIA_PORT:-8500}" "$@"
+exec uvicorn hestia.main:app --host "${HESTIA_HOST:-127.0.0.1}" --port "${HESTIA_PORT:-8500}" "$@"

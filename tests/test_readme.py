@@ -52,3 +52,19 @@ def test_readme_positions_hestia_as_flat_price_hosted_microsaas():
         assert phrase in readme
 
     assert "Studio Pro" not in readme
+
+
+def test_readme_routes_local_and_hosted_setup_to_the_right_templates():
+    readme = Path("README.md").read_text(encoding="utf-8")
+    quickstart = readme.split("## Quickstart", 1)[1].split("## The Offer", 1)[0]
+    hosted = readme.split("## Hosted Release Candidate (Held)", 1)[1].split(
+        "## Trial, Billing, And Account Flow", 1
+    )[0]
+    local = readme.split("## Local Development", 1)[1].split(
+        "## API Example", 1
+    )[0]
+
+    assert "cp .env.example .env" in quickstart
+    assert "cp .env.example .env" in local
+    assert "cp .env.production.example .env" in hosted
+    assert "cp .env.example .env" not in hosted

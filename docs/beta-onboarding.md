@@ -1,5 +1,10 @@
 # Beta onboarding runbook
 
+> **HOLD — do not execute yet.** This runbook begins only after the complete Day-7
+> public release gate in `launch-checklist.md` passes: D1-D5, non-bypassable runtime
+> enforcement, public-edge review, and SQLite runtime patch evidence. A green current
+> preflight alone is not authorization to invite anyone.
+
 Your first-cohort playbook once the box is live and green (see
 `docs/launch-checklist.md`). Everything here is a button in the operator admin — no
 scripts, no SQL. Sign in at `/admin` with your `HESTIA_API_TOKEN`.
@@ -96,14 +101,13 @@ address, 2–3 sentences, no template smell — personalize the [bracketed] bits
 > photographers: upload any recent shoot to a gallery and watch the cull and the
 > offer draft appear. Takes about two minutes. Anything in your way?
 
-**Day ~7, if activated but no money link yet:**
+**Day ~7 private test rehearsal (do not send while D2 is held):**
 
-> Subject: getting paid through [studio]
+> Subject: private payment-path test
 >
-> Hey [name] — your galleries look great. The next ten-minute win: send yourself an
-> invoice (Invoices → New) and open the payment link to see exactly what your client
-> sees. After that, real client money is one click away. Want a hand setting up
-> deposits or payment plans?
+> Founder-only test: create an invoice and inspect the payment page without real funds.
+> This proves the UI, not settlement. Do not send a client link until the approved D2
+> Connect path and its webhook/idempotency evidence are live.
 
 Why these stay manual: at first-cohort size, a founder reply-thread converts better
 than any automation — and what you learn writing them becomes the next automated

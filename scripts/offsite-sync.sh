@@ -8,7 +8,9 @@
 # HESTIA_OFFSITE_REMOTE is an rclone "remote:path". rclone speaks S3, Backblaze B2,
 # Cloudflare R2, Google Drive, SFTP, and more — configure it once with `rclone config`.
 # Run this on a cron a few minutes AFTER the daily backup (see docs/operations.md).
-# Media blobs are content-addressed and immutable, so each run copies only new files.
+# rclone copy is non-deleting, not append-only: changed same-path objects can replace
+# prior remote bytes. D5 requires destination versioning/object lock (or equivalent)
+# plus remote verification and a fresh receipt before this is launch evidence.
 set -euo pipefail
 
 REMOTE="${HESTIA_OFFSITE_REMOTE:-}"
@@ -25,9 +27,10 @@ STORAGE="${HESTIA_STORAGE_BACKEND:-local}"
 echo "→ DB backups → $REMOTE/backups"
 rclone copy "$BACKUP_DIR" "$REMOTE/backups" --stats-one-line
 
-# Media originals + thumbnails: only for local storage (S3/R2 already lives off-box and
-# is durable). copy, not sync — a client's originals must never be deleted off-site just
-# because a local gallery was removed. The off-site copy is a safety net; it only grows.
+# Media originals + thumbnails: only for local storage (S3/R2 already lives off-box).
+# copy, not sync, preserves destination-only objects when a local gallery is removed.
+# A changed object at the same key can still overwrite remote bytes; provider-side
+# retention is required for immutable history.
 if [ "$STORAGE" = "local" ]; then
   if [ -d "$MEDIA_DIR" ]; then
     echo "→ media → $REMOTE/media"
@@ -39,4 +42,4 @@ else
   echo "→ storage=$STORAGE: media already lives off-box in the object store, skipping"
 fi
 
-echo "off-site sync complete → $REMOTE"
+echo "off-site copy commands completed (UNVERIFIED; not D5 evidence) → $REMOTE"

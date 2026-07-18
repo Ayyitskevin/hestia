@@ -4,8 +4,29 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ## [Unreleased]
 
+### Added
+
+- Added a sidecar-free, immutable read-only migration audit with a committed checksum
+  manifest, exact current/original migration-0065 schema signatures, malformed-ledger
+  detection, stable JSON output, and installed-wheel validation. It fingerprints the
+  isolated snapshot before and after inspection and has no apply/repair path.
+- Centralized the five launch-critical owner choices—AI packaging, Stripe client funds,
+  media authorization, migration compatibility, and off-site durability—in an
+  implementation-ready decision queue without approving them implicitly.
+- Recast the hosted environment and launch runbooks as a private, test-mode release
+  candidate held behind those decisions, documented the remaining non-bypassable code
+  gate, and corrected off-site-copy guidance to require destination-side retention for
+  same-path overwrites.
+- Added regressions for the safe local path: the local template is non-SaaS/mock-first,
+  boots with placeholders, and binds loopback while hosted defaults remain fail-closed.
+
 ### Fixed
 
+- Tightened migration-audit identity to the immutable 0001 data spine, rejected malformed
+  ledger timestamps by exact UTC shape and calendar semantics, added the missing
+  pre-0065/gap/name/non-Hestia fixtures, and made the scratch-copy recipe unpredictable.
+- Changed off-site completion output and recovery runbooks to distinguish transfer
+  completion from verified remote DB+media recovery evidence.
 - Made gallery publication a one-way claim so retried POSTs preserve the original
   publication timestamp and cannot duplicate activity or client automations.
 - Reconciled appointment notifications on reschedule: queued confirmation/reminder
@@ -24,14 +45,13 @@ All notable changes to Hestia are documented in this file. The format follows [K
   redaction, `robots.txt`, hosted preflight, and CI. Proposal bearer tokens are now
   redacted in real request logs and proposal pages carry an explicit `noindex` meta tag.
 
-## [1.0.0] - 2026-07-02
+## 1.0.0 (internal milestone; untagged) - 2026-07-02
 
-The go-live release. 0.1.0 froze the feature set; 1.0.0 is that product made
-launchable — security-hardened end to end, wired for a real box (TLS, deploys,
-backups, monitoring), documented for the founder who has to run it, and polished
-for the photographer's first hour. Validated by a full first-owner smoke against a
-live boot: signup → verify → preset → publish → gallery → AI offer → invoice →
-client payment → launch checklist complete, with zero paper cuts.
+Historical internal milestone, not publication evidence. This heading was originally
+described as the go-live release, but no corresponding Git tag exists and public launch is
+now held behind the decision/runtime/edge/runtime-patch gates documented above. Do not
+treat the version heading or its historical smoke narrative as authorization to deploy,
+accept funds, or make live product claims.
 
 ### Added
 
@@ -98,7 +118,7 @@ and monitoring — each invariant landed with a regression test:
   `robots.txt` must disallow every token prefix — enforced on every run, plus a
   live-domain probe in preflight.
 
-## [0.1.0] - 2026-07-02
+## 0.1.0 (internal milestone; untagged) - 2026-07-02
 
 Initial release. Hestia is a hosted, AI-native, flat $40/month operating system for photography studios. It owns the whole business in one place — visitor to inquiry to client to gallery to AI cull to print/album offer to invoice to payment to retention — with a public studio site and booking front door, a CRM and delivery back office, and an operator control plane for running the hosted service. Every studio is a fully isolated tenant; client-facing links are password-free capability tokens; the background worker handles the follow-ups so the photographer doesn't have to.
 
@@ -207,7 +227,7 @@ Initial release. Hestia is a hosted, AI-native, flat $40/month operating system 
 ### Security & Privacy
 
 - **Tenant isolation everywhere.** Every CRM, questionnaire, contract, proposal, gallery, money, campaign, automation, and subscription query is tenant-scoped; optional client/project parents are validated to the tenant before write, read joins are tenant-matched, and a stray cross-tenant id is dropped rather than surfaced. Storage blobs are tenant-prefixed so images never leak across studios, and webhook subscription updates guard on tenant existence so foreign or bogus Stripe metadata can't write orphan rows or 500 the endpoint.
-- **Password-free capability tokens for client surfaces.** Delivery (`/d/{token}`), album review (`/a/{token}`), per-image media (`/media/{token}`), portal, pay, sign, questionnaire-fill, and proposal-accept links are gated only by unguessable tokens — the token is the credential. Minting is idempotent and race-safe (claim-before-act), rotation instantly revokes the prior link, delivery links honor an expiry gate (410 past the date), and these routes are deliberately CSRF-exempt but rate-limited.
+- **Password-free capability tokens for client surfaces.** Delivery (`/d/{token}`), album review (`/a/{token}`), per-image media (`/media/{token}`), portal, pay, sign, questionnaire-fill, and proposal-accept links are gated only by unguessable tokens—the token is the credential. Minting is idempotent and race-safe (claim-before-act), and delivery links honor an expiry gate (410 past the date). Gallery/portal rotation revokes the corresponding route URL, but separate per-image media tokens do not inherit the gallery PIN or rotation; that D3 limitation now holds public launch.
 - **Private surfaces stay out of search.** `robots.txt` disallows every token-gated surface (portal, delivery, pay, sign, gallery, offer, questionnaire, invite, verify/reset, calendar, media) on top of per-page `noindex` meta, while keeping marketing, studio, and booking pages indexable; CI enforces both invariants and a live-robots probe.
 - **Access-log token redaction.** The credential-bearing tail of every client-token and media path is redacted to just the route prefix, so working bearer tokens are never persisted to logs.
 - **Media can't execute on our origin.** Inline images are clamped to a raster-type allowlist so a stored `text/html` or SVG "image" downloads as octet-stream instead of running (stored-XSS defense); the `/media` path serves only published, non-hidden, non-culled frames, and the enumerable storage-key path is owner-only (403). Culled/hidden frames never resurface in client galleries, delivery, album review, or offer thumbnails, even by direct image id.
@@ -229,6 +249,3 @@ Initial release. Hestia is a hosted, AI-native, flat $40/month operating system 
 - **Reminder sweeps claim-before-send.** Contract, questionnaire, and proposal reminders, growth asks, gallery sales-campaign emails, owner and launch digests, trial-ending nudges, and past-due dunning all claim atomically and share audit-ledger cooldowns between the manual admin action and the automated worker, so a studio or client is never double-emailed; proposal auto-follow-ups cap at 3 and campaign emails honor a 14-day per-gallery cooldown.
 - **Traceability and hardened responses.** Every response carries `nosniff`, `SAMEORIGIN` frame options, a strict referrer policy, and a per-request `X-Request-ID`.
 - **Streaming stays bounded.** Zip delivery streams one file at a time (`ZIP_STORED`) so a multi-GB gallery can't OOM the server, and client CSV import authenticates before reading the body, enforces a 5MB cap, and turns a malformed/binary file into a friendly error.
-
-[1.0.0]: https://github.com/Ayyitskevin/hestia/releases/tag/v1.0.0
-[0.1.0]: https://github.com/Ayyitskevin/hestia/releases/tag/v0.1.0

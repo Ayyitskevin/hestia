@@ -47,7 +47,7 @@ include = ["hestia*"]
 # Bundle the runtime resources the package reads from disk at import/boot, so a
 # built wheel works as well as an editable install does.
 [tool.setuptools.package-data]
-hestia = ["migrations/*.sql", "templates/**/*.html", "static/*"]
+hestia = ["migrations/*.sql", "migrations/manifest.json", "templates/**/*.html", "static/*"]
 
 [tool.ruff]
 line-length = 100

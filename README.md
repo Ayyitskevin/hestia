@@ -1,5 +1,10 @@
 # Hestia
 
+> **Public launch is held.** The $40/AI/payment language below is proposed positioning,
+> not an approved live contract. Keep every release candidate private and test-mode until
+> D1-D5, the non-bypassable runtime authorization boundary, custom-domain edge review,
+> and SQLite runtime patch evidence are closed.
+
 **Everything you need to run a professional photography studio - fully hosted,
 AI-powered, and maintained for you, only $40/month.**
 
@@ -103,9 +108,10 @@ MAGIC MOMENT
    idempotent: re-process produced the same link
 ```
 
-## Hosted SaaS Mode
+## Hosted Release Candidate (Held)
 
-Hestia is ready for a simple solo-founder hosted launch:
+Hestia has the architecture for a solo-founder hosted product, but the current candidate
+is for private, test-mode rehearsal only:
 
 - Dockerized FastAPI app
 - Caddy reverse proxy
@@ -135,13 +141,15 @@ Hestia is ready for a simple solo-founder hosted launch:
 - Mock-first provider seams for safe local and staging runs
 
 ```bash
-cp .env.example .env
-# set HESTIA_DOMAIN, HESTIA_PUBLIC_URL, HESTIA_* secrets, Stripe/SMTP/S3 keys as needed
+cp .env.production.example .env
+# fill the four SET_ME groups; keep DNS and public ingress closed
 docker compose up --build -d
 ```
 
-Set wildcard DNS for `*.yourdomain.com` to the host running Caddy. With
-`HESTIA_DOMAIN=yourdomain.com`, a studio with slug `oak-room` is reachable at:
+Compose publishes ports 80/443 on all interfaces, so a host firewall or source allowlist
+must provide the private boundary. Do not activate wildcard DNS yet. After the launch
+holds close, `*.yourdomain.com` can point to Caddy; with
+`HESTIA_DOMAIN=yourdomain.com`, a studio with slug `oak-room` is then reachable at:
 
 ```text
 https://oak-room.yourdomain.com
@@ -206,6 +214,10 @@ Hestia is a modular monolith, not a bundle of disconnected services.
 
 ## Local Development
 
+The local template is deliberately non-SaaS, mock-first, and the launcher binds
+`127.0.0.1` by default. An explicit exported `HESTIA_HOST` can override the bind;
+do not use that as a hosted-launch shortcut.
+
 ```bash
 python3.12 -m venv .venv
 . .venv/bin/activate
@@ -248,10 +260,11 @@ Everything runs without external keys by default.
 | Email | `HESTIA_EMAIL_BACKEND` | `mock` | `smtp` |
 | Print fulfillment | `HESTIA_FULFILLMENT_BACKEND` | `mock` | `lab` |
 
-Beta AI subsidy (when vision uses `xai`): `HESTIA_AI_SUBSIDY_ENABLED` (default `true`),
-`HESTIA_AI_SUBSIDY_GALLERIES` (default `1` live gallery per studio),
-`HESTIA_AI_SUBSIDY_IMAGE_CAP` (default `150` images). After the subsidy is used, new
-galleries fall back to mock cull — see [`docs/launch-week1.md`](docs/launch-week1.md).
+The current live-vision allowance is usage-bound: when vision uses `xai`, the defaults
+fund one live gallery per studio up to 150 images, then later galleries fall back to
+mock cull. It is not tied to trial state and is not approved public packaging.
+[`docs/HUMAN-DECISIONS.md`](docs/HUMAN-DECISIONS.md) D1 defines the recommended
+trial-state contract and the implementation required before that claim can ship.
 Product-photo edits use the separate `HESTIA_XAI_IMAGE_MODEL` setting (default
 `grok-imagine-image-quality`). Hestia streams provider responses through a hard
 byte cap, accepts only bounded and fully decodable JPEG/PNG rasters, then
@@ -290,7 +303,11 @@ bash scripts/lock-dependencies.sh --check  # prove Python 3.12 locks match their
 python -m pip_audit --strict --require-hashes --disable-pip \
   --vulnerability-service=pypi -r requirements/runtime.lock  # production CVE gate
 bash scripts/hosted-preflight.sh --url https://yourdomain.com
+python -m hestia.migration_audit /path/to/restored-snapshot.db  # never the live WAL path
 ```
+Migration-audit input and exit semantics are documented in
+[`docs/backup-restore.md`](docs/backup-restore.md); the command is diagnostic only and
+does not apply or repair migrations.
 
 The test suite covers tenant isolation, hosted routing, public demo, beta landing, trial proof plan, and pricing
 pages, first-party signup attribution, private beta invites, beta launch kit, flat-plan billing, signup,
@@ -306,6 +323,12 @@ assets, failing `/healthz`/`/readyz` probes, a stale backup artifact (a dead bac
 is a launch blocker), or a live `robots.txt` missing the client-token disallows.
 Set `HESTIA_PREFLIGHT_URL` or pass `--url` after the app is running.
 
+The current preflight is configuration diagnostics, not D1-D5 authorization. It can
+pass configurations that still use usage-bound AI packaging, platform Stripe invoice
+Checkout, free-text durability acknowledgment, or direct S3/R2 media delivery. Until
+evidence-specific release gates replace those predicates, keep the release candidate
+private and test-mode even if preflight reports success.
+
 CI smoke also enforces the privacy invariants on every run: every standalone
 client-token template must carry the `noindex` meta (new token pages fail CI the
 day they land without it), `robots.txt` must disallow every client-token prefix,
@@ -316,27 +339,45 @@ and the marketing landing page must stay indexable.
 The day-by-day founder runbook with exact commands lives in
 [`docs/launch-checklist.md`](docs/launch-checklist.md). The condensed gate list:
 
-1. Buy or choose the hosted domain.
-2. Point apex and wildcard DNS at the host.
+Live launch remains held until the owner resolves D1-D5 in
+[`docs/HUMAN-DECISIONS.md`](docs/HUMAN-DECISIONS.md). In particular, current client
+invoice Checkout is not approved to process live customer funds.
+
+1. Choose the hosted domain, but do not activate its DNS yet.
+2. Prepare apex/wildcard records and firewall changes while keeping public ingress
+   closed.
 3. Set `HESTIA_DOMAIN` and `HESTIA_PUBLIC_URL`.
-4. Generate strong `HESTIA_SECRET_KEY`, `HESTIA_API_TOKEN`, and CSRF/session secrets.
-5. Configure SMTP for verification and owner emails.
-6. Configure Stripe live keys and webhook secret.
-7. Confirm Stripe checkout creates the single $40/month subscription with a 14-day trial.
-8. Choose local volume or S3/R2 storage; the compose `backup` service takes a
-   daily WAL-safe snapshot (preflight fails if backups go stale), and
-   `scripts/restore.sh` is the drilled recovery path.
-9. Run `docker compose up --build -d`.
-10. Run `/healthz`, `/readyz`, `scripts/ci-smoke.sh`, `scripts/dogfood-hestia.sh`,
-    and `scripts/hosted-preflight.sh --url https://yourdomain.com`.
-11. Create one test studio through `/signup`.
+4. Generate strong `HESTIA_API_TOKEN`, `HESTIA_TENANT_KEY_PEPPER`, and
+   `HESTIA_SESSION_SECRET` values.
+5. Configure SMTP for controlled verification testing.
+6. Use Stripe test keys and a private test webhook for the studio-subscription path;
+   keep signup off and client invoice Checkout held.
+7. Confirm in test mode that the $40/month subscription has a 14-day trial. D2
+   separately governs the connected-studio client-payment path.
+8. Follow D5 for durability: take and restore-drill the WAL-safe DB snapshot, copy DB
+   plus required media to a version-retained remote, and prove recovery from that
+   remote.
+9. Run `docker compose up --build -d` only behind private ingress.
+10. Run `scripts/ci-smoke.sh`, `scripts/dogfood-hestia.sh`, internal `/healthz` and
+    `/readyz`, and `scripts/hosted-preflight.sh` without `--url`; record the expected
+    signup/invoice failures and test-key warning.
+11. Create a controlled test studio through temporarily enabled private signup.
 12. Install each onboarding preset once: wedding, portrait, food & beverage, real estate.
-13. Start and cancel a test subscription.
-14. Verify custom-domain pending and admin verification flow.
-15. Review `/admin/launch` beta interest leads and send private invite links.
-16. Publish the launch post and invite the first 5-10 studios manually.
+13. Start and cancel a Stripe test-mode subscription.
+14. Verify custom-domain pending and admin verification flow privately.
+15. After D1-D5 are approved, implemented, and verified, prove the separately approved
+    non-environment runtime boundary cannot be bypassed through preflight, Admin Launch,
+    signup/invites, client Checkout, the invoice webhook branch, or anonymous media.
+16. Close the custom-domain/public-edge review and SQLite runtime patch-evidence gate,
+    switch to approved live providers, then activate DNS/ingress and run hosted preflight
+    with `--url` to zero failures and zero unexplained warnings.
+17. Only then send private invites, publish launch copy, or invite the first cohort.
 
 ## X Launch Thread Outline
+
+Draft only: do not publish this thread until the complete Day-7 release gate—not only
+D1-D5—passes. Recheck every price, AI, payment, media-security, and durability claim
+against the shipped path.
 
 **Post 1**
 
@@ -402,4 +443,7 @@ Near-term product work:
 
 ## License
 
-TBD - under active development by [Kevin Lee](https://github.com/Ayyitskevin).
+License/release truth is unresolved. `pyproject.toml` currently declares
+`Proprietary`, no `LICENSE` file or `1.0.0` Git tag exists, and this repository does
+not grant redistribution rights. The owner must make the explicit legal/product decision
+recorded in the review plan before publication.

@@ -1,5 +1,8 @@
 # Support playbook
 
+> **Pre-launch draft.** Do not use live client-payment or media-privacy assurances until
+> D2/D3 and the complete public release gate are closed.
+
 The founder's first-response kit for the beta cohort. Every answer below is grounded
 in a real product flow — nothing here promises a feature that doesn't exist. Reply
 copy is ready to personalize and send.
@@ -45,15 +48,17 @@ and forms behind one client link.
 ### 4. "My client lost the link" / "I think the link leaked"
 
 Lost: re-copy it from the gallery page and resend — links don't expire on their own.
-Leaked: **rotate the link** on the gallery page; rotation instantly revokes the old
-URL and mints a new one. Same for portal links.
+Leaked: rotate the gallery/portal link, then treat it as a security incident. Rotation
+does not currently revoke separately issued per-image media tokens or an already issued
+S3 presigned URL; keep affected media private and follow D3 rather than promising instant
+revocation.
 
 ### 5. "A client's payment didn't go through"
 
-The **Stripe dashboard is the source of truth** — check it before debugging Hestia.
-The invoice's payment link can simply be retried with another card. An invoice only
-flips to paid on Stripe's signed webhook, so if Stripe shows paid but Hestia doesn't
-(rare), check webhook delivery per `docs/operations.md` incident table.
+Live client-invoice payment is held by D2. Do not send or retry a customer payment link.
+The current platform-account Checkout/webhook path lacks the approved Connect attempt
+binding and idempotency evidence; use only the private Stripe test-mode subscription
+rehearsal described in `docs/deploy-wiring.md`.
 
 ### 6. "My own card failed" / "am I about to lose access?"
 
@@ -66,9 +71,9 @@ the card is fixed, and access continues meanwhile.
 ### 7. "How do I cancel? What happens to my data?"
 
 Self-serve at **Settings → Billing → Cancel**. Their data stays intact — the studio
-downgrades rather than deletes, so coming back later is painless. Refunds are yours to
-grant in the Stripe dashboard; **beta policy: refund the current month, no questions.**
-Goodwill at this size is marketing.
+downgrades rather than deletes, so coming back later is painless. Refund handling and
+any beta promise remain an owner/legal decision; do not promise a policy that has not
+been recorded and implemented.
 
 ### 8. "Can I get my data out?"
 
@@ -83,8 +88,9 @@ Yes, honestly:
 
 ### 9. "Is my clients' data private?" / a security report
 
-Short answer for users: every studio's data is isolated, client links are unguessable
-capability tokens, and private pages are never search-indexed. Full posture:
+Short answer for users: tenant data is isolated, client links are unguessable capability
+tokens, and private pages are marked against search indexing. Do not claim a gallery PIN
+revokes or gates raw per-image media URLs until D3 lands. Full posture:
 `docs/security.md`. **If someone reports a vulnerability**, thank them same-day and
 follow the responsible-disclosure section there — a good-faith reporter is a friend.
 

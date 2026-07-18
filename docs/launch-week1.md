@@ -1,8 +1,17 @@
-# Launch week 1 — after the four product slices
+# Launch week 1 — superseded historical plan
 
-Runbook for going from a green `main` to the first paying beta studios. Pairs with
-[`launch-checklist.md`](launch-checklist.md) (infra) and [`beta-onboarding.md`](beta-onboarding.md)
-(cohort ops). Copy pack: [`beta-emails.md`](beta-emails.md).
+> **Do not execute this file.** It predates D1-D5 and includes unsafe live-payment,
+> public-media, AI-packaging, and DB-only durability assumptions.
+
+The only current sequence is [`HUMAN-DECISIONS.md`](HUMAN-DECISIONS.md) →
+[`launch-checklist.md`](launch-checklist.md) →
+[`deploy-wiring.md`](deploy-wiring.md). Until approved implementations replace every
+hold, keep the candidate private, use Stripe test mode, and leave self-service signup
+off. Everything below is historical evidence, not an operating instruction.
+
+<details>
+<summary>Historical pre-decision plan (do not execute)</summary>
+
 
 ## Day 1 — Box + DNS
 
@@ -93,3 +102,5 @@ bash scripts/dogfood-hestia.sh
 ## Week 2+
 
 See the original game plan: vision torture tests on your own photos, widen invites when funnel holds, day-7 retro template in `beta-onboarding.md` §8.
+
+</details>

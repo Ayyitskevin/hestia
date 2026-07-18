@@ -3,8 +3,8 @@
 - **Original review:** 2026-07-13
 - **Historical baseline:** `a3f31b9c722554ddbdfcd26882c19eabcb95ad75` (`main`)
 - **Status refreshed:** 2026-07-17
-- **Status base:** current branch at this document revision (includes `25029d1` and
-  the 2026-07-17 live-vision resilience slice)
+- **Status base:** `465c6b45abdb46e9ddce64d9d4b8fdbcd5a6fa1d` plus the Unreleased
+  migration-evidence and decision-documentation slice described below
 - **Scope:** preserve every product capability; improve correctness, security,
   reproducibility, maintainability, and launch confidence without changing Hestia's
   modular-monolith doctrine.
@@ -37,12 +37,14 @@ No existing feature needs to be removed to do this work.
 | Review area | Status | Evidence and remaining gate |
 |---|---|---|
 | Private-surface policy | **Landed** | Canonical policy and regressions merged in PR #207. Media-token authorization semantics are a separate security/product decision and remain open. |
-| Migration integrity | **Open - human gate** | The original-0065/checksum and partial-DDL design still requires schema approval, compatibility fixtures, and a live-data backup plan. |
+| Migration integrity | **Evidence landed; policy open** | A read-only offline audit, full migration manifest, exact current/original 0065 signatures, malformed-ledger checks, and adversarial fixtures fail closed without repairing data. Supporting versus normalizing the historical shape remains human-gated. |
 | Revenue-spine coverage | **Landed; semantics open** | PR #217 made the selected-suite gate block the `smoke` job and pass: 192 tests, 83.23% coverage. No branch rule requires that job yet; Stripe settlement validation and other money-state invariants remain human-gated. |
+| Release-candidate enforcement | **Open - human gate** | The docs and environment template hold the candidate private and test-mode, but current preflight, Admin Launch, invite helpers/redemption, signup, client Checkout, the invoice webhook branch, and anonymous media do not enforce D1-D5. A committed, non-environment hold across those surfaces is required before a public candidate; changing authentication/payment behavior requires explicit approval. |
 | Custom-domain edge | **Open - human gate** | The public Caddy catch-all and on-demand TLS behavior still require infrastructure review and deployment approval. |
 | Build reproducibility and wheel contents | **Landed** | PRs #209 and #213 added locked installs, artifact checks, and the missing runtime asset. |
 | Runtime vulnerability enforcement | **Landed** | PR #218 made the exact runtime-lock audit block the `smoke` job. The broader development-lock audit remains advisory. |
 | Deprecation enforcement | **Landed** | The `httpx` transition landed in PR #213; PR #219 removed the remaining Pillow warning and made every `DeprecationWarning` fail pytest. |
+| SQLite WAL runtime | **Open - patch evidence** | The review environment reports SQLite 3.45.1, inside the upstream WAL-reset affected range. Verify the production image carries an approved backport or upgrade before launch; do not infer its patch state from the version string alone. See [SQLite's WAL-reset advisory](https://www.sqlite.org/wal.html#walreset). |
 | Shared xAI transport | **Landed; paid canary open** | PR #211 consolidated the repeated transport/error seam. Commit `25029d1` added bounded streaming for image responses, the current JSON/data-URI edit contract, and a configurable current image model. A paid live canary still needs explicit approval and a bounded test image. |
 | Product-render validation | **Landed** | Commit `25029d1` validates JPEG/PNG sources and provider output, exercises normal provider-sized rasters against every real preset, requires retained alpha for transparent output, and canonically crops/resizes/re-encodes before storage. |
 | Pillow runtime and compatibility | **Landed** | Pillow 12.3 is a core runtime dependency, its exact floor remains hash-locked, and hosted CI checks the focused perceptual-duplicate and media-delivery paths at that floor. |
@@ -53,18 +55,23 @@ No existing feature needs to be removed to do this work.
 | Restore and artifact evidence | **Partial** | PRs #212 and #213 added restore/artifact evidence. Offsite-sync freshness, media-backend integration, and Caddy adaptation evidence remain open. |
 | Release and license truth | **Open - human gate** | License choice, tag history, and release metadata still require a legal/product decision. |
 
+The five implementation-ready owner choices are centralized in
+[`HUMAN-DECISIONS.md`](HUMAN-DECISIONS.md); scattered historical prose is evidence,
+not an approval record.
+
 ### Current priority map
 
-- **High - human-gated:** decide the public pricing/BYOK story (the configurable hosted
-  subsidy defaults to one live gallery up to 150 images; a studio key takes precedence,
-  and deployments may disable the subsidy); decide media capability scope; validate
-  Stripe settlement semantics; design the original-0065/checksum migration path; define
-  offsite-sync freshness evidence; and review the public Caddy custom-domain edge.
+- **High - human-gated:** decide D1-D5 in
+  [`HUMAN-DECISIONS.md`](HUMAN-DECISIONS.md), approve the non-bypassable hosted hold
+  design for preflight/Admin Launch/signup/invites/client Checkout/invoice webhook/media,
+  then review the public Caddy custom-domain edge separately.
+- **High - autonomous evidence:** verify the production SQLite runtime contains the
+  WAL-reset fix or a documented vendor backport before proposing any runtime change.
 - **Medium - autonomous GREEN:** keep provider result validation domain-local and
   update competitive claims whenever shipped depth changes.
 - **Medium - human-gated after design:** subscription terminal-state ordering,
-  fulfillment retry/payment semantics, gallery-PIN authorization/rate limiting,
-  timezone/calendar schema, repository rulesets, and release/license metadata.
+  fulfillment retry/payment semantics, timezone/calendar schema, repository rulesets,
+  and release/license metadata.
 - **Completed since the previous refresh:** Pillow floor coverage, strict content result
   validation, product-render validation, xAI image-contract correction, live-vision
   whole-gallery resilience, the studio calibration snapshot, tracked storage
@@ -267,9 +274,9 @@ superseded by the remaining sequence below.
    rollups now use existing metadata with anomaly counts and explicit thumbnail,
    generated-render, and provider-cost exclusions. No quota or dollar estimate is
    enforced without a pricing decision.
-4. **Product and risk decisions** - obtain human decisions for AI subsidy/BYOK
-   disclosure, media-token scope, Stripe settlement semantics, fulfillment depth,
-   timezone/calendar schema, migration integrity, and the public edge.
+4. **Product and risk decisions** - obtain D1-D5 from
+   [`HUMAN-DECISIONS.md`](HUMAN-DECISIONS.md), then separately decide fulfillment depth,
+   timezone/calendar schema, and the public edge.
 5. **Approved corrections** - implement money, security, schema, and infrastructure
    changes only inside their approved designs and with their stronger gates.
 6. **Release truth** - reconcile license, tags, and release metadata only after the
