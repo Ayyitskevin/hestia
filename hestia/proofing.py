@@ -12,9 +12,21 @@ import sqlite3
 from collections import defaultdict
 
 
+def _reopen_submitted_selections(
+    conn: sqlite3.Connection, tenant_id: str, gallery_id: int
+) -> None:
+    """Mark a previously submitted packet as changed within the caller's transaction."""
+    conn.execute(
+        "UPDATE galleries SET selections_submitted_at = NULL "
+        "WHERE id = ? AND tenant_id = ? AND selections_submitted_at IS NOT NULL",
+        (gallery_id, tenant_id),
+    )
+
+
 def image_in_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int, image_id: int) -> bool:
+    """Return whether a frame is currently visible and proofable through this gallery."""
     row = conn.execute(
-        "SELECT 1 FROM images WHERE id = ? AND gallery_id = ? AND tenant_id = ?",
+        "SELECT 1 FROM images WHERE id = ? AND gallery_id = ? AND tenant_id = ? AND hidden = 0",
         (image_id, gallery_id, tenant_id),
     ).fetchone()
     return row is not None
@@ -25,19 +37,29 @@ def toggle_favorite(
 ) -> bool | None:
     """Toggle a favorite. Returns True if now favorited, False if removed, or None
     if the image isn't part of this gallery (nothing happens)."""
-    if not image_in_gallery(conn, tenant_id, gallery_id, image_id):
-        return None
-    existing = conn.execute(
-        "SELECT id FROM image_favorites WHERE gallery_id = ? AND image_id = ? AND tenant_id = ?",
-        (gallery_id, image_id, tenant_id),
-    ).fetchone()
-    if existing:
-        conn.execute("DELETE FROM image_favorites WHERE id = ?", (existing["id"],))
-        return False
-    conn.execute(
-        "INSERT INTO image_favorites (tenant_id, gallery_id, image_id) VALUES (?, ?, ?)",
-        (tenant_id, gallery_id, image_id),
+    # The visibility predicate belongs inside each write statement. The first DELETE
+    # acquires SQLite's writer lock even when no favorite exists, so a concurrent cull
+    # cannot slip between validation and the fallback INSERT.
+    cur = conn.execute(
+        "DELETE FROM image_favorites "
+        "WHERE tenant_id = ? AND gallery_id = ? AND image_id = ? "
+        "AND EXISTS (SELECT 1 FROM images WHERE id = ? AND gallery_id = ? "
+        "AND tenant_id = ? AND hidden = 0)",
+        (tenant_id, gallery_id, image_id, image_id, gallery_id, tenant_id),
     )
+    if cur.rowcount == 1:
+        _reopen_submitted_selections(conn, tenant_id, gallery_id)
+        return False
+    cur = conn.execute(
+        "INSERT INTO image_favorites (tenant_id, gallery_id, image_id) "
+        "SELECT ?, ?, ? FROM images "
+        "WHERE id = ? AND gallery_id = ? AND tenant_id = ? AND hidden = 0 "
+        "ON CONFLICT DO NOTHING",
+        (tenant_id, gallery_id, image_id, image_id, gallery_id, tenant_id),
+    )
+    if cur.rowcount != 1:
+        return None
+    _reopen_submitted_selections(conn, tenant_id, gallery_id)
     return True
 
 
@@ -90,13 +112,18 @@ def add_comment(
     """Add a client comment to an image. Returns None for an empty body or an
     image that isn't part of this gallery."""
     text = (body or "").strip()
-    if not text or not image_in_gallery(conn, tenant_id, gallery_id, image_id):
+    if not text:
         return None
     cur = conn.execute(
         "INSERT INTO image_comments (tenant_id, gallery_id, image_id, author_name, body) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (tenant_id, gallery_id, image_id, author_name.strip()[:80], text[:1000]),
+        "SELECT ?, ?, ?, ?, ? FROM images "
+        "WHERE id = ? AND gallery_id = ? AND tenant_id = ? AND hidden = 0",
+        (tenant_id, gallery_id, image_id, author_name.strip()[:80], text[:1000],
+         image_id, gallery_id, tenant_id),
     )
+    if cur.rowcount != 1:
+        return None
+    _reopen_submitted_selections(conn, tenant_id, gallery_id)
     row = conn.execute("SELECT * FROM image_comments WHERE id = ?", (cur.lastrowid,)).fetchone()
     return dict(row)
 

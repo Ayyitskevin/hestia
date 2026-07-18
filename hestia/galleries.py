@@ -161,14 +161,13 @@ def publish_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -
 
 
 def submit_selections(conn: sqlite3.Connection, *, tenant_id: str, gallery_id: int) -> bool:
-    """Client finalizes their proofing picks — a one-way "I'm done, these are my
-    favorites" signal that closes the gallery → album/offer handoff.
+    """Client finalizes the current revision of their proofing picks.
 
     Claim-before-act: the guarded UPDATE only matches a not-yet-submitted gallery
-    (``selections_submitted_at IS NULL``), so just the FIRST submit wins (rowcount
-    == 1). A double-submit or a re-opened link is a no-op that returns False and
-    never re-stamps or re-notifies. On the winning submit it emits
-    ``gallery.selections_submitted`` so the owner's automations can fire."""
+    (``selections_submitted_at IS NULL``), so just the first submit of that revision
+    wins. An unchanged retry is a no-op. A later favorite or note reopens the packet;
+    submitting that updated revision stamps and notifies again. On each winning submit
+    this emits ``gallery.selections_submitted`` so the owner's automations can fire."""
     cur = conn.execute(
         "UPDATE galleries SET selections_submitted_at = datetime('now') "
         "WHERE id = ? AND tenant_id = ? AND selections_submitted_at IS NULL",

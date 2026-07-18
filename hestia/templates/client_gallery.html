@@ -49,8 +49,8 @@
         {% if gallery.selections_submitted_at %}
           <div class="card stack" style="margin-bottom:14px">
             <strong>✓ You've sent {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }} to {{ tenant.name }}.</strong>
-            <p class="muted">They'll use these to build your album and prints. You can still change your hearts below —
-              just let {{ tenant.name }} know if you do.</p>
+            <p class="muted">They'll use these to build your album and prints. If you change a heart or add a note,
+              Hestia will reopen this packet so you can send the updated list.</p>
           </div>
         {% else %}
           <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/submit" style="margin-bottom:14px"

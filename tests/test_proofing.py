@@ -255,6 +255,59 @@ def test_submit_selections_tenant_isolation(conn):
     assert submit_selections(conn, tenant_id=t1["id"], gallery_id=g1["id"]) is True
 
 
+def test_real_post_submit_proofing_edits_reopen_packet(conn, storage):
+    t = _tenant(conn)
+    gallery = create_gallery(conn, tenant_id=t["id"], title="Wedding")
+    other = create_gallery(conn, tenant_id=t["id"], title="Other")
+    image = _img(conn, storage, t["id"], gallery["id"])
+    hidden = _img(conn, storage, t["id"], gallery["id"], "hidden.jpg")
+    foreign_image = _img(conn, storage, t["id"], other["id"], "other.jpg")
+    conn.execute("UPDATE images SET hidden = 1 WHERE id = ?", (hidden["id"],))
+    assert submit_selections(conn, tenant_id=t["id"], gallery_id=gallery["id"])
+    submitted_at = get_gallery(conn, t["id"], gallery["id"])["selections_submitted_at"]
+
+    assert add_comment(conn, tenant_id=t["id"], gallery_id=gallery["id"],
+                       image_id=image["id"], body="  ") is None
+    assert toggle_favorite(conn, tenant_id=t["id"], gallery_id=gallery["id"],
+                           image_id=foreign_image["id"]) is None
+    assert toggle_favorite(conn, tenant_id=t["id"], gallery_id=gallery["id"],
+                           image_id=hidden["id"]) is None
+    assert add_comment(conn, tenant_id=t["id"], gallery_id=gallery["id"],
+                       image_id=hidden["id"], body="stale form") is None
+    assert get_gallery(conn, t["id"], gallery["id"])["selections_submitted_at"] == submitted_at
+
+    assert add_comment(conn, tenant_id=t["id"], gallery_id=gallery["id"],
+                       image_id=image["id"], body="Use this as the opener")
+    assert get_gallery(conn, t["id"], gallery["id"])["selections_submitted_at"] is None
+    assert selection_packet(conn, t["id"], gallery["id"])["status"] == "in_progress"
+
+    assert submit_selections(conn, tenant_id=t["id"], gallery_id=gallery["id"])
+    assert toggle_favorite(conn, tenant_id=t["id"], gallery_id=gallery["id"],
+                           image_id=image["id"]) is True
+    assert get_gallery(conn, t["id"], gallery["id"])["selections_submitted_at"] is None
+    packet = selection_packet(conn, t["id"], gallery["id"])
+    assert packet["status"] == "in_progress"
+    assert packet["favorite_count"] == 1
+
+
+def test_hidden_existing_favorite_cannot_toggle_or_reopen_packet(conn, storage):
+    t = _tenant(conn)
+    gallery = create_gallery(conn, tenant_id=t["id"], title="Wedding")
+    image = _img(conn, storage, t["id"], gallery["id"])
+    assert toggle_favorite(conn, tenant_id=t["id"], gallery_id=gallery["id"],
+                           image_id=image["id"]) is True
+    assert submit_selections(conn, tenant_id=t["id"], gallery_id=gallery["id"])
+    submitted_at = get_gallery(conn, t["id"], gallery["id"])["selections_submitted_at"]
+    conn.execute("UPDATE images SET hidden = 1 WHERE id = ?", (image["id"],))
+
+    assert toggle_favorite(conn, tenant_id=t["id"], gallery_id=gallery["id"],
+                           image_id=image["id"]) is None
+    assert add_comment(conn, tenant_id=t["id"], gallery_id=gallery["id"],
+                       image_id=image["id"], body="stale note") is None
+    assert favorite_image_ids(conn, gallery["id"]) == {image["id"]}
+    assert get_gallery(conn, t["id"], gallery["id"])["selections_submitted_at"] == submitted_at
+
+
 def test_http_submit_notifies_owner_once(client, app):
     # onboarding creates an owner user, so owner_digest_recipient resolves to an inbox
     creds = onboard_studio(client, name="Pixel Studio", email="pix@example.com")
@@ -267,6 +320,7 @@ def test_http_submit_notifies_owner_once(client, app):
         tid, slug = row["id"], row["slug"]
         g = create_gallery(conn, tenant_id=tid, title="Wedding")
         img = _img(conn, app.state.storage, tid, g["id"])
+        second = _img(conn, app.state.storage, tid, g["id"], "second.jpg")
         publish_gallery(conn, tid, g["id"])
         conn.commit()
     finally:
@@ -300,6 +354,29 @@ def test_http_submit_notifies_owner_once(client, app):
                 if "favorites" in e["subject"].lower()]
         assert len(sent) == 1                       # still exactly one
         assert get_gallery(conn, tid, g["id"])["selections_submitted_at"] == first_ts
+    finally:
+        conn.close()
+
+    # A real edit reopens the packet; the updated revision can notify once more.
+    client.post(f"{base}/favorite/{second['id']}")
+    revised = client.get(base).text
+    assert "I'm done" in revised
+    assert "You've sent" not in revised
+    conn = connect(app.state.settings.db_path)
+    try:
+        assert get_gallery(conn, tid, g["id"])["selections_submitted_at"] is None
+    finally:
+        conn.close()
+
+    client.post(f"{base}/submit")
+    client.post(f"{base}/submit")  # unchanged retry of this revision is still a no-op
+    conn = connect(app.state.settings.db_path)
+    try:
+        sent = [e for e in list_emails(conn, tid, to_addr=creds["email"])
+                if "favorites" in e["subject"].lower()]
+        assert len(sent) == 2
+        assert "2 favorites" in sent[0]["body"]
+        assert get_gallery(conn, tid, g["id"])["selections_submitted_at"]
     finally:
         conn.close()
 
