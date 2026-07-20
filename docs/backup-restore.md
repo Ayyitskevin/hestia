@@ -1,7 +1,8 @@
 # Backups & restore
 
 Hestia's state is one SQLite file (`hestia.db`) plus the media directory, both on
-the `hestia-data` volume. Backups are automatic; restores are a two-command drill.
+the `hestia-data` volume. Backups are automatic; restores are a two-command drill
+with production-path refusal, integrity checks, and post-restore verification.
 
 ## How backups run
 
@@ -96,46 +97,199 @@ lives off-box and the script copies only DB backups. Current preflight accepts a
 or `HESTIA_MEDIA_DURABILITY_ACK`, but that configuration acknowledgment is not D5 launch
 evidence. Losing every gallery to a dead disk is not a footnote.
 
-## Restore drill
+## Production-path refusal (do not skip)
+
+`scripts/restore.sh` and `python -m hestia.recovery check-target` refuse to write into
+paths that look like a live production data directory:
+
+- `./data` / `data` relative to the current working directory
+- `/data`, `/srv/hestia/data`, `/var/lib/hestia/data`
+- whatever `HESTIA_PRODUCTION_DATA_DIR` names, if set
+
+A deliberate live restore requires **both** a conscious operator action and one of:
+
+```sh
+# flag form (preferred — visible in shell history)
+HESTIA_DATA_DIR=/srv/hestia/data bash scripts/restore.sh /path/to/hestia-….db.gz --allow-production
+
+# or env form (for automation that already gates on a change ticket)
+HESTIA_ALLOW_PRODUCTION_RESTORE=1 HESTIA_DATA_DIR=/srv/hestia/data \
+  bash scripts/restore.sh /path/to/hestia-….db.gz
+```
+
+Scratch and staging restores never need the override. The automated drill
+(`scripts/restore-drill.sh`) proves the refusal path on every CI run.
+
+## Restore procedure (live or staging)
 
 1. Stop the app (leave caddy up; it will 502 briefly):
    ```sh
    docker compose stop hestia
    ```
-2. Restore a chosen artifact (tab-complete the newest):
+2. Confirm the artifact exists and is the one you intend (checksum / remote version id).
+3. Restore:
    ```sh
    docker compose run --rm --no-deps --entrypoint bash backup \
-     /app/scripts/restore.sh /data/backups/hestia-<stamp>.db.gz
+     /app/scripts/restore.sh /data/backups/hestia-<stamp>.db.gz --allow-production
    ```
-   `restore.sh` refuses if the app still looks live (`hestia.db-wal` present),
-   integrity-checks the backup **before** touching the live DB, and keeps the
-   outgoing database at `backups/pre-restore-<stamp>.db` in case you need to
-   roll forward again.
-3. Start and verify:
+   Safety rails, in order:
+   - production-path refusal (see above)
+   - refuses while the app looks live (`hestia.db-wal` present) unless `--force`
+   - missing / unreadable backup → exit non-zero, **live DB untouched**
+   - corrupt gzip / failed `PRAGMA integrity_check` → exit non-zero, **live DB untouched**
+   - disk preflight: refuses when free space cannot hold the unpacked backup + safety copy
+   - writes via same-filesystem temp (`.restore-<stamp>.db`) + atomic `mv`
+   - keeps the outgoing DB at `backups/pre-restore-<stamp>.db`
+   - leaves `.restore-in-progress` if the process dies mid-restore (clear only after you
+     understand the half-applied state)
+   - every run prints a `correlation_id=` you can grep in logs
+4. Restore **media** for the same recovery point (rclone pull, or object-store already
+   holds it when `HESTIA_STORAGE_BACKEND=s3`).
+5. Verify before opening the door:
+   ```sh
+   python -m hestia.recovery verify /data/hestia.db \
+     --media-dir /data/media \
+     --backup /data/backups/hestia-<stamp>.db.gz \
+     --require-media \
+     --json-out /tmp/hestia-verify.json
+   ```
+   Success looks like: `integrity_check=ok`, `ok=true`, empty `missing_blobs`, a
+   `representative_gallery` with `first_blob_present=true`, and printed
+   `rto_ms` / `rpo_s` fields.
+6. Start and smoke:
    ```sh
    docker compose start hestia
    curl -sf "https://$HESTIA_DOMAIN/healthz"
+   curl -sf "https://$HESTIA_DOMAIN/readyz"
    ```
-4. Log in, open a gallery, confirm the data is what you expected.
+7. Log in, open one known gallery, confirm bytes and client access.
 
-Bare-metal: same `restore.sh` with `HESTIA_DATA_DIR` pointing at the data dir.
+Bare-metal: same `restore.sh` with `HESTIA_DATA_DIR` pointing at the data dir (and the
+production override only when that path is live).
 
 ## Automated scratch drill
 
-CI exercises both scripts against disposable state on every change:
+CI exercises backup → media copy → restore → verify against disposable state on every
+change:
 
 ```sh
 bash scripts/restore-drill.sh
+# optional: keep the verification JSON
+HESTIA_DRILL_REPORT=/tmp/drill-report.json bash scripts/restore-drill.sh
 ```
 
-The drill creates a migrated source database, takes an online backup, copies the
-compressed artifact, restores it over different scratch state, runs SQLite integrity
-checks, and proves the replaced database was kept as a usable pre-restore safety copy.
-It deliberately ignores your configured `HESTIA_DATA_DIR` and cannot touch live data.
+The drill:
 
+1. Seeds a migrated source DB **with a published gallery and real JPEG media**.
+2. Takes an online backup and copies the compressed artifact.
+3. Proves `HESTIA_DATA_DIR=./data` is **refused** without an override.
+4. Restores over different scratch state and keeps a pre-restore safety copy.
+5. Runs `python -m hestia.recovery verify` (SQLite integrity, schema support, tenant
+   ownership, DB↔media consistency, representative gallery blob presence).
+6. Prints `restore drill OK` with `rto_ms`, `rpo_s`, and `correlation_id`.
+
+It deliberately ignores your configured `HESTIA_DATA_DIR` and cannot touch live data.
 This synthetic proof catches script and schema compatibility regressions. It does not
-replace the quarterly drill below, which must use a real off-site artifact and verify
-that client media is present too.
+replace the quarterly drill below, which must use a real off-site artifact.
+
+### Failure modes the tooling must fail loud on
+
+| Scenario | Expected behavior |
+|----------|-------------------|
+| Missing backup file | exit ≠ 0; target DB unchanged |
+| Corrupt gzip | exit ≠ 0; target DB unchanged |
+| Gzip of non-SQLite garbage | `integrity_check` fails; target DB unchanged |
+| Partial media (DB row, missing blob) | `verify` → `ok=false`, `missing_blobs` listed |
+| Size mismatch (truncated blob) | `verify` → `ok=false`, `size_mismatches` listed |
+| Unsupported schema version (future ledger) | `verify` fails; do not boot that DB on this release |
+| Interrupted restore (`.restore-in-progress`) | operator inspects; re-run restore after quiescing WAL |
+| Insufficient disk (preflight) | exit ≠ 0 before any live rename |
+| Accidental `./data` / `/data` target | refused without `--allow-production` |
+
+Pytest covers these under `tests/test_disaster_recovery.py` and side-effect
+idempotency under `tests/test_dr_idempotency.py`.
+
+## Post-restore verification (operators)
+
+```sh
+# Full report (JSON to stdout + optional file)
+python -m hestia.recovery verify "$HESTIA_DATA_DIR/hestia.db" \
+  --media-dir "$HESTIA_DATA_DIR/media" \
+  --backup /path/to/hestia-<stamp>.db.gz \
+  --require-media \
+  --json-out ./verify-report.json
+
+# Consistency only
+python -m hestia.recovery consistency "$HESTIA_DATA_DIR/hestia.db" "$HESTIA_DATA_DIR/media"
+
+# Path safety only
+python -m hestia.recovery check-target "$HESTIA_DATA_DIR"
+```
+
+### Interpreting diagnostics
+
+Structured lines use logger `hestia.recovery` with fields:
+
+- `action` — e.g. `recovery.restore.begin`, `recovery.verify.complete`,
+  `recovery.restore.refused_production`, `recovery.disk.insufficient`
+- `correlation_id` / `request_id` — 12-hex id tying shell + Python steps (also printed
+  by `restore.sh` / the drill)
+- counts: `tenant_count`, `gallery_count`, `image_count`, `elapsed_ms`, `rpo_seconds`
+- **never** client tokens, passwords, secrets, or email bodies
+
+### RPO / RTO fields
+
+| Field | Meaning |
+|-------|---------|
+| `rpo_seconds` | Age of the backup artifact at verification time (wall clock − backup mtime). Lower is fresher. |
+| `elapsed_ms` / drill `rto_ms` | Time spent in verification (or the full scratch drill). This is a **lower bound** on operator RTO; a real incident also includes decision time, media pull, and DNS/TLS. |
+
+Honest default targets for a single-node SQLite deploy (tune with evidence):
+
+- **RPO**: ≤ 24 h when daily backup + off-site sync are green (bounded by backup cadence).
+- **RTO**: tens of minutes for DB restore + verify on scratch; add media transfer time for
+  large local galleries.
+
+## Rollback after a failed deploy
+
+App/image rollback (code only — data already migrated forward may not reverse):
+
+```sh
+# 1. Note the running image / compose digest before changing anything
+docker compose images
+# 2. Redeploy the previous known-good commit/image
+git -C /path/to/deploy fetch && git -C /path/to/deploy checkout <good-sha>
+docker compose up -d --build
+# 3. Confirm
+bash scripts/hosted-preflight.sh --url "https://$HESTIA_DOMAIN"
+curl -sf "https://$HESTIA_DOMAIN/readyz"
+```
+
+Data rollback (when a bad migration or bad write corrupted state):
+
+```sh
+docker compose stop hestia
+# Prefer the pre-restore safety copy written just before the last restore, or a
+# known-good off-site artifact:
+bash scripts/restore.sh /data/backups/pre-restore-<stamp>.db --allow-production
+# or: bash scripts/restore.sh /data/backups/hestia-<good>.db.gz --allow-production
+python -m hestia.recovery verify /data/hestia.db --media-dir /data/media --require-media
+docker compose start hestia
+```
+
+Forward-only migrations never rewrite history: if the bad release applied a new
+`NNNN_*.sql`, rolling the image back without a data restore leaves the ledger ahead of
+the code. Prefer **restore-to-known-good backup** over hand-editing `schema_migrations`.
+
+## Escalation
+
+| Severity | Trigger | Action |
+|----------|---------|--------|
+| Page | `backup` container crash-looping; off-site sync stale > 48 h; `/readyz` red | Page on-call; restore from last good off-site artifact onto **staging** first |
+| High | `verify` reports `missing_blobs` after restore; media/DB mismatch | Stop serving galleries if needed; pull media from off-site; do not invent blobs |
+| High | migration audit exit 2–3 on a candidate release | Hold deploy; see D4 in `HUMAN-DECISIONS.md` |
+| Medium | climbing failed jobs / dead-letter | Requeue only after root-cause fix (`/admin/system`); handlers are at-least-once |
+| Info | restore drill or CI red | Fix before merge — do not ship a broken recovery path |
 
 ## Quarterly drill checklist
 
@@ -145,8 +299,11 @@ that client media is present too.
 - [ ] Restore that downloaded artifact on a scratch `HESTIA_DATA_DIR` (or staging) —
       never make production your first restore under pressure.
 - [ ] Recover required media from the same remote protection set and verify one known
-      gallery's bytes/rendering, not only its database rows.
-- [ ] Confirm `healthz` is green, `integrity_check` is `ok`, and the known
+      gallery's bytes/rendering, not only its database rows
+      (`python -m hestia.recovery verify … --require-media`).
+- [ ] Confirm `healthz` / `readyz` green, `integrity_check` is `ok`, and the known
       client/gallery is present.
+- [ ] Run `python -m hestia.migration_audit` against the restored scratch DB.
+- [ ] Record observed `rpo_seconds` and wall-clock RTO in the incident/ops log.
 - [ ] Review any `pre-restore-*.db` safety copies under the owner-approved retention
       policy; do not delete recovery evidence automatically.
