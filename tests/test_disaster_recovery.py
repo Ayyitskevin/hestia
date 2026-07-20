@@ -136,9 +136,32 @@ def test_is_production_data_path_flags_default_and_deploy_paths(tmp_path, monkey
     assert is_production_data_path(tmp_path / "data") is True
     assert is_production_data_path(Path("/srv/hestia/data")) is True
     assert is_production_data_path(Path("/data")) is True
+    # Layout …/hestia/data even when cwd is elsewhere (bare-metal style).
+    nest = tmp_path / "opt" / "hestia" / "data"
+    nest.mkdir(parents=True)
+    assert is_production_data_path(nest) is True
     scratch = tmp_path / "scratch-restore"
     scratch.mkdir()
     assert is_production_data_path(scratch) is False
+    # A directory merely named data under an unrelated parent is not production
+    # unless it is the cwd default ./data (already covered above).
+    other = tmp_path / "uploads" / "data"
+    other.mkdir(parents=True)
+    assert is_production_data_path(other) is False
+
+
+def test_symlink_to_production_data_is_refused(tmp_path, monkeypatch):
+    """Canonical resolve: scratch-looking symlink whose target is ./data must refuse."""
+    monkeypatch.chdir(tmp_path)
+    prod = tmp_path / "data"
+    prod.mkdir()
+    link = tmp_path / "looks-like-scratch"
+    link.symlink_to(prod)
+    assert is_production_data_path(link) is True
+    with pytest.raises(RecoveryError, match="production"):
+        assert_safe_restore_target(link)
+    # Override still works on the resolved production path.
+    assert assert_safe_restore_target(link, allow_production=True) == prod.resolve()
 
 
 def test_assert_safe_restore_target_refuses_without_override(tmp_path, monkeypatch):
@@ -193,13 +216,21 @@ def test_verify_restored_database_success_with_media(tmp_path):
     media_dst = target / "media"
     shutil.copytree(media, media_dst)
     _quiesce_db(target / "hestia.db")
-    result = _restore(target, artifact, backup_dir=tmp_path / "safety")
+    # HESTIA_BACKUP_DIR off to the side must NOT receive the pre-restore copy —
+    # safety stays same-FS under target/backups.
+    offbox = tmp_path / "offbox-archives"
+    offbox.mkdir()
+    result = _restore(target, artifact, backup_dir=offbox)
     assert result.returncode == 0, result.stderr
+    safety_copies = list((target / "backups").glob("pre-restore-*.db"))
+    assert len(safety_copies) == 1, safety_copies
+    assert list(offbox.glob("pre-restore-*.db")) == []
     report = verify_restored_database(
         target / "hestia.db",
         media_dir=media_dst,
         backup_path=artifact,
         require_media=True,
+        measurement_kind="synthetic_scratch_drill",
     )
     assert report.ok is True, report.failures
     assert report.integrity_check == "ok"
@@ -210,9 +241,13 @@ def test_verify_restored_database_success_with_media(tmp_path):
     assert seed["storage_key"] not in report.consistency.missing_blobs
     assert report.representative_gallery is not None
     assert report.representative_gallery["first_blob_present"] is True
+    for banned in ("access_token", "email", "client_name", "password"):
+        assert banned not in report.representative_gallery
     assert report.rpo_seconds is not None
     assert report.elapsed_ms >= 0
     assert report.correlation_id
+    assert report.measurement_kind == "synthetic_scratch_drill"
+    assert "incident" in report.timing_disclaimer.lower()
 
 
 def test_media_inventory_and_consistency_detect_missing_and_orphan(tmp_path):
@@ -335,6 +370,13 @@ def test_restore_empty_gzip_leaves_target_byte_identical(tmp_path):
     assert result.returncode != 0, result.stdout + result.stderr
     assert (target / "hestia.db").read_bytes() == before
     assert not list(safety.glob("pre-restore-*.db"))
+    # Gate failed early — no interrupted-restore marker and no safety move.
+    assert not (target / ".restore-in-progress").exists()
+    assert (
+        not list((target / "backups").glob("pre-restore-*.db"))
+        if (target / "backups").exists()
+        else True
+    )
 
 
 def test_restore_empty_raw_db_leaves_target_byte_identical(tmp_path):
@@ -347,6 +389,7 @@ def test_restore_empty_raw_db_leaves_target_byte_identical(tmp_path):
     assert result.returncode != 0, result.stdout + result.stderr
     assert (target / "hestia.db").read_bytes() == before
     assert not list(safety.glob("pre-restore-*.db"))
+    assert not (target / ".restore-in-progress").exists()
 
 
 def test_restore_non_hestia_sqlite_leaves_target_byte_identical(tmp_path):
@@ -510,12 +553,28 @@ def test_structured_diag_is_privacy_safe_and_has_correlation():
         tenant_count=2,
         token="should-be-stripped",
         password="nope",
+        secret="also-no",
+        api_key="nope",
     )
     assert payload["correlation_id"] == "abc123def456"
     assert payload["action"] == "recovery.test"
     assert "token" not in payload
     assert "password" not in payload
+    assert "secret" not in payload
+    assert "api_key" not in payload
     assert payload["tenant_count"] == 2
+
+
+def test_free_space_probe_does_not_mkdir_missing_leaf(tmp_path):
+    """Disk preflight must not create a production-like path as a side effect."""
+    missing = tmp_path / "never-created" / "data"
+    assert not missing.exists()
+    from hestia.recovery import free_space_bytes
+
+    free = free_space_bytes(missing)
+    assert free >= 0
+    assert not missing.exists()
+    assert not missing.parent.exists()
 
 
 # ── shell drill (end-to-end entry point) ────────────────────────────────────
@@ -538,8 +597,10 @@ def test_restore_drill_script_green(tmp_path):
     assert "restore drill OK" in combined
     assert "integrity=ok" in combined
     assert "correlation_id=" in combined
-    assert "rto_ms=" in combined
-    assert "rpo_s=" in combined
+    assert "synthetic_elapsed_ms=" in combined
+    assert "artifact_age_s=" in combined
+    assert "SYNTHETIC" in combined
+    assert "measurement_kind=synthetic_scratch_drill" in combined
     assert report.is_file()
     data = json.loads(report.read_text(encoding="utf-8"))
     assert data["ok"] is True
@@ -547,6 +608,11 @@ def test_restore_drill_script_green(tmp_path):
     assert data["image_count"] >= 1
     assert data["consistency"]["ok"] is True
     assert data["rpo_seconds"] is not None
+    assert data["measurement_kind"] == "synthetic_scratch_drill"
+    # Privacy: no client tokens or emails in the capturable report.
+    blob = json.dumps(data)
+    assert "access_token" not in blob
+    assert "@" not in blob or "example" not in blob  # no email-shaped client fields
 
 
 def test_recovery_cli_verify_and_check_target(tmp_path):

@@ -143,9 +143,11 @@ Scratch and staging restores never need the override. The automated drill
      (`assert_restorable_backup` / `python -m hestia.recovery gate-backup`)
    - disk preflight: refuses when free space cannot hold the unpacked backup + safety copy
    - writes via same-filesystem temp (`.restore-<stamp>.db`) + atomic `mv`
-   - keeps the outgoing DB at `backups/pre-restore-<stamp>.db`
-   - leaves `.restore-in-progress` if the process dies mid-restore (clear only after you
-     understand the half-applied state)
+   - pre-restore safety copy always under `$HESTIA_DATA_DIR/backups/` (same FS as the
+     live DB), even when `HESTIA_BACKUP_DIR` points at an off-box archive tree
+   - writes `.restore-in-progress` only **after** the schema gate passes (early
+     refusal does not leave a false interrupted marker); marker stores basename of
+     the artifact only (no full path / client path leakage)
    - every run prints a `correlation_id=` you can grep in logs
 4. Restore **media** for the same recovery point (rclone pull, or object-store already
    holds it when `HESTIA_STORAGE_BACKEND=s3`).
@@ -244,18 +246,25 @@ Structured lines use logger `hestia.recovery` with fields:
 - counts: `tenant_count`, `gallery_count`, `image_count`, `elapsed_ms`, `rpo_seconds`
 - **never** client tokens, passwords, secrets, or email bodies
 
-### RPO / RTO fields
+### RPO / RTO fields (do not confuse CI timings with incident recovery)
 
 | Field | Meaning |
 |-------|---------|
-| `rpo_seconds` | Age of the backup artifact at verification time (wall clock − backup mtime). Lower is fresher. |
-| `elapsed_ms` / drill `rto_ms` | Time spent in verification (or the full scratch drill). This is a **lower bound** on operator RTO; a real incident also includes decision time, media pull, and DNS/TLS. |
+| `rpo_seconds` / drill `artifact_age_s` | Age of the **local backup file** at verification time (wall clock − mtime). Useful as an artifact freshness signal, not a guarantee of off-site RPO. |
+| `elapsed_ms` / drill `synthetic_elapsed_ms` | Wall-clock duration of **this process only** (verify or scratch drill). |
+| `measurement_kind` | `operator_verify` for real ops; `synthetic_scratch_drill` for CI/`restore-drill.sh`. |
+| `timing_disclaimer` | Always present in the JSON report — synthetic numbers are **not** production RTO/RPO. |
 
-Honest default targets for a single-node SQLite deploy (tune with evidence):
+**CI / `restore-drill.sh` timings are synthetic.** A green drill with
+`synthetic_elapsed_ms≈500` proves the scripts and schema path work; it does **not**
+mean a real outage recovers in half a second. Real incident RTO includes operator
+decision time, stopping the app, pulling off-site media, DNS/TLS, and client checks.
 
-- **RPO**: ≤ 24 h when daily backup + off-site sync are green (bounded by backup cadence).
-- **RTO**: tens of minutes for DB restore + verify on scratch; add media transfer time for
-  large local galleries.
+Honest **planning** targets for a single-node SQLite deploy (tune with quarterly
+drill evidence on real artifact sizes):
+
+- **RPO**: ≤ 24 h when daily backup + verified off-site sync are green (bounded by backup cadence + last successful off-site receipt).
+- **RTO**: tens of minutes for DB restore + verify on a staging box; add media transfer time for large local galleries.
 
 ## Rollback after a failed deploy
 

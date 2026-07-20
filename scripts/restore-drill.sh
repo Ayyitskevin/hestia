@@ -125,21 +125,24 @@ grep -q "production\|refusing restore" "$ROOT/refuse.err" || {
 echo "production refusal OK"
 
 echo "→ restore into scratch target"
+# HESTIA_BACKUP_DIR may point off-box for archives; pre-restore safety always lands
+# under $HESTIA_DATA_DIR/backups (same filesystem as hestia.db).
 HESTIA_DATA_DIR="$TARGET" HESTIA_BACKUP_DIR="$SAFETY" HESTIA_MEDIA_DIR="$MEDIA_DST" \
   bash scripts/restore.sh "$COPIED"
 
-safety_copies=("$SAFETY"/pre-restore-*.db)
+safety_copies=("$TARGET"/backups/pre-restore-*.db)
 if [[ "${#safety_copies[@]}" -ne 1 ]]; then
-  echo "FAIL: expected one pre-restore safety copy, found ${#safety_copies[@]}" >&2
+  echo "FAIL: expected one pre-restore safety copy under target/backups, found ${#safety_copies[@]}" >&2
   exit 1
 fi
 
-echo "→ post-restore verification (integrity + media checksums + ownership + RPO/RTO)"
+echo "→ post-restore verification (integrity + media checksums + ownership + synthetic timings)"
 python3 -m hestia.recovery verify "$TARGET/hestia.db" \
   --media-dir "$MEDIA_DST" \
   --backup "$COPIED" \
   --require-media \
   --expected-checksums "$CHECKSUMS" \
+  --measurement-kind synthetic_scratch_drill \
   --json-out "$REPORT" \
   --correlation-id "$CORRELATION_ID"
 
@@ -177,15 +180,23 @@ assert report["consistency"]["ok"] is True
 assert report["consistency"]["missing_blobs"] == []
 assert report["representative_gallery"] is not None
 assert report["representative_gallery"]["first_blob_present"] is True
+# Privacy: report must not carry client-facing secrets.
+rep = report["representative_gallery"]
+for banned in ("access_token", "email", "client_name", "token", "password"):
+    assert banned not in rep, banned
 assert report["correlation_id"] == cid
 assert report["rpo_seconds"] is not None
-rto_ms = int((time.monotonic() - drill_start) * 1000)
+assert report["measurement_kind"] == "synthetic_scratch_drill"
+assert "not real-incident" in report["timing_disclaimer"].lower() or "not" in report["timing_disclaimer"].lower()
+synthetic_elapsed_ms = int((time.monotonic() - drill_start) * 1000)
 print(
     f"restore drill OK: integrity=ok, migration={report['schema_version']}, "
     f"tenants={report['tenant_count']}, galleries={report['gallery_count']}, "
     f"images={report['image_count']}, media_ok=1, safety_copy=ok, "
-    f"rto_ms={rto_ms}, verify_ms={report['elapsed_ms']}, "
-    f"rpo_s={report['rpo_seconds']}, correlation_id={cid}"
+    f"synthetic_elapsed_ms={synthetic_elapsed_ms}, verify_elapsed_ms={report['elapsed_ms']}, "
+    f"artifact_age_s={report['rpo_seconds']}, measurement_kind={report['measurement_kind']}, "
+    f"correlation_id={cid} "
+    f"(SYNTHETIC timings — not production RTO/RPO)"
 )
 PY
 

@@ -122,6 +122,13 @@ class RestoreVerification:
     rpo_seconds: float | None
     ok: bool
     failures: list[str] = field(default_factory=list)
+    # How to read elapsed_ms / rpo_seconds — never treat CI drill numbers as incident RTO.
+    measurement_kind: str = "operator_verify"
+    timing_disclaimer: str = (
+        "elapsed_ms and rpo_seconds are local wall-clock measurements for this run only; "
+        "synthetic scratch drills are not real-incident RTO/RPO. Real recovery adds "
+        "operator decision time, off-site media pull, DNS/TLS, and client verification."
+    )
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -176,8 +183,9 @@ def normalize_data_path(path: str | Path) -> Path:
 def is_production_data_path(path: str | Path) -> bool:
     """True when *path* matches a known live/production data directory pattern.
 
-    Also treats a path whose ``HESTIA_DATA_DIR`` env currently points at the same
-    resolved location as production when that env looks like a real deploy path.
+    Resolution uses :meth:`Path.resolve` so a symlink whose *final* target is a
+    production path is refused even when the operator-facing path looks like
+    scratch (``/tmp/link`` → ``/srv/hestia/data``).
     """
     resolved = normalize_data_path(path)
     markers = list(_PRODUCTION_ABS_MARKERS) + list(_cwd_default_data_paths())
@@ -187,11 +195,15 @@ def is_production_data_path(path: str | Path) -> bool:
                 return True
         except OSError:
             continue
-    # Absolute deploy-style paths commonly used in bare-metal installs.
+    # Absolute deploy-style paths commonly used in bare-metal / compose installs.
     text = str(resolved)
     if text == "/data" or text.startswith("/data/"):
         return True
     if "/srv/hestia" in text or "/var/lib/hestia" in text:
+        return True
+    # Layout ``…/hestia/data`` (e.g. /opt/hestia/data) even when cwd is elsewhere.
+    parts = resolved.parts
+    if len(parts) >= 2 and parts[-1] == "data" and parts[-2] == "hestia":
         return True
     env_dir = os.environ.get("HESTIA_PRODUCTION_DATA_DIR", "").strip()
     if env_dir:
@@ -240,13 +252,38 @@ def assert_safe_restore_target(
 
 
 def free_space_bytes(path: str | Path) -> int:
-    """Bytes free on the filesystem that holds *path* (creates parents if needed)."""
-    p = Path(path)
-    probe = p if p.exists() else p.parent
+    """Bytes free on the filesystem that holds *path*.
+
+    Does **not** create directories: a missing path walks up to an existing ancestor
+    so a disk probe cannot mkdir a production data dir as a side effect.
+    """
+    p = Path(path).expanduser()
+    probe = p
+    while not probe.exists():
+        parent = probe.parent
+        if parent == probe:
+            break
+        probe = parent
     if not probe.exists():
-        probe.mkdir(parents=True, exist_ok=True)
+        probe = Path.cwd()
     usage = shutil.disk_usage(probe)
     return int(usage.free)
+
+
+def same_filesystem(a: str | Path, b: str | Path) -> bool:
+    """True when both paths share a device id (after resolving existing ancestors)."""
+
+    def _stat_path(path: Path) -> os.stat_result:
+        p = path.expanduser()
+        while not p.exists():
+            parent = p.parent
+            if parent == p:
+                p = Path.cwd()
+                break
+            p = parent
+        return p.stat()
+
+    return _stat_path(Path(a)).st_dev == _stat_path(Path(b)).st_dev
 
 
 def assert_sufficient_disk(
@@ -654,11 +691,15 @@ def verify_restored_database(
     expected_checksums: dict[str, str] | None = None,
     correlation_id: str | None = None,
     started_at: float | None = None,
+    measurement_kind: str = "operator_verify",
 ) -> RestoreVerification:
     """Post-restore verification: integrity, schema, ownership, media, RPO/RTO fields.
 
     When *expected_checksums* is provided (path → sha256), media content is
     deep-verified against that inventory in addition to presence/size checks.
+
+    ``measurement_kind`` labels timing fields so synthetic CI drills are not
+    mistaken for production incident RTO/RPO (use ``synthetic_scratch_drill``).
     """
     cid = correlation_id or new_correlation_id()
     t0 = started_at if started_at is not None else time.monotonic()
@@ -751,6 +792,7 @@ def verify_restored_database(
         rpo_seconds=rpo_seconds,
         ok=ok,
         failures=failures,
+        measurement_kind=measurement_kind,
     )
     structured_diag(
         "recovery.verify.complete",
@@ -763,6 +805,7 @@ def verify_restored_database(
         image_count=image_count,
         elapsed_ms=elapsed_ms,
         rpo_seconds=rpo_seconds,
+        measurement_kind=measurement_kind,
         ok=ok,
         failure_count=len(failures),
     )
@@ -799,6 +842,11 @@ def _cli(argv: list[str] | None = None) -> int:
     )
     v.add_argument("--json-out", type=Path, default=None)
     v.add_argument("--correlation-id", default=None)
+    v.add_argument(
+        "--measurement-kind",
+        default="operator_verify",
+        help="Label for timing fields (use synthetic_scratch_drill for CI drills)",
+    )
 
     s = sub.add_parser("check-target", help="Refuse if data dir looks like production")
     s.add_argument("data_dir", type=Path)
@@ -889,6 +937,7 @@ def _cli(argv: list[str] | None = None) -> int:
             allow_unsupported_schema=args.allow_unsupported_schema,
             expected_checksums=expected,
             correlation_id=cid,
+            measurement_kind=args.measurement_kind,
         )
         if args.json_out:
             write_verification_report(result, args.json_out)
@@ -898,8 +947,9 @@ def _cli(argv: list[str] | None = None) -> int:
                 f"recovery verify OK correlation_id={result.correlation_id} "
                 f"integrity={result.integrity_check} schema={result.schema_version} "
                 f"tenants={result.tenant_count} galleries={result.gallery_count} "
-                f"images={result.image_count} rto_ms={result.elapsed_ms} "
-                f"rpo_s={result.rpo_seconds}",
+                f"images={result.image_count} elapsed_ms={result.elapsed_ms} "
+                f"artifact_age_s={result.rpo_seconds} "
+                f"measurement_kind={result.measurement_kind}",
                 file=sys.stderr,
             )
             return 0
