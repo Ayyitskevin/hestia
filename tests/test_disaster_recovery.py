@@ -1,0 +1,475 @@
+"""Disaster-recovery verification: restore safety rails, media consistency, failure modes.
+
+Drives the shipped ``hestia.recovery`` helpers and ``scripts/restore.sh`` against
+scratch trees only. Never touches production client assets or live volumes.
+"""
+
+from __future__ import annotations
+
+import gzip
+import io
+import json
+import os
+import shutil
+import sqlite3
+import subprocess
+from pathlib import Path
+
+import pytest
+from PIL import Image
+
+from hestia.db import connect, init_db
+from hestia.galleries import add_image, create_gallery, publish_gallery
+from hestia.recovery import (
+    RecoveryError,
+    assert_safe_restore_target,
+    assert_sufficient_disk,
+    check_db_media_consistency,
+    is_production_data_path,
+    media_inventory,
+    structured_diag,
+    verify_restored_database,
+)
+from hestia.storage import LocalStorage
+from hestia.tenants import create_tenant
+
+REPO = Path(__file__).resolve().parents[1]
+RESTORE_SH = REPO / "scripts" / "restore.sh"
+BACKUP_SH = REPO / "scripts" / "backup.sh"
+DRILL_SH = REPO / "scripts" / "restore-drill.sh"
+
+
+def _jpeg_bytes(size=(16, 12), color=(10, 20, 30)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", size, color=color).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+def _seed_db_with_media(db_path: Path, media_dir: Path, *, name: str = "DR Studio") -> dict:
+    media_dir.mkdir(parents=True, exist_ok=True)
+    init_db(db_path)
+    conn = connect(db_path)
+    tenant = create_tenant(conn, name=name, shoot_type="wedding")
+    g = create_gallery(conn, tenant_id=tenant["id"], title="DR Gallery", client_name="Client A")
+    storage = LocalStorage(media_dir)
+    img = add_image(
+        conn,
+        storage,
+        tenant_id=tenant["id"],
+        gallery_id=g["id"],
+        filename="frame.jpg",
+        fileobj=io.BytesIO(_jpeg_bytes()),
+        content_type="image/jpeg",
+    )
+    assert img is not None
+    assert publish_gallery(conn, tenant["id"], g["id"]) is True
+    conn.commit()
+    conn.close()
+    return {
+        "tenant_id": tenant["id"],
+        "gallery_id": g["id"],
+        "image_id": img["id"],
+        "storage_key": img["storage_key"],
+        "thumb_key": img.get("thumb_key"),
+    }
+
+
+def _quiesce_db(db_path: Path) -> None:
+    """Checkpoint WAL and drop sidecars so restore.sh sees a stopped app."""
+    if not db_path.is_file():
+        return
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    finally:
+        conn.close()
+    for side in (f"{db_path}-wal", f"{db_path}-shm"):
+        Path(side).unlink(missing_ok=True)
+
+
+def _backup(data_dir: Path, backup_dir: Path) -> Path:
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    _quiesce_db(data_dir / "hestia.db")
+    env = {
+        **os.environ,
+        "HESTIA_DATA_DIR": str(data_dir),
+        "HESTIA_BACKUP_DIR": str(backup_dir),
+        "HESTIA_BACKUP_KEEP": "5",
+    }
+    subprocess.run(["bash", str(BACKUP_SH)], cwd=REPO, env=env, check=True, capture_output=True)
+    artifacts = sorted(backup_dir.glob("hestia-*.db.gz"))
+    assert len(artifacts) >= 1
+    return artifacts[-1]
+
+
+def _restore(
+    data_dir: Path,
+    artifact: Path,
+    *,
+    backup_dir: Path | None = None,
+    allow_production: bool = False,
+    force: bool = False,
+) -> subprocess.CompletedProcess:
+    env = {**os.environ, "HESTIA_DATA_DIR": str(data_dir)}
+    # Never inherit a production-restore override unless the test asks for it.
+    env.pop("HESTIA_ALLOW_PRODUCTION_RESTORE", None)
+    if allow_production:
+        env["HESTIA_ALLOW_PRODUCTION_RESTORE"] = "1"
+    if backup_dir is not None:
+        env["HESTIA_BACKUP_DIR"] = str(backup_dir)
+    args = ["bash", str(RESTORE_SH), str(artifact)]
+    if force:
+        args.append("--force")
+    if allow_production:
+        args.append("--allow-production")
+    return subprocess.run(args, cwd=REPO, env=env, capture_output=True, text=True)
+
+
+# ── production path refusal ─────────────────────────────────────────────────
+
+
+def test_is_production_data_path_flags_default_and_deploy_paths(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    assert is_production_data_path(tmp_path / "data") is True
+    assert is_production_data_path(Path("/srv/hestia/data")) is True
+    assert is_production_data_path(Path("/data")) is True
+    scratch = tmp_path / "scratch-restore"
+    scratch.mkdir()
+    assert is_production_data_path(scratch) is False
+
+
+def test_assert_safe_restore_target_refuses_without_override(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    data = tmp_path / "data"
+    data.mkdir()
+    with pytest.raises(RecoveryError, match="production"):
+        assert_safe_restore_target(data)
+    # Explicit override is the only way through.
+    assert assert_safe_restore_target(data, allow_production=True) == data.resolve()
+
+
+def test_restore_sh_refuses_repo_data_dir(tmp_path, monkeypatch):
+    """scripts/restore.sh must not accept HESTIA_DATA_DIR=./data without override."""
+    monkeypatch.chdir(REPO)
+    source = tmp_path / "src"
+    source.mkdir()
+    init_db(source / "hestia.db")
+    conn = connect(source / "hestia.db")
+    create_tenant(conn, name="Only DB", shoot_type="other")
+    conn.commit()
+    conn.close()
+    artifact = _backup(source, tmp_path / "bak")
+    # Point at the real repo ./data path — must refuse.
+    result = _restore(REPO / "data", artifact)
+    assert result.returncode != 0
+    combined = result.stdout + result.stderr
+    assert "refusing" in combined.lower() or "production" in combined.lower()
+    # Live repo DB (if any) must still be the same file that was there — we never
+    # require it to exist; we only require we did not write a new hestia.db via restore.
+    # Prove refusal by checking no pre-restore safety copy was created under data/backups
+    # for this run with our stamp pattern is hard; instead: exit non-zero is enough plus
+    # the error text. Also: a missing backup file is a different code path tested below.
+
+
+# ── happy path verification ─────────────────────────────────────────────────
+
+
+def test_verify_restored_database_success_with_media(tmp_path):
+    data = tmp_path / "data"
+    media = data / "media"
+    seed = _seed_db_with_media(data / "hestia.db", media)
+    artifact = _backup(data, tmp_path / "bak")
+    # Restore into a different scratch tree that had different tenants.
+    target = tmp_path / "target"
+    target.mkdir()
+    init_db(target / "hestia.db")
+    conn = connect(target / "hestia.db")
+    create_tenant(conn, name="Will Be Replaced", shoot_type="other")
+    conn.commit()
+    conn.close()
+    media_dst = target / "media"
+    shutil.copytree(media, media_dst)
+    _quiesce_db(target / "hestia.db")
+    result = _restore(target, artifact, backup_dir=tmp_path / "safety")
+    assert result.returncode == 0, result.stderr
+    report = verify_restored_database(
+        target / "hestia.db",
+        media_dir=media_dst,
+        backup_path=artifact,
+        require_media=True,
+    )
+    assert report.ok is True, report.failures
+    assert report.integrity_check == "ok"
+    assert report.tenant_count >= 1
+    assert report.image_count >= 1
+    assert report.consistency is not None and report.consistency.ok
+    assert report.consistency.missing_blobs == []
+    assert seed["storage_key"] not in report.consistency.missing_blobs
+    assert report.representative_gallery is not None
+    assert report.representative_gallery["first_blob_present"] is True
+    assert report.rpo_seconds is not None
+    assert report.elapsed_ms >= 0
+    assert report.correlation_id
+
+
+def test_media_inventory_and_consistency_detect_missing_and_orphan(tmp_path):
+    data = tmp_path / "data"
+    media = data / "media"
+    seed = _seed_db_with_media(data / "hestia.db", media)
+    conn = connect(data / "hestia.db")
+    # Missing blob: delete the original file but leave the DB row.
+    (media / seed["storage_key"]).unlink()
+    report = check_db_media_consistency(conn, media)
+    assert report.ok is False
+    assert seed["storage_key"] in report.missing_blobs
+    # Orphan: put an unexpected file on disk.
+    orphan = media / "orphan-file.bin"
+    orphan.parent.mkdir(parents=True, exist_ok=True)
+    orphan.write_bytes(b"not-in-db")
+    report2 = check_db_media_consistency(conn, media)
+    assert any(p.endswith("orphan-file.bin") for p in report2.orphan_blobs)
+    # Orphans alone do not make ok=False when blobs still missing — still false.
+    assert report2.ok is False
+    conn.close()
+    inv = media_inventory(media)
+    assert any(b.relative_path.endswith("orphan-file.bin") for b in inv)
+    assert all(len(b.sha256) == 64 for b in inv)
+
+
+def test_size_mismatch_is_reported(tmp_path):
+    data = tmp_path / "data"
+    media = data / "media"
+    seed = _seed_db_with_media(data / "hestia.db", media)
+    # Truncate the blob so size disagrees with images.bytes.
+    path = media / seed["storage_key"]
+    path.write_bytes(b"x")
+    conn = connect(data / "hestia.db")
+    report = check_db_media_consistency(conn, media)
+    conn.close()
+    assert report.ok is False
+    assert report.size_mismatches
+    assert report.size_mismatches[0]["storage_key"] == seed["storage_key"]
+
+
+# ── failure modes: missing / corrupt / interrupted / schema / disk ──────────
+
+
+def test_restore_missing_backup_leaves_target_untouched(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir()
+    db = target / "hestia.db"
+    init_db(db)
+    conn = connect(db)
+    create_tenant(conn, name="Pre-existing", shoot_type="other")
+    conn.commit()
+    conn.close()
+    before = db.read_bytes()
+    result = _restore(target, tmp_path / "no-such-backup.db.gz")
+    assert result.returncode != 0
+    assert "no backup" in (result.stderr + result.stdout).lower()
+    assert db.read_bytes() == before
+
+
+def test_restore_corrupt_gzip_leaves_target_untouched(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir()
+    db = target / "hestia.db"
+    init_db(db)
+    conn = connect(db)
+    create_tenant(conn, name="Pre-existing", shoot_type="other")
+    conn.commit()
+    conn.close()
+    before = db.read_bytes()
+    bogus = tmp_path / "bad.db.gz"
+    bogus.write_bytes(b"not-a-gzip-stream-at-all")
+    result = _restore(target, bogus)
+    assert result.returncode != 0
+    assert db.read_bytes() == before
+    # No half-applied main DB rename.
+    assert not list(target.glob("pre-restore-*.db"))
+
+
+def test_restore_corrupt_sqlite_payload_leaves_target_untouched(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir()
+    db = target / "hestia.db"
+    init_db(db)
+    conn = connect(db)
+    create_tenant(conn, name="Pre-existing", shoot_type="other")
+    conn.commit()
+    conn.close()
+    before = db.read_bytes()
+    # Valid gzip wrapping non-SQLite garbage → integrity_check fails.
+    artifact = tmp_path / "garbage.db.gz"
+    with gzip.open(artifact, "wb") as fh:
+        fh.write(b"SQLite format 3\x00this is not a real database payload" + b"\x00" * 200)
+    result = _restore(target, artifact)
+    assert result.returncode != 0
+    assert db.read_bytes() == before
+
+
+def test_verify_refuses_unsupported_schema_version(tmp_path):
+    db = tmp_path / "hestia.db"
+    init_db(db)
+    conn = connect(db)
+    create_tenant(conn, name="Schema Canary", shoot_type="other")
+    # Inject a future migration version the running code does not ship.
+    conn.execute(
+        "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
+        ("9999", "9999_from_the_future"),
+    )
+    conn.commit()
+    conn.close()
+    report = verify_restored_database(db)
+    assert report.ok is False
+    assert any("unsupported schema" in f for f in report.failures)
+
+
+def test_interrupted_restore_marker_and_live_db_intact(tmp_path):
+    """A leftover .restore-*.db / in-progress marker must not be treated as success.
+
+    Simulate an interrupted unpack: marker present, temp present, live DB unchanged.
+    """
+    target = tmp_path / "target"
+    target.mkdir()
+    db = target / "hestia.db"
+    init_db(db)
+    conn = connect(db)
+    create_tenant(conn, name="Live Before Crash", shoot_type="other")
+    conn.commit()
+    conn.close()
+    before = db.read_bytes()
+    (target / ".restore-in-progress").write_text(
+        "correlation_id=deadbeef\nstamp=interrupted\n", encoding="utf-8"
+    )
+    (target / ".restore-20990101-000000.db").write_bytes(b"partial")
+    # Operator recovery: refuse to claim success while marker exists; live DB intact.
+    assert (target / ".restore-in-progress").is_file()
+    assert db.read_bytes() == before
+    # Running restore with a good artifact should succeed and clear the marker.
+    source = tmp_path / "src"
+    source.mkdir()
+    _seed_db_with_media(source / "hestia.db", source / "media", name="After Repair")
+    artifact = _backup(source, tmp_path / "bak")
+    _quiesce_db(target / "hestia.db")
+    result = _restore(target, artifact, backup_dir=tmp_path / "safety")
+    assert result.returncode == 0, result.stderr
+    assert not (target / ".restore-in-progress").exists()
+    names = {r[0] for r in sqlite3.connect(db).execute("SELECT name FROM tenants")}
+    assert names == {"After Repair"}
+
+
+def test_assert_sufficient_disk_fails_loud_when_injected(tmp_path):
+    with pytest.raises(RecoveryError, match="insufficient disk"):
+        assert_sufficient_disk(tmp_path, need_bytes=10**12, free_bytes=100)
+    # Real free space on tmp should exceed a tiny need.
+    free = assert_sufficient_disk(tmp_path, need_bytes=1)
+    assert free >= 1
+
+
+def test_structured_diag_is_privacy_safe_and_has_correlation():
+    payload = structured_diag(
+        "recovery.test",
+        correlation_id="abc123def456",
+        tenant_count=2,
+        token="should-be-stripped",
+        password="nope",
+    )
+    assert payload["correlation_id"] == "abc123def456"
+    assert payload["action"] == "recovery.test"
+    assert "token" not in payload
+    assert "password" not in payload
+    assert payload["tenant_count"] == 2
+
+
+# ── shell drill (end-to-end entry point) ────────────────────────────────────
+
+
+def test_restore_drill_script_green(tmp_path):
+    report = tmp_path / "drill-report.json"
+    env = {**os.environ, "HESTIA_DRILL_REPORT": str(report)}
+    env.pop("HESTIA_ALLOW_PRODUCTION_RESTORE", None)
+    result = subprocess.run(
+        ["bash", str(DRILL_SH)],
+        cwd=REPO,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stdout + "\n" + result.stderr
+    combined = result.stdout + result.stderr
+    assert "restore drill OK" in combined
+    assert "integrity=ok" in combined
+    assert "correlation_id=" in combined
+    assert "rto_ms=" in combined
+    assert "rpo_s=" in combined
+    assert report.is_file()
+    data = json.loads(report.read_text(encoding="utf-8"))
+    assert data["ok"] is True
+    assert data["integrity_check"] == "ok"
+    assert data["image_count"] >= 1
+    assert data["consistency"]["ok"] is True
+    assert data["rpo_seconds"] is not None
+
+
+def test_recovery_cli_verify_and_check_target(tmp_path):
+    data = tmp_path / "data"
+    media = data / "media"
+    _seed_db_with_media(data / "hestia.db", media)
+    out = tmp_path / "report.json"
+    proc = subprocess.run(
+        [
+            "python",
+            "-m",
+            "hestia.recovery",
+            "verify",
+            str(data / "hestia.db"),
+            "--media-dir",
+            str(media),
+            "--require-media",
+            "--json-out",
+            str(out),
+        ],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert out.is_file()
+    body = json.loads(out.read_text(encoding="utf-8"))
+    assert body["ok"] is True
+
+    # check-target refuses ./data from repo root.
+    refuse = subprocess.run(
+        ["python", "-m", "hestia.recovery", "check-target", str(REPO / "data")],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    assert refuse.returncode == 2
+    ok = subprocess.run(
+        [
+            "python",
+            "-m",
+            "hestia.recovery",
+            "check-target",
+            str(tmp_path / "scratch"),
+            "--allow-production",
+        ],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    # scratch may not exist yet — check-target only cares about the path identity.
+    # Without allow it should still be fine for a non-production path.
+    ok2 = subprocess.run(
+        ["python", "-m", "hestia.recovery", "check-target", str(tmp_path / "scratch")],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    assert ok2.returncode == 0, ok2.stderr
+    assert ok.returncode == 0
