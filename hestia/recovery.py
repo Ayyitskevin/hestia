@@ -86,13 +86,14 @@ class ConsistencyReport:
     missing_thumbs: list[str] = field(default_factory=list)
     orphan_blobs: list[str] = field(default_factory=list)
     size_mismatches: list[dict[str, Any]] = field(default_factory=list)
+    checksum_mismatches: list[dict[str, Any]] = field(default_factory=list)
     tenant_ids: list[str] = field(default_factory=list)
     gallery_count: int = 0
     published_gallery_count: int = 0
 
     @property
     def ok(self) -> bool:
-        return not self.missing_blobs and not self.size_mismatches
+        return not self.missing_blobs and not self.size_mismatches and not self.checksum_mismatches
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -336,18 +337,34 @@ def db_media_refs(conn: sqlite3.Connection) -> list[DbMediaRef]:
     return refs
 
 
+def media_checksum_map(media_dir: str | Path, *, max_files: int = 500_000) -> dict[str, str]:
+    """Relative path → sha256 for every file under *media_dir* (empty if missing)."""
+    return {
+        blob.relative_path: blob.sha256 for blob in media_inventory(media_dir, max_files=max_files)
+    }
+
+
 def check_db_media_consistency(
     conn: sqlite3.Connection,
     media_dir: str | Path,
     *,
     checksum: bool = False,
+    expected_checksums: dict[str, str] | None = None,
 ) -> ConsistencyReport:
     """Compare image rows to on-disk blobs under *media_dir* (local storage only).
 
-    Missing blobs and size mismatches are fatal for a recovery claim. Orphan blobs
-    (on disk, not in DB) are reported but do not flip ``ok`` — they are recoverable
-    waste, not lost client assets. Missing thumbs are reported separately.
+    Missing blobs, size mismatches, and (when requested) checksum mismatches are
+    fatal for a recovery claim. Orphan blobs (on disk, not in DB) are reported but
+    do not flip ``ok`` — they are recoverable waste, not lost client assets.
+    Missing thumbs are reported separately.
+
+    When ``checksum=True``, *expected_checksums* is required: a map of relative
+    path → sha256 (typically from :func:`media_checksum_map` of the source tree
+    before restore). Each present referenced blob is hashed and compared.
     """
+    if checksum and expected_checksums is None:
+        raise ValueError("checksum=True requires expected_checksums (use media_checksum_map)")
+
     root = Path(media_dir)
     refs = db_media_refs(conn)
     report = ConsistencyReport(image_rows=len(refs))
@@ -363,6 +380,7 @@ def check_db_media_consistency(
         pass
 
     expected_keys: set[str] = set()
+    keys_to_hash: list[str] = []
     for ref in refs:
         expected_keys.add(ref.storage_key)
         blob = root / ref.storage_key
@@ -378,13 +396,38 @@ def check_db_media_consistency(
                     "disk_bytes": size,
                 }
             )
-        if checksum:
-            # Optional deep verify — expensive; used by explicit drills.
-            _ = file_sha256(blob)
+        keys_to_hash.append(ref.storage_key)
         if ref.thumb_key:
             expected_keys.add(ref.thumb_key)
-            if not (root / ref.thumb_key).is_file():
+            thumb_path = root / ref.thumb_key
+            if not thumb_path.is_file():
                 report.missing_thumbs.append(ref.thumb_key)
+            else:
+                keys_to_hash.append(ref.thumb_key)
+
+    if checksum and expected_checksums is not None:
+        for key in keys_to_hash:
+            path = root / key
+            if not path.is_file():
+                continue
+            actual = file_sha256(path)
+            expected = expected_checksums.get(key)
+            if expected is None:
+                report.checksum_mismatches.append(
+                    {
+                        "storage_key": key,
+                        "reason": "no_expected_checksum",
+                        "actual_sha256": actual,
+                    }
+                )
+            elif actual != expected:
+                report.checksum_mismatches.append(
+                    {
+                        "storage_key": key,
+                        "expected_sha256": expected,
+                        "actual_sha256": actual,
+                    }
+                )
 
     if root.is_dir():
         on_disk: list[str] = []
@@ -398,7 +441,12 @@ def check_db_media_consistency(
 
 def sqlite_integrity_ok(db_path: str | Path) -> str:
     """Run ``PRAGMA integrity_check``; return the first result string (``ok`` or error)."""
-    conn = sqlite3.connect(str(db_path))
+    path = Path(db_path)
+    if not path.is_file():
+        return "missing"
+    if path.stat().st_size == 0:
+        return "empty"
+    conn = sqlite3.connect(str(path))
     try:
         return str(conn.execute("PRAGMA integrity_check").fetchone()[0])
     finally:
@@ -413,6 +461,17 @@ def schema_version(conn: sqlite3.Connection) -> str | None:
         return None
 
 
+def has_schema_migrations(conn: sqlite3.Connection) -> bool:
+    """True when the connection's DB has a ``schema_migrations`` table."""
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations'"
+        ).fetchone()
+        return row is not None
+    except sqlite3.Error:
+        return False
+
+
 def assert_supported_schema(
     conn: sqlite3.Connection,
     *,
@@ -422,9 +481,18 @@ def assert_supported_schema(
     """Refuse a restore whose ledger claims a version this codebase has never shipped.
 
     When *known_versions* is omitted, the local ``hestia/migrations`` directory is
-    the source of truth.
+    the source of truth. Missing ``schema_migrations`` is always a refusal.
     """
     cid = correlation_id or new_correlation_id()
+    if not has_schema_migrations(conn):
+        structured_diag(
+            "recovery.schema.missing_table",
+            correlation_id=cid,
+            level=logging.ERROR,
+        )
+        raise RecoveryError(
+            "not a Hestia database: missing schema_migrations table — refuse restore"
+        )
     version = schema_version(conn)
     if version is None:
         structured_diag(
@@ -432,7 +500,9 @@ def assert_supported_schema(
             correlation_id=cid,
             level=logging.ERROR,
         )
-        raise RecoveryError("database has no schema_migrations ledger — not a Hestia DB")
+        raise RecoveryError(
+            "database has an empty schema_migrations ledger — not a usable Hestia backup"
+        )
     if known_versions is None:
         from .db import discover_migrations
 
@@ -450,6 +520,64 @@ def assert_supported_schema(
             f"{len(known_versions)} migration versions; refuse restore rather than "
             "silently run against an unknown schema"
         )
+    return version
+
+
+def assert_restorable_backup(
+    db_path: str | Path,
+    *,
+    correlation_id: str | None = None,
+    known_versions: set[str] | None = None,
+) -> str:
+    """Gate a candidate backup *before* any live database is moved aside.
+
+    Refuses empty files, non-SQLite payloads, integrity failures, non-Hestia DBs
+    (no ``schema_migrations``), empty ledgers, and unsupported schema versions.
+    Returns the supported schema version string on success.
+    """
+    cid = correlation_id or new_correlation_id()
+    path = Path(db_path)
+    if not path.is_file():
+        structured_diag(
+            "recovery.backup.missing",
+            correlation_id=cid,
+            level=logging.ERROR,
+            path=str(path),
+        )
+        raise RecoveryError(f"no backup file at {path}")
+    size = path.stat().st_size
+    if size == 0:
+        structured_diag(
+            "recovery.backup.empty",
+            correlation_id=cid,
+            level=logging.ERROR,
+            path=str(path),
+        )
+        raise RecoveryError(f"empty backup file at {path} — refuse restore")
+
+    integrity = sqlite_integrity_ok(path)
+    if integrity != "ok":
+        structured_diag(
+            "recovery.backup.integrity_failed",
+            correlation_id=cid,
+            level=logging.ERROR,
+            path=str(path),
+            integrity_check=integrity,
+        )
+        raise RecoveryError(f"backup failed integrity_check ({integrity}) — refuse restore")
+
+    conn = sqlite3.connect(str(path))
+    try:
+        version = assert_supported_schema(conn, known_versions=known_versions, correlation_id=cid)
+    finally:
+        conn.close()
+
+    structured_diag(
+        "recovery.backup.accepted",
+        correlation_id=cid,
+        schema_version=version,
+        size_bytes=size,
+    )
     return version
 
 
@@ -523,10 +651,15 @@ def verify_restored_database(
     backup_path: str | Path | None = None,
     require_media: bool = False,
     allow_unsupported_schema: bool = False,
+    expected_checksums: dict[str, str] | None = None,
     correlation_id: str | None = None,
     started_at: float | None = None,
 ) -> RestoreVerification:
-    """Post-restore verification: integrity, schema, ownership, media, RPO/RTO fields."""
+    """Post-restore verification: integrity, schema, ownership, media, RPO/RTO fields.
+
+    When *expected_checksums* is provided (path → sha256), media content is
+    deep-verified against that inventory in addition to presence/size checks.
+    """
     cid = correlation_id or new_correlation_id()
     t0 = started_at if started_at is not None else time.monotonic()
     path = Path(db_path)
@@ -542,11 +675,11 @@ def verify_restored_database(
         version: str | None
         try:
             if allow_unsupported_schema:
-                version = schema_version(conn)
+                version = schema_version(conn) if has_schema_migrations(conn) else None
             else:
                 version = assert_supported_schema(conn, correlation_id=cid)
         except RecoveryError as exc:
-            version = schema_version(conn)
+            version = schema_version(conn) if has_schema_migrations(conn) else None
             failures.append(str(exc))
 
         try:
@@ -570,12 +703,20 @@ def verify_restored_database(
         consistency: ConsistencyReport | None = None
         rep = representative_gallery_access(conn, media_dir)
         if media_dir is not None:
-            consistency = check_db_media_consistency(conn, media_dir)
+            do_checksum = expected_checksums is not None
+            consistency = check_db_media_consistency(
+                conn,
+                media_dir,
+                checksum=do_checksum,
+                expected_checksums=expected_checksums,
+            )
             if not consistency.ok:
                 if consistency.missing_blobs:
                     failures.append(f"missing_blobs:{len(consistency.missing_blobs)}")
                 if consistency.size_mismatches:
                     failures.append(f"size_mismatches:{len(consistency.size_mismatches)}")
+                if consistency.checksum_mismatches:
+                    failures.append(f"checksum_mismatches:{len(consistency.checksum_mismatches)}")
             if require_media and image_count > 0 and consistency and consistency.missing_blobs:
                 failures.append("require_media:unsatisfied")
         elif require_media:
@@ -650,6 +791,12 @@ def _cli(argv: list[str] | None = None) -> int:
     v.add_argument("--backup", type=Path, default=None, help="Backup artifact for RPO measurement")
     v.add_argument("--require-media", action="store_true")
     v.add_argument("--allow-unsupported-schema", action="store_true")
+    v.add_argument(
+        "--expected-checksums",
+        type=Path,
+        default=None,
+        help="JSON object of relative media path → sha256 for content verify",
+    )
     v.add_argument("--json-out", type=Path, default=None)
     v.add_argument("--correlation-id", default=None)
 
@@ -657,9 +804,22 @@ def _cli(argv: list[str] | None = None) -> int:
     s.add_argument("data_dir", type=Path)
     s.add_argument("--allow-production", action="store_true")
 
+    g = sub.add_parser(
+        "gate-backup",
+        help="Refuse empty/non-Hestia/unsupported backups (pre-restore gate)",
+    )
+    g.add_argument("db_path", type=Path)
+    g.add_argument("--correlation-id", default=None)
+
     c = sub.add_parser("consistency", help="DB↔media consistency report only")
     c.add_argument("db_path", type=Path)
     c.add_argument("media_dir", type=Path)
+    c.add_argument(
+        "--expected-checksums",
+        type=Path,
+        default=None,
+        help="JSON object of relative media path → sha256",
+    )
     c.add_argument("--json-out", type=Path, default=None)
 
     args = parser.parse_args(argv)
@@ -686,11 +846,28 @@ def _cli(argv: list[str] | None = None) -> int:
         )
         return 0
 
+    if args.cmd == "gate-backup":
+        try:
+            version = assert_restorable_backup(args.db_path, correlation_id=cid)
+        except RecoveryError as exc:
+            print(f"REFUSED: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps({"ok": True, "schema_version": version, "correlation_id": cid}))
+        return 0
+
     if args.cmd == "consistency":
+        expected = None
+        if args.expected_checksums:
+            expected = json.loads(Path(args.expected_checksums).read_text(encoding="utf-8"))
         conn = sqlite3.connect(str(args.db_path))
         conn.row_factory = sqlite3.Row
         try:
-            report = check_db_media_consistency(conn, args.media_dir)
+            report = check_db_media_consistency(
+                conn,
+                args.media_dir,
+                checksum=expected is not None,
+                expected_checksums=expected,
+            )
         finally:
             conn.close()
         payload = report.to_dict()
@@ -701,12 +878,16 @@ def _cli(argv: list[str] | None = None) -> int:
         return 0 if report.ok else 1
 
     if args.cmd == "verify":
+        expected = None
+        if args.expected_checksums:
+            expected = json.loads(Path(args.expected_checksums).read_text(encoding="utf-8"))
         result = verify_restored_database(
             args.db_path,
             media_dir=args.media_dir,
             backup_path=args.backup,
             require_media=args.require_media,
             allow_unsupported_schema=args.allow_unsupported_schema,
+            expected_checksums=expected,
             correlation_id=cid,
         )
         if args.json_out:

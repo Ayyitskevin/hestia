@@ -118,25 +118,24 @@ case "$SRC" in
     ;;
 esac
 
-# Truncated / non-SQLite payloads fail here before the live DB is moved aside.
+# Integrity + Hestia schema gate BEFORE any live rename. Empty files, bare SQLite
+# files that pass PRAGMA integrity_check, and unsupported schema versions all refuse here.
 if ! python3 - "$TMP" "$CORRELATION_ID" <<'PY'
-import sqlite3
 import sys
+from hestia.recovery import RecoveryError, assert_restorable_backup
 
 path, cid = sys.argv[1], sys.argv[2]
 try:
-    conn = sqlite3.connect(path)
-    ok = conn.execute("PRAGMA integrity_check").fetchone()[0]
-    conn.close()
-except sqlite3.Error as exc:
-    print(f"integrity_check: error ({exc})")
+    version = assert_restorable_backup(path, correlation_id=cid)
+except RecoveryError as exc:
+    print(f"integrity_check / schema gate: refused ({exc})")
     sys.exit(1)
-print("integrity_check:", ok)
-sys.exit(0 if ok == "ok" else 1)
+print(f"integrity_check: ok schema={version}")
+sys.exit(0)
 PY
 then
   rm -f "$TMP"
-  echo "ERROR: backup failed integrity_check — live database untouched (correlation_id=$CORRELATION_ID)" >&2
+  echo "ERROR: backup failed integrity/schema gate — live database untouched (correlation_id=$CORRELATION_ID)" >&2
   exit 1
 fi
 

@@ -85,6 +85,17 @@ cp "${backups[0]}" "$COPIED"
 # stand-in for rclone restore of the media tree (no real remote required).
 echo "→ sync media into target (local stand-in for off-site media restore)"
 cp -a "$MEDIA_SRC/." "$MEDIA_DST/"
+# Capture source media checksums so post-restore verify proves content identity, not only presence.
+CHECKSUMS="$ROOT/media-checksums.json"
+python3 - "$MEDIA_SRC" "$CHECKSUMS" <<'PY'
+import json
+import sys
+from hestia.recovery import media_checksum_map
+
+src, out = sys.argv[1], sys.argv[2]
+open(out, "w", encoding="utf-8").write(json.dumps(media_checksum_map(src), indent=2, sort_keys=True) + "\n")
+print(f"media checksum inventory → {out} ({len(json.loads(open(out).read()))} files)")
+PY
 
 echo "→ seed disposable target DB that restore will replace"
 python3 - "$TARGET/hestia.db" <<'PY'
@@ -123,11 +134,12 @@ if [[ "${#safety_copies[@]}" -ne 1 ]]; then
   exit 1
 fi
 
-echo "→ post-restore verification (integrity + media + ownership + RPO/RTO)"
+echo "→ post-restore verification (integrity + media checksums + ownership + RPO/RTO)"
 python3 -m hestia.recovery verify "$TARGET/hestia.db" \
   --media-dir "$MEDIA_DST" \
   --backup "$COPIED" \
   --require-media \
+  --expected-checksums "$CHECKSUMS" \
   --json-out "$REPORT" \
   --correlation-id "$CORRELATION_ID"
 

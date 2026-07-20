@@ -22,10 +22,12 @@ from hestia.db import connect, init_db
 from hestia.galleries import add_image, create_gallery, publish_gallery
 from hestia.recovery import (
     RecoveryError,
+    assert_restorable_backup,
     assert_safe_restore_target,
     assert_sufficient_disk,
     check_db_media_consistency,
     is_production_data_path,
+    media_checksum_map,
     media_inventory,
     structured_diag,
     verify_restored_database,
@@ -309,6 +311,97 @@ def test_restore_corrupt_sqlite_payload_leaves_target_untouched(tmp_path):
     assert db.read_bytes() == before
 
 
+def _seed_target_with_tenant(target: Path, name: str = "Pre-existing") -> bytes:
+    target.mkdir(parents=True, exist_ok=True)
+    db = target / "hestia.db"
+    init_db(db)
+    conn = connect(db)
+    create_tenant(conn, name=name, shoot_type="other")
+    conn.commit()
+    conn.close()
+    _quiesce_db(db)
+    return db.read_bytes()
+
+
+def test_restore_empty_gzip_leaves_target_byte_identical(tmp_path):
+    """Empty .db.gz must not replace the live DB (integrity_check alone would pass 0-byte unpack)."""
+    target = tmp_path / "target"
+    safety = tmp_path / "safety"
+    before = _seed_target_with_tenant(target)
+    empty_gz = tmp_path / "empty.db.gz"
+    with gzip.open(empty_gz, "wb") as fh:
+        fh.write(b"")
+    result = _restore(target, empty_gz, backup_dir=safety)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert (target / "hestia.db").read_bytes() == before
+    assert not list(safety.glob("pre-restore-*.db"))
+
+
+def test_restore_empty_raw_db_leaves_target_byte_identical(tmp_path):
+    target = tmp_path / "target"
+    safety = tmp_path / "safety"
+    before = _seed_target_with_tenant(target)
+    empty_db = tmp_path / "empty.db"
+    empty_db.write_bytes(b"")
+    result = _restore(target, empty_db, backup_dir=safety)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert (target / "hestia.db").read_bytes() == before
+    assert not list(safety.glob("pre-restore-*.db"))
+
+
+def test_restore_non_hestia_sqlite_leaves_target_byte_identical(tmp_path):
+    """A pristine SQLite file passes PRAGMA integrity_check but has no schema_migrations."""
+    target = tmp_path / "target"
+    before = _seed_target_with_tenant(target)
+    foreign = tmp_path / "foreign.db"
+    conn = sqlite3.connect(foreign)
+    conn.execute("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT)")
+    conn.execute("INSERT INTO notes (body) VALUES ('not hestia')")
+    conn.commit()
+    conn.close()
+    # Confirm the trap: integrity is ok, but gate must still refuse.
+    assert sqlite3.connect(foreign).execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    with pytest.raises(RecoveryError, match="schema_migrations"):
+        assert_restorable_backup(foreign)
+
+    artifact = tmp_path / "foreign.db.gz"
+    with gzip.open(artifact, "wb") as fh:
+        fh.write(foreign.read_bytes())
+    result = _restore(target, artifact, backup_dir=tmp_path / "safety")
+    assert result.returncode != 0, result.stdout + result.stderr
+    combined = (result.stdout + result.stderr).lower()
+    assert "schema" in combined or "refused" in combined or "hestia" in combined
+    assert (target / "hestia.db").read_bytes() == before
+    assert not list((tmp_path / "safety").glob("pre-restore-*.db"))
+
+
+def test_restore_unsupported_schema_leaves_target_byte_identical(tmp_path):
+    """Future ledger version that still integrity-checks must not install via restore.sh."""
+    target = tmp_path / "target"
+    before = _seed_target_with_tenant(target)
+
+    source = tmp_path / "src"
+    source.mkdir()
+    init_db(source / "hestia.db")
+    conn = connect(source / "hestia.db")
+    create_tenant(conn, name="Future Schema", shoot_type="other")
+    conn.execute(
+        "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
+        ("9999", "9999_from_the_future"),
+    )
+    conn.commit()
+    conn.close()
+    # Also force MAX(version) to be the unsupported one: MAX of text versions —
+    # 9999 is max lexicographically among 0001..9999 for zero-padded 4-digit.
+    # assert_supported_schema checks the MAX(version) is in known set.
+    artifact = _backup(source, tmp_path / "bak")
+    result = _restore(target, artifact, backup_dir=tmp_path / "safety")
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "unsupported" in (result.stdout + result.stderr).lower()
+    assert (target / "hestia.db").read_bytes() == before
+    assert not list((tmp_path / "safety").glob("pre-restore-*.db"))
+
+
 def test_verify_refuses_unsupported_schema_version(tmp_path):
     db = tmp_path / "hestia.db"
     init_db(db)
@@ -324,6 +417,48 @@ def test_verify_refuses_unsupported_schema_version(tmp_path):
     report = verify_restored_database(db)
     assert report.ok is False
     assert any("unsupported schema" in f for f in report.failures)
+
+
+def test_checksum_mismatch_fails_consistency(tmp_path):
+    data = tmp_path / "data"
+    media = data / "media"
+    seed = _seed_db_with_media(data / "hestia.db", media)
+    expected = media_checksum_map(media)
+    # Tamper with the blob without changing size so only checksum catches it.
+    path = media / seed["storage_key"]
+    original = path.read_bytes()
+    assert len(original) > 8
+    path.write_bytes(b"\x00" * len(original))
+    conn = connect(data / "hestia.db")
+    # Size may still match images.bytes if we preserved length.
+    report = check_db_media_consistency(conn, media, checksum=True, expected_checksums=expected)
+    conn.close()
+    assert report.ok is False
+    assert report.checksum_mismatches
+    assert report.checksum_mismatches[0]["storage_key"] == seed["storage_key"]
+    assert report.checksum_mismatches[0]["actual_sha256"] != expected[seed["storage_key"]]
+
+
+def test_checksum_true_requires_expected_map(tmp_path):
+    data = tmp_path / "data"
+    media = data / "media"
+    _seed_db_with_media(data / "hestia.db", media)
+    conn = connect(data / "hestia.db")
+    with pytest.raises(ValueError, match="expected_checksums"):
+        check_db_media_consistency(conn, media, checksum=True)
+    conn.close()
+
+
+def test_assert_restorable_backup_accepts_real_hestia_db(tmp_path):
+    db = tmp_path / "hestia.db"
+    init_db(db)
+    conn = connect(db)
+    create_tenant(conn, name="Good", shoot_type="other")
+    conn.commit()
+    conn.close()
+    version = assert_restorable_backup(db)
+    assert version is not None
+    assert version.isdigit() or version  # non-empty supported version
 
 
 def test_interrupted_restore_marker_and_live_db_intact(tmp_path):

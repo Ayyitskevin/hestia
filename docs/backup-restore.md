@@ -136,7 +136,11 @@ Scratch and staging restores never need the override. The automated drill
    - production-path refusal (see above)
    - refuses while the app looks live (`hestia.db-wal` present) unless `--force`
    - missing / unreadable backup → exit non-zero, **live DB untouched**
-   - corrupt gzip / failed `PRAGMA integrity_check` → exit non-zero, **live DB untouched**
+   - corrupt gzip → exit non-zero, **live DB untouched**
+   - empty backup / bare SQLite that passes `PRAGMA integrity_check` but is not Hestia
+     (no `schema_migrations`) → refused **before** any live rename
+   - unsupported / unknown schema version → refused **before** any live rename
+     (`assert_restorable_backup` / `python -m hestia.recovery gate-backup`)
    - disk preflight: refuses when free space cannot hold the unpacked backup + safety copy
    - writes via same-filesystem temp (`.restore-<stamp>.db`) + atomic `mv`
    - keeps the outgoing DB at `backups/pre-restore-<stamp>.db`
@@ -197,11 +201,14 @@ replace the quarterly drill below, which must use a real off-site artifact.
 | Scenario | Expected behavior |
 |----------|-------------------|
 | Missing backup file | exit ≠ 0; target DB unchanged |
+| Empty `.db` / empty `.db.gz` | exit ≠ 0; target DB unchanged (never install 0-byte) |
 | Corrupt gzip | exit ≠ 0; target DB unchanged |
-| Gzip of non-SQLite garbage | `integrity_check` fails; target DB unchanged |
+| Gzip of non-SQLite garbage | integrity/schema gate fails; target DB unchanged |
+| Non-Hestia SQLite (integrity ok, no ledger) | schema gate refuses; target DB unchanged |
+| Unsupported schema version (future ledger) | restore + verify refuse; target DB unchanged |
 | Partial media (DB row, missing blob) | `verify` → `ok=false`, `missing_blobs` listed |
 | Size mismatch (truncated blob) | `verify` → `ok=false`, `size_mismatches` listed |
-| Unsupported schema version (future ledger) | `verify` fails; do not boot that DB on this release |
+| Checksum mismatch vs source inventory | `verify --expected-checksums` → `checksum_mismatches` |
 | Interrupted restore (`.restore-in-progress`) | operator inspects; re-run restore after quiescing WAL |
 | Insufficient disk (preflight) | exit ≠ 0 before any live rename |
 | Accidental `./data` / `/data` target | refused without `--allow-production` |
