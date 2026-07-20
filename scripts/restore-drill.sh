@@ -1,31 +1,74 @@
 #!/usr/bin/env bash
-# Exercise backup.sh -> copied artifact -> restore.sh entirely in scratch data.
-# This is safe for CI and local verification; it never reads HESTIA_DATA_DIR.
+# Exercise backup → media copy → restore → verify entirely in scratch data.
+# Safe for CI and local verification; never reads or writes a production HESTIA_DATA_DIR.
+#
+# Success prints structured recovery metrics (RTO/RPO fields) and exits 0.
+# Optional: HESTIA_DRILL_REPORT=/path/to/report.json to keep the verification JSON.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-ROOT="$(mktemp -d)"
+# Clear any ambient production-restore override so the drill proves the default refuse path.
+unset HESTIA_ALLOW_PRODUCTION_RESTORE || true
+
+ROOT="$(mktemp -d "${TMPDIR:-/tmp}/hestia-restore-drill.XXXXXX")"
 SOURCE="$ROOT/source"
 TARGET="$ROOT/target"
 ARTIFACTS="$ROOT/artifacts"
 SAFETY="$ROOT/safety"
-mkdir -p "$SOURCE" "$TARGET" "$ARTIFACTS" "$SAFETY"
-trap 'rm -rf "$ROOT"' EXIT
+MEDIA_SRC="$SOURCE/media"
+MEDIA_DST="$TARGET/media"
+CORRELATION_ID="$(python3 -c 'import uuid; print(uuid.uuid4().hex[:12])')"
+export HESTIA_RECOVERY_CORRELATION_ID="$CORRELATION_ID"
+REPORT="${HESTIA_DRILL_REPORT:-$ROOT/verify-report.json}"
+mkdir -p "$SOURCE" "$TARGET" "$ARTIFACTS" "$SAFETY" "$MEDIA_SRC" "$MEDIA_DST"
+# Keep ROOT on failure when HESTIA_DRILL_KEEP=1 so operators can inspect; else always clean.
+cleanup() {
+  if [ "${HESTIA_DRILL_KEEP:-0}" = "1" ]; then
+    echo "drill scratch kept at $ROOT (HESTIA_DRILL_KEEP=1)" >&2
+  else
+    rm -rf "$ROOT"
+  fi
+}
+trap cleanup EXIT
 
-python - "$SOURCE/hestia.db" <<'PY'
+DRILL_START="$(python3 -c 'import time; print(time.monotonic())')"
+
+echo "→ seed source DB + media (correlation_id=$CORRELATION_ID)"
+python3 - "$SOURCE/hestia.db" "$MEDIA_SRC" <<'PY'
+import io
 import sys
+from pathlib import Path
+
+from PIL import Image
 
 from hestia.db import connect, init_db
+from hestia.galleries import add_image, create_gallery, publish_gallery
+from hestia.storage import LocalStorage
 from hestia.tenants import create_tenant
 
-db = sys.argv[1]
+db, media = sys.argv[1], Path(sys.argv[2])
+media.mkdir(parents=True, exist_ok=True)
 init_db(db)
 conn = connect(db)
-create_tenant(conn, name="Restore Drill Source", shoot_type="wedding")
+tenant = create_tenant(conn, name="Restore Drill Source", shoot_type="wedding")
+g = create_gallery(conn, tenant_id=tenant["id"], title="Drill Gallery", client_name="Drill Client")
+storage = LocalStorage(media)
+buf = io.BytesIO()
+Image.new("RGB", (32, 24), color=(180, 90, 40)).save(buf, format="JPEG")
+buf.seek(0)
+img = add_image(
+    conn, storage,
+    tenant_id=tenant["id"], gallery_id=g["id"],
+    filename="drill.jpg", fileobj=buf, content_type="image/jpeg",
+)
+assert img is not None, "failed to seed drill image"
+assert publish_gallery(conn, tenant["id"], g["id"]) is True
 conn.commit()
 conn.close()
+print(f"seeded tenant={tenant['id']} gallery={g['id']} image={img['id']} key={img['storage_key']}")
 PY
 
+echo "→ backup source"
 HESTIA_DATA_DIR="$SOURCE" HESTIA_BACKUP_DIR="$ARTIFACTS" HESTIA_BACKUP_KEEP=2 \
   bash scripts/backup.sh
 
@@ -38,9 +81,14 @@ fi
 COPIED="$ROOT/copied-backup.db.gz"
 cp "${backups[0]}" "$COPIED"
 
-python - "$TARGET/hestia.db" <<'PY'
-import sys
+# Off-site media half of the story: copy media into the restore target as a
+# stand-in for rclone restore of the media tree (no real remote required).
+echo "→ sync media into target (local stand-in for off-site media restore)"
+cp -a "$MEDIA_SRC/." "$MEDIA_DST/"
 
+echo "→ seed disposable target DB that restore will replace"
+python3 - "$TARGET/hestia.db" <<'PY'
+import sys
 from hestia.db import connect, init_db
 from hestia.tenants import create_tenant
 
@@ -52,7 +100,21 @@ conn.commit()
 conn.close()
 PY
 
-HESTIA_DATA_DIR="$TARGET" HESTIA_BACKUP_DIR="$SAFETY" \
+echo "→ prove production-path refusal (default ./data without override)"
+if HESTIA_DATA_DIR="./data" bash scripts/restore.sh "$COPIED" 2>"$ROOT/refuse.err"; then
+  echo "FAIL: restore into ./data should have been refused" >&2
+  cat "$ROOT/refuse.err" >&2
+  exit 1
+fi
+grep -q "production\|refusing restore" "$ROOT/refuse.err" || {
+  echo "FAIL: expected production refusal message" >&2
+  cat "$ROOT/refuse.err" >&2
+  exit 1
+}
+echo "production refusal OK"
+
+echo "→ restore into scratch target"
+HESTIA_DATA_DIR="$TARGET" HESTIA_BACKUP_DIR="$SAFETY" HESTIA_MEDIA_DIR="$MEDIA_DST" \
   bash scripts/restore.sh "$COPIED"
 
 safety_copies=("$SAFETY"/pre-restore-*.db)
@@ -61,12 +123,25 @@ if [[ "${#safety_copies[@]}" -ne 1 ]]; then
   exit 1
 fi
 
-python - "$TARGET/hestia.db" "${safety_copies[0]}" <<'PY'
+echo "→ post-restore verification (integrity + media + ownership + RPO/RTO)"
+python3 -m hestia.recovery verify "$TARGET/hestia.db" \
+  --media-dir "$MEDIA_DST" \
+  --backup "$COPIED" \
+  --require-media \
+  --json-out "$REPORT" \
+  --correlation-id "$CORRELATION_ID"
+
+python3 - "$TARGET/hestia.db" "${safety_copies[0]}" "$REPORT" "$DRILL_START" "$CORRELATION_ID" <<'PY'
+import json
 import sqlite3
 import sys
+import time
 
 restored = sqlite3.connect(sys.argv[1])
 safety = sqlite3.connect(sys.argv[2])
+report = json.loads(open(sys.argv[3], encoding="utf-8").read())
+drill_start = float(sys.argv[4])
+cid = sys.argv[5]
 
 assert restored.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
 assert safety.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -76,7 +151,33 @@ safety_names = {row[0] for row in safety.execute("SELECT name FROM tenants")}
 assert restored_names == {"Restore Drill Source"}, restored_names
 assert safety_names == {"Restore Drill Replaced"}, safety_names
 
-version = restored.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
-assert version is not None
-print(f"restore drill OK: integrity=ok, migration={version}, safety_copy=ok")
+images = restored.execute("SELECT COUNT(*) FROM images").fetchone()[0]
+assert images >= 1, images
+gals = restored.execute(
+    "SELECT COUNT(*) FROM galleries WHERE status='published'"
+).fetchone()[0]
+assert gals >= 1, gals
+
+assert report["ok"] is True, report.get("failures")
+assert report["integrity_check"] == "ok"
+assert report["image_count"] >= 1
+assert report["consistency"]["ok"] is True
+assert report["consistency"]["missing_blobs"] == []
+assert report["representative_gallery"] is not None
+assert report["representative_gallery"]["first_blob_present"] is True
+assert report["correlation_id"] == cid
+assert report["rpo_seconds"] is not None
+rto_ms = int((time.monotonic() - drill_start) * 1000)
+print(
+    f"restore drill OK: integrity=ok, migration={report['schema_version']}, "
+    f"tenants={report['tenant_count']}, galleries={report['gallery_count']}, "
+    f"images={report['image_count']}, media_ok=1, safety_copy=ok, "
+    f"rto_ms={rto_ms}, verify_ms={report['elapsed_ms']}, "
+    f"rpo_s={report['rpo_seconds']}, correlation_id={cid}"
+)
 PY
+
+# If the operator asked to keep a report outside the scratch tree, copy it before EXIT cleanup.
+if [ -n "${HESTIA_DRILL_REPORT:-}" ] && [ -f "$REPORT" ]; then
+  echo "verification report → $REPORT"
+fi
