@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import sqlite3
 import sys
@@ -87,18 +88,30 @@ class ConsistencyReport:
     orphan_blobs: list[str] = field(default_factory=list)
     size_mismatches: list[dict[str, Any]] = field(default_factory=list)
     checksum_mismatches: list[dict[str, Any]] = field(default_factory=list)
+    # Expected-table query failures — never treat as an empty clean studio.
+    query_errors: list[str] = field(default_factory=list)
     tenant_ids: list[str] = field(default_factory=list)
     gallery_count: int = 0
     published_gallery_count: int = 0
 
     @property
     def ok(self) -> bool:
-        return not self.missing_blobs and not self.size_mismatches and not self.checksum_mismatches
+        return (
+            not self.missing_blobs
+            and not self.size_mismatches
+            and not self.checksum_mismatches
+            and not self.query_errors
+        )
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["ok"] = self.ok
         return d
+
+
+# Backup-set manifest format (privacy-safe; no client PII or secrets).
+MANIFEST_FORMAT_VERSION = 1
+MANIFEST_FILENAME_SUFFIX = ".manifest.json"
 
 
 @dataclass
@@ -346,14 +359,18 @@ def media_inventory(media_dir: str | Path, *, max_files: int = 500_000) -> list[
 
 
 def db_media_refs(conn: sqlite3.Connection) -> list[DbMediaRef]:
-    """All image storage keys the database expects to find in media storage."""
+    """All image storage keys the database expects to find in media storage.
+
+    Fail-closed: a missing/malformed ``images`` table raises :class:`RecoveryError`
+    with reason code ``schema_query:images`` — never an empty list that looks clean.
+    """
     try:
         rows = conn.execute(
             "SELECT id, tenant_id, gallery_id, storage_key, thumb_key, bytes "
             "FROM images ORDER BY id"
         ).fetchall()
-    except sqlite3.Error:
-        return []
+    except sqlite3.Error as exc:
+        raise RecoveryError(f"schema_query:images:{type(exc).__name__}") from exc
     refs: list[DbMediaRef] = []
     for r in rows:
         d = dict(r)
@@ -403,8 +420,13 @@ def check_db_media_consistency(
         raise ValueError("checksum=True requires expected_checksums (use media_checksum_map)")
 
     root = Path(media_dir)
-    refs = db_media_refs(conn)
-    report = ConsistencyReport(image_rows=len(refs))
+    report = ConsistencyReport()
+    try:
+        refs = db_media_refs(conn)
+    except RecoveryError as exc:
+        report.query_errors.append(str(exc))
+        refs = []
+    report.image_rows = len(refs)
 
     try:
         tenants = [r[0] for r in conn.execute("SELECT id FROM tenants ORDER BY id")]
@@ -413,8 +435,9 @@ def check_db_media_consistency(
         report.published_gallery_count = int(
             conn.execute("SELECT COUNT(*) FROM galleries WHERE status = 'published'").fetchone()[0]
         )
-    except sqlite3.Error:
-        pass
+    except sqlite3.Error as exc:
+        # Expected tables failed — not a silent empty studio.
+        report.query_errors.append(f"schema_query:tenants_or_galleries:{type(exc).__name__}")
 
     expected_keys: set[str] = set()
     keys_to_hash: list[str] = []
@@ -618,8 +641,241 @@ def assert_restorable_backup(
     return version
 
 
+# ── Backup-set generation manifest (DB + media bound to one generation) ─────
+
+
+def manifest_path_for_backup(backup_path: str | Path) -> Path:
+    """Sidecar path: ``hestia-STAMP.db.gz`` → ``hestia-STAMP.db.gz.manifest.json``."""
+    p = Path(backup_path)
+    return p.with_name(p.name + MANIFEST_FILENAME_SUFFIX)
+
+
+def build_backup_manifest(
+    *,
+    db_artifact: str | Path,
+    media_dir: str | Path | None = None,
+    unpacked_db: str | Path | None = None,
+    generation_id: str | None = None,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Build a privacy-safe versioned backup-set manifest for one generation.
+
+    Binds the compressed (or raw) DB artifact checksum to an optional media
+    inventory (relative path → size + sha256). Never includes client tokens,
+    emails, or secrets.
+    """
+    cid = correlation_id or new_correlation_id()
+    artifact = Path(db_artifact)
+    if not artifact.is_file():
+        raise RecoveryError(f"manifest.db_missing:{artifact.name}")
+    db_sha = file_sha256(artifact)
+    db_size = artifact.stat().st_size
+
+    schema_ver: str | None = None
+    inspect = Path(unpacked_db) if unpacked_db else None
+    if inspect is None and not str(artifact).endswith(".gz"):
+        inspect = artifact
+    if inspect is not None and inspect.is_file() and inspect.stat().st_size > 0:
+        try:
+            schema_ver = assert_restorable_backup(inspect, correlation_id=cid)
+        except RecoveryError:
+            # Still record the artifact; schema gate at restore will refuse separately.
+            try:
+                conn = sqlite3.connect(str(inspect))
+                try:
+                    schema_ver = schema_version(conn)
+                finally:
+                    conn.close()
+            except sqlite3.Error:
+                schema_ver = None
+
+    media_files: dict[str, dict[str, Any]] = {}
+    total_bytes = 0
+    if media_dir is not None:
+        root = Path(media_dir)
+        if root.is_dir():
+            for blob in media_inventory(root):
+                media_files[blob.relative_path] = {
+                    "sha256": blob.sha256,
+                    "size_bytes": blob.size_bytes,
+                }
+                total_bytes += blob.size_bytes
+
+    gen = generation_id or hashlib.sha256(
+        f"{db_sha}:{db_size}:{datetime.now(UTC).isoformat()}".encode()
+    ).hexdigest()[:32]
+
+    manifest: dict[str, Any] = {
+        "format_version": MANIFEST_FORMAT_VERSION,
+        "generation_id": gen,
+        "created_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "schema_version": schema_ver,
+        "db": {
+            "filename": artifact.name,
+            "sha256": db_sha,
+            "size_bytes": db_size,
+        },
+        "media": {
+            "file_count": len(media_files),
+            "total_bytes": total_bytes,
+            "files": media_files,
+        },
+    }
+    structured_diag(
+        "recovery.manifest.built",
+        correlation_id=cid,
+        generation_id=gen,
+        schema_version=schema_ver,
+        media_file_count=len(media_files),
+        db_size_bytes=db_size,
+    )
+    return manifest
+
+
+def write_backup_manifest(manifest: dict[str, Any], path: str | Path) -> Path:
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return out
+
+
+def load_backup_manifest(path: str | Path) -> dict[str, Any]:
+    """Load and structurally validate a backup-set manifest (fail-closed)."""
+    p = Path(path)
+    if not p.is_file():
+        raise RecoveryError(f"manifest.missing:{p.name}")
+    if p.stat().st_size == 0:
+        raise RecoveryError(f"manifest.empty:{p.name}")
+    try:
+        raw = p.read_text(encoding="utf-8")
+        data = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RecoveryError(f"manifest.corrupt:{type(exc).__name__}") from exc
+    if not isinstance(data, dict):
+        raise RecoveryError("manifest.corrupt:not_object")
+    if data.get("format_version") != MANIFEST_FORMAT_VERSION:
+        raise RecoveryError(
+            f"manifest.unsupported_format:{data.get('format_version')!r}"
+        )
+    for key in ("generation_id", "created_at", "db", "media"):
+        if key not in data:
+            raise RecoveryError(f"manifest.incomplete:{key}")
+    db = data["db"]
+    media = data["media"]
+    if not isinstance(db, dict) or not isinstance(media, dict):
+        raise RecoveryError("manifest.corrupt:db_or_media_not_object")
+    for key in ("filename", "sha256", "size_bytes"):
+        if key not in db:
+            raise RecoveryError(f"manifest.incomplete:db.{key}")
+    if "files" not in media or not isinstance(media["files"], dict):
+        raise RecoveryError("manifest.incomplete:media.files")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(db["sha256"])):
+        raise RecoveryError("manifest.corrupt:db.sha256")
+    return data
+
+
+def verify_backup_set(
+    *,
+    db_artifact: str | Path,
+    manifest: dict[str, Any] | str | Path,
+    media_dir: str | Path | None = None,
+    require_media: bool = False,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Verify DB artifact (+ optional media tree) against one generation manifest.
+
+    Refuses missing, size-mismatched, checksum-mismatched, truncated, or
+    cross-generation inputs **before** any live target replacement. Returns a
+    privacy-safe summary dict on success; raises :class:`RecoveryError` on refuse.
+    """
+    cid = correlation_id or new_correlation_id()
+    if not isinstance(manifest, dict):
+        manifest = load_backup_manifest(manifest)
+    else:
+        # Re-validate structure even if caller passed a dict.
+        if manifest.get("format_version") != MANIFEST_FORMAT_VERSION:
+            raise RecoveryError(
+                f"manifest.unsupported_format:{manifest.get('format_version')!r}"
+            )
+
+    artifact = Path(db_artifact)
+    if not artifact.is_file():
+        raise RecoveryError(f"manifest.db_missing:{artifact.name}")
+
+    expected_name = str(manifest["db"]["filename"])
+    if artifact.name != expected_name:
+        # Allow restore from a copied artifact with a different name only when
+        # checksums still match; flag name drift but do not treat as cross-generation.
+        structured_diag(
+            "recovery.manifest.filename_drift",
+            correlation_id=cid,
+            expected=expected_name,
+            actual=artifact.name,
+        )
+
+    actual_size = artifact.stat().st_size
+    expected_size = int(manifest["db"]["size_bytes"])
+    if actual_size != expected_size:
+        raise RecoveryError(
+            f"manifest.db_size_mismatch:expected={expected_size}:actual={actual_size}"
+        )
+    if actual_size == 0:
+        raise RecoveryError("manifest.db_empty")
+
+    actual_sha = file_sha256(artifact)
+    expected_sha = str(manifest["db"]["sha256"])
+    if actual_sha != expected_sha:
+        raise RecoveryError("manifest.db_checksum_mismatch")
+
+    media_spec = manifest["media"]
+    files: dict[str, Any] = media_spec.get("files") or {}
+    if require_media and int(media_spec.get("file_count") or 0) > 0 and media_dir is None:
+        raise RecoveryError("manifest.media_dir_required")
+
+    if media_dir is not None:
+        root = Path(media_dir)
+        if not root.is_dir() and files:
+            raise RecoveryError("manifest.media_dir_missing")
+        on_disk = media_checksum_map(root) if root.is_dir() else {}
+        # Required media from this generation must be present and match.
+        for rel, meta in files.items():
+            if not isinstance(meta, dict) or "sha256" not in meta:
+                raise RecoveryError(f"manifest.corrupt:media_entry:{rel[:64]}")
+            if rel not in on_disk:
+                raise RecoveryError(f"manifest.media_missing:{rel[:128]}")
+            if on_disk[rel] != meta["sha256"]:
+                raise RecoveryError(f"manifest.media_checksum_mismatch:{rel[:128]}")
+            expected_sz = meta.get("size_bytes")
+            if expected_sz is not None:
+                disk_sz = (root / rel).stat().st_size
+                if int(expected_sz) != disk_sz:
+                    raise RecoveryError(f"manifest.media_size_mismatch:{rel[:128]}")
+        # Extra on-disk files are allowed (orphans); required set must be complete.
+
+    summary = {
+        "ok": True,
+        "generation_id": manifest["generation_id"],
+        "schema_version": manifest.get("schema_version"),
+        "db_sha256": expected_sha,
+        "media_file_count": int(media_spec.get("file_count") or 0),
+        "correlation_id": cid,
+    }
+    structured_diag(
+        "recovery.manifest.verified",
+        correlation_id=cid,
+        generation_id=summary["generation_id"],
+        schema_version=summary["schema_version"],
+        media_file_count=summary["media_file_count"],
+    )
+    return summary
+
+
 def tenant_ownership_ok(conn: sqlite3.Connection) -> list[str]:
-    """Return codes for cross-tenant ownership violations (empty = clean)."""
+    """Return codes for cross-tenant ownership violations (empty = clean).
+
+    Fail-closed: if an ownership query cannot run (missing tables), returns a
+    ``schema_query:…`` failure code rather than treating the check as skipped/clean.
+    """
     failures: list[str] = []
     checks = [
         (
@@ -642,7 +898,8 @@ def tenant_ownership_ok(conn: sqlite3.Connection) -> list[str]:
     for code, sql in checks:
         try:
             n = int(conn.execute(sql).fetchone()[0])
-        except sqlite3.Error:
+        except sqlite3.Error as exc:
+            failures.append(f"schema_query:{code}:{type(exc).__name__}")
             continue
         if n:
             failures.append(f"{code}:{n}")
@@ -653,19 +910,29 @@ def representative_gallery_access(
     conn: sqlite3.Connection,
     media_dir: str | Path | None,
 ) -> dict[str, Any] | None:
-    """Pick one published (else any) gallery and confirm its rows + first blob exist."""
-    row = conn.execute(
-        "SELECT id, tenant_id, slug, title, status FROM galleries "
-        "ORDER BY CASE status WHEN 'published' THEN 0 ELSE 1 END, id LIMIT 1"
-    ).fetchone()
+    """Pick one published (else any) gallery and confirm its rows + first blob exist.
+
+    Raises :class:`RecoveryError` with ``schema_query:galleries`` / ``images`` when
+    expected tables are unreadable — never returns a synthetic empty success.
+    """
+    try:
+        row = conn.execute(
+            "SELECT id, tenant_id, slug, title, status FROM galleries "
+            "ORDER BY CASE status WHEN 'published' THEN 0 ELSE 1 END, id LIMIT 1"
+        ).fetchone()
+    except sqlite3.Error as exc:
+        raise RecoveryError(f"schema_query:galleries:{type(exc).__name__}") from exc
     if not row:
         return None
     g = dict(row)
-    images = conn.execute(
-        "SELECT id, storage_key, access_token FROM images "
-        "WHERE gallery_id = ? AND tenant_id = ? ORDER BY position, id",
-        (g["id"], g["tenant_id"]),
-    ).fetchall()
+    try:
+        images = conn.execute(
+            "SELECT id, storage_key, access_token FROM images "
+            "WHERE gallery_id = ? AND tenant_id = ? ORDER BY position, id",
+            (g["id"], g["tenant_id"]),
+        ).fetchall()
+    except sqlite3.Error as exc:
+        raise RecoveryError(f"schema_query:images:{type(exc).__name__}") from exc
     first_blob_ok = None
     if images and media_dir:
         key = images[0]["storage_key"]
@@ -679,6 +946,46 @@ def representative_gallery_access(
         # access_token is intentionally NOT returned (privacy)
         "first_blob_present": first_blob_ok,
     }
+
+
+def assert_writer_quiescent(
+    data_dir: str | Path,
+    *,
+    force_live_wal: bool = False,
+    correlation_id: str | None = None,
+) -> None:
+    """Refuse restore when a WAL sidecar indicates a live (or crash-mid-write) app.
+
+    ``--force`` is **not** accepted here. The only override is ``force_live_wal=True``
+    (CLI ``--force-live-wal``), which is loud and separately named so operators cannot
+    confuse it with “the app is definitely stopped.”
+    """
+    cid = correlation_id or new_correlation_id()
+    wal = Path(data_dir) / "hestia.db-wal"
+    if not wal.exists():
+        return
+    if force_live_wal:
+        structured_diag(
+            "recovery.restore.force_live_wal",
+            correlation_id=cid,
+            level=logging.WARNING,
+            data_dir=str(normalize_data_path(data_dir)),
+            reason="operator_override_app_may_still_be_live",
+        )
+        return
+    structured_diag(
+        "recovery.restore.live_writer",
+        correlation_id=cid,
+        level=logging.ERROR,
+        data_dir=str(normalize_data_path(data_dir)),
+        reason="wal_present",
+    )
+    raise RecoveryError(
+        f"refusing restore while {wal} exists — app looks live. "
+        "Stop the app first, or pass the loud override --force-live-wal "
+        "(not --force) only if you accept possible corruption risk "
+        "(see docs/backup-restore.md)"
+    )
 
 
 def verify_restored_database(
@@ -734,7 +1041,8 @@ def verify_restored_database(
             )
             image_count = int(conn.execute("SELECT COUNT(*) FROM images").fetchone()[0])
         except sqlite3.Error as exc:
-            failures.append(f"schema_query:{exc}")
+            # Fail-closed: reason code only (no SQL text that might echo paths/PII).
+            failures.append(f"schema_query:core_tables:{type(exc).__name__}")
             tenant_count = gallery_count = published = image_count = 0
             tenant_ids = []
 
@@ -742,7 +1050,11 @@ def verify_restored_database(
             failures.append(code)
 
         consistency: ConsistencyReport | None = None
-        rep = representative_gallery_access(conn, media_dir)
+        rep: dict[str, Any] | None = None
+        try:
+            rep = representative_gallery_access(conn, media_dir)
+        except RecoveryError as exc:
+            failures.append(str(exc))
         if media_dir is not None:
             do_checksum = expected_checksums is not None
             consistency = check_db_media_consistency(
@@ -751,6 +1063,8 @@ def verify_restored_database(
                 checksum=do_checksum,
                 expected_checksums=expected_checksums,
             )
+            if consistency.query_errors:
+                failures.extend(consistency.query_errors)
             if not consistency.ok:
                 if consistency.missing_blobs:
                     failures.append(f"missing_blobs:{len(consistency.missing_blobs)}")
@@ -870,6 +1184,26 @@ def _cli(argv: list[str] | None = None) -> int:
     )
     c.add_argument("--json-out", type=Path, default=None)
 
+    mb = sub.add_parser(
+        "manifest-build",
+        help="Write a generation manifest binding one DB artifact to a media tree",
+    )
+    mb.add_argument("db_artifact", type=Path)
+    mb.add_argument("--media-dir", type=Path, default=None)
+    mb.add_argument("--unpacked-db", type=Path, default=None, help="Uncompressed DB for schema")
+    mb.add_argument("--out", type=Path, default=None, help="Default: <artifact>.manifest.json")
+    mb.add_argument("--correlation-id", default=None)
+
+    mv = sub.add_parser(
+        "manifest-verify",
+        help="Verify DB (+ media) against a generation manifest before restore",
+    )
+    mv.add_argument("db_artifact", type=Path)
+    mv.add_argument("manifest", type=Path)
+    mv.add_argument("--media-dir", type=Path, default=None)
+    mv.add_argument("--require-media", action="store_true")
+    mv.add_argument("--correlation-id", default=None)
+
     args = parser.parse_args(argv)
     cid = getattr(args, "correlation_id", None) or new_correlation_id()
 
@@ -901,6 +1235,48 @@ def _cli(argv: list[str] | None = None) -> int:
             print(f"REFUSED: {exc}", file=sys.stderr)
             return 1
         print(json.dumps({"ok": True, "schema_version": version, "correlation_id": cid}))
+        return 0
+
+    if args.cmd == "manifest-build":
+        try:
+            manifest = build_backup_manifest(
+                db_artifact=args.db_artifact,
+                media_dir=args.media_dir,
+                unpacked_db=args.unpacked_db,
+                correlation_id=cid,
+            )
+            out = args.out or manifest_path_for_backup(args.db_artifact)
+            write_backup_manifest(manifest, out)
+        except RecoveryError as exc:
+            print(f"REFUSED: {exc}", file=sys.stderr)
+            return 1
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "path": str(out),
+                    "generation_id": manifest["generation_id"],
+                    "schema_version": manifest.get("schema_version"),
+                    "media_file_count": manifest["media"]["file_count"],
+                    "correlation_id": cid,
+                }
+            )
+        )
+        return 0
+
+    if args.cmd == "manifest-verify":
+        try:
+            summary = verify_backup_set(
+                db_artifact=args.db_artifact,
+                manifest=args.manifest,
+                media_dir=args.media_dir,
+                require_media=args.require_media,
+                correlation_id=cid,
+            )
+        except RecoveryError as exc:
+            print(f"REFUSED: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(summary, indent=2, sort_keys=True))
         return 0
 
     if args.cmd == "consistency":

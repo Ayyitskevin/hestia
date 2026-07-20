@@ -25,11 +25,14 @@ from hestia.recovery import (
     assert_restorable_backup,
     assert_safe_restore_target,
     assert_sufficient_disk,
+    assert_writer_quiescent,
     check_db_media_consistency,
     is_production_data_path,
+    load_backup_manifest,
     media_checksum_map,
     media_inventory,
     structured_diag,
+    verify_backup_set,
     verify_restored_database,
 )
 from hestia.storage import LocalStorage
@@ -110,20 +113,30 @@ def _restore(
     *,
     backup_dir: Path | None = None,
     allow_production: bool = False,
-    force: bool = False,
+    force_live_wal: bool = False,
+    media_dir: Path | None = None,
+    manifest: Path | None = None,
+    require_manifest: bool = False,
 ) -> subprocess.CompletedProcess:
     env = {**os.environ, "HESTIA_DATA_DIR": str(data_dir)}
     # Never inherit a production-restore override unless the test asks for it.
     env.pop("HESTIA_ALLOW_PRODUCTION_RESTORE", None)
+    env.pop("HESTIA_REQUIRE_BACKUP_MANIFEST", None)
     if allow_production:
         env["HESTIA_ALLOW_PRODUCTION_RESTORE"] = "1"
     if backup_dir is not None:
         env["HESTIA_BACKUP_DIR"] = str(backup_dir)
+    if media_dir is not None:
+        env["HESTIA_MEDIA_DIR"] = str(media_dir)
     args = ["bash", str(RESTORE_SH), str(artifact)]
-    if force:
-        args.append("--force")
+    if force_live_wal:
+        args.append("--force-live-wal")
     if allow_production:
         args.append("--allow-production")
+    if manifest is not None:
+        args.extend(["--manifest", str(manifest)])
+    if require_manifest:
+        args.append("--require-manifest")
     return subprocess.run(args, cwd=REPO, env=env, capture_output=True, text=True)
 
 
@@ -674,3 +687,204 @@ def test_recovery_cli_verify_and_check_target(tmp_path):
     )
     assert ok2.returncode == 0, ok2.stderr
     assert ok.returncode == 0
+
+
+# ── Fail-closed schema queries + generation manifests ───────────────────────
+
+
+def test_malformed_images_table_fails_verification_not_empty_clean(tmp_path):
+    """Expected-table query failure must not look like a clean empty studio."""
+    db = tmp_path / "hestia.db"
+    init_db(db)
+    conn = connect(db)
+    create_tenant(conn, name="Broken Schema Studio", shoot_type="other")
+    # Drop images so the expected query fails (malformed/missing table).
+    conn.execute("DROP TABLE images")
+    conn.commit()
+    conn.close()
+    report = verify_restored_database(db, media_dir=tmp_path / "media")
+    assert report.ok is False
+    assert any("schema_query" in f for f in report.failures)
+    # Not a silent zero-tenant clean result after swallow — tenants still readable,
+    # but images path must fail closed.
+    assert any("images" in f for f in report.failures)
+
+
+def test_db_media_refs_raises_not_empty_on_missing_table(tmp_path):
+    db = tmp_path / "x.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE notes (id INTEGER)")
+    conn.commit()
+    with pytest.raises(RecoveryError, match="schema_query:images"):
+        from hestia.recovery import db_media_refs
+
+        db_media_refs(conn)
+    conn.close()
+
+
+def test_consistency_query_error_marks_not_ok(tmp_path):
+    db = tmp_path / "hestia.db"
+    init_db(db)
+    conn = connect(db)
+    create_tenant(conn, name="T", shoot_type="other")
+    conn.execute("DROP TABLE images")
+    conn.commit()
+    media = tmp_path / "media"
+    media.mkdir()
+    report = check_db_media_consistency(conn, media)
+    conn.close()
+    assert report.ok is False
+    assert report.query_errors
+    assert any("schema_query" in e for e in report.query_errors)
+
+
+def test_backup_manifest_binds_generation_and_refuses_cross_media(tmp_path):
+    data = tmp_path / "data"
+    media = data / "media"
+    _seed_db_with_media(data / "hestia.db", media)
+    artifact = _backup(data, tmp_path / "bak")
+    # backup.sh now writes a sidecar; if helper only used online backup without script,
+    # build explicitly.
+    sidecar = Path(str(artifact) + ".manifest.json")
+    if not sidecar.is_file():
+        # _backup uses backup.sh which should write it — assert.
+        pass
+    assert sidecar.is_file(), "backup.sh must write generation manifest"
+    manifest = load_backup_manifest(sidecar)
+    assert manifest["generation_id"]
+    assert manifest["db"]["sha256"]
+    assert manifest["media"]["file_count"] >= 1
+    # Happy path: verify generation.
+    summary = verify_backup_set(
+        db_artifact=artifact, manifest=manifest, media_dir=media, require_media=True
+    )
+    assert summary["ok"] is True
+    assert summary["generation_id"] == manifest["generation_id"]
+
+    # Cross-generation: swap media blob content → checksum mismatch refused.
+    first = next(iter(manifest["media"]["files"]))
+    path = media / first
+    path.write_bytes(b"\x00" * max(1, path.stat().st_size))
+    with pytest.raises(RecoveryError, match="media_checksum_mismatch"):
+        verify_backup_set(
+            db_artifact=artifact, manifest=manifest, media_dir=media, require_media=True
+        )
+
+
+def test_restore_refuses_corrupt_manifest_leaves_target(tmp_path):
+    target = tmp_path / "target"
+    before = _seed_target_with_tenant(target)
+    source = tmp_path / "src"
+    source.mkdir()
+    _seed_db_with_media(source / "hestia.db", source / "media")
+    artifact = _backup(source, tmp_path / "bak")
+    bad = tmp_path / "bad.manifest.json"
+    bad.write_text("{not json", encoding="utf-8")
+    _quiesce_db(target / "hestia.db")
+    result = _restore(
+        target,
+        artifact,
+        backup_dir=tmp_path / "safety",
+        manifest=bad,
+        require_manifest=True,
+        media_dir=source / "media",
+    )
+    assert result.returncode != 0
+    assert (target / "hestia.db").read_bytes() == before
+
+
+def test_restore_refuses_missing_manifest_when_required(tmp_path):
+    target = tmp_path / "target"
+    before = _seed_target_with_tenant(target)
+    source = tmp_path / "src"
+    source.mkdir()
+    init_db(source / "hestia.db")
+    conn = connect(source / "hestia.db")
+    create_tenant(conn, name="OnlyDB", shoot_type="other")
+    conn.commit()
+    conn.close()
+    # Raw online backup without going through backup.sh (no manifest).
+    bak = tmp_path / "bak"
+    bak.mkdir()
+    # Use online backup API only (bypass scripts/backup.sh) so no manifest exists.
+    raw = bak / "hestia-manual.db"
+    src = sqlite3.connect(source / "hestia.db")
+    dst = sqlite3.connect(raw)
+    with dst:
+        src.backup(dst)
+    dst.close()
+    src.close()
+    artifact = bak / "hestia-manual.db.gz"
+    with open(raw, "rb") as fh, gzip.open(artifact, "wb") as out:
+        out.write(fh.read())
+    _quiesce_db(target / "hestia.db")
+    result = _restore(
+        target, artifact, backup_dir=tmp_path / "safety", require_manifest=True
+    )
+    assert result.returncode != 0
+    assert "manifest" in (result.stdout + result.stderr).lower()
+    assert (target / "hestia.db").read_bytes() == before
+
+
+def test_restore_refuses_plain_force_for_live_wal(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir()
+    init_db(target / "hestia.db")
+    # Create a fake WAL sidecar.
+    (target / "hestia.db-wal").write_bytes(b"wal")
+    source = tmp_path / "src"
+    source.mkdir()
+    init_db(source / "hestia.db")
+    conn = connect(source / "hestia.db")
+    create_tenant(conn, name="S", shoot_type="other")
+    conn.commit()
+    conn.close()
+    artifact = _backup(source, tmp_path / "bak")
+    # --force must exit 2 with guidance to --force-live-wal
+    env = {**os.environ, "HESTIA_DATA_DIR": str(target)}
+    env.pop("HESTIA_ALLOW_PRODUCTION_RESTORE", None)
+    r = subprocess.run(
+        ["bash", str(RESTORE_SH), str(artifact), "--force"],
+        cwd=REPO,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode != 0
+    assert "force-live-wal" in (r.stdout + r.stderr).lower()
+    # Without override, wal still refuses.
+    with pytest.raises(RecoveryError, match="live"):
+        assert_writer_quiescent(target)
+    # Loud override accepted by helper.
+    assert_writer_quiescent(target, force_live_wal=True)
+
+
+def test_idempotent_reverification_same_manifest(tmp_path):
+    data = tmp_path / "data"
+    media = data / "media"
+    _seed_db_with_media(data / "hestia.db", media)
+    artifact = _backup(data, tmp_path / "bak")
+    sidecar = Path(str(artifact) + ".manifest.json")
+    m = load_backup_manifest(sidecar)
+    s1 = verify_backup_set(db_artifact=artifact, manifest=m, media_dir=media)
+    s2 = verify_backup_set(db_artifact=artifact, manifest=m, media_dir=media)
+    assert s1["generation_id"] == s2["generation_id"]
+    assert s1["ok"] and s2["ok"]
+
+
+def test_restore_drill_reports_generation_manifest(tmp_path):
+    report = tmp_path / "drill-report.json"
+    env = {**os.environ, "HESTIA_DRILL_REPORT": str(report)}
+    env.pop("HESTIA_ALLOW_PRODUCTION_RESTORE", None)
+    result = subprocess.run(
+        ["bash", str(DRILL_SH)],
+        cwd=REPO,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stdout + "\n" + result.stderr
+    combined = result.stdout + result.stderr
+    assert "generation_manifest=ok" in combined or "generation manifest" in combined.lower()
+    assert "SYNTHETIC" in combined

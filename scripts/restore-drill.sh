@@ -68,9 +68,9 @@ conn.close()
 print(f"seeded tenant={tenant['id']} gallery={g['id']} image={img['id']} key={img['storage_key']}")
 PY
 
-echo "→ backup source"
-HESTIA_DATA_DIR="$SOURCE" HESTIA_BACKUP_DIR="$ARTIFACTS" HESTIA_BACKUP_KEEP=2 \
-  bash scripts/backup.sh
+echo "→ backup source (+ generation manifest)"
+HESTIA_DATA_DIR="$SOURCE" HESTIA_BACKUP_DIR="$ARTIFACTS" HESTIA_MEDIA_DIR="$MEDIA_SRC" \
+  HESTIA_BACKUP_KEEP=2 bash scripts/backup.sh
 
 shopt -s nullglob
 backups=("$ARTIFACTS"/hestia-*.db.gz)
@@ -79,7 +79,14 @@ if [[ "${#backups[@]}" -ne 1 ]]; then
   exit 1
 fi
 COPIED="$ROOT/copied-backup.db.gz"
+COPIED_MANIFEST="$ROOT/copied-backup.db.gz.manifest.json"
 cp "${backups[0]}" "$COPIED"
+if [ ! -f "${backups[0]}.manifest.json" ]; then
+  echo "FAIL: backup did not write generation manifest" >&2
+  exit 1
+fi
+cp "${backups[0]}.manifest.json" "$COPIED_MANIFEST"
+echo "generation manifest present: $(python3 -c "import json;print(json.load(open('$COPIED_MANIFEST'))['generation_id'])")"
 
 # Off-site media half of the story: copy media into the restore target as a
 # stand-in for rclone restore of the media tree (no real remote required).
@@ -124,11 +131,11 @@ grep -q "production\|refusing restore" "$ROOT/refuse.err" || {
 }
 echo "production refusal OK"
 
-echo "→ restore into scratch target"
+echo "→ restore into scratch target (generation-gated)"
 # HESTIA_BACKUP_DIR may point off-box for archives; pre-restore safety always lands
 # under $HESTIA_DATA_DIR/backups (same filesystem as hestia.db).
 HESTIA_DATA_DIR="$TARGET" HESTIA_BACKUP_DIR="$SAFETY" HESTIA_MEDIA_DIR="$MEDIA_DST" \
-  bash scripts/restore.sh "$COPIED"
+  bash scripts/restore.sh "$COPIED" --manifest "$COPIED_MANIFEST" --require-manifest
 
 safety_copies=("$TARGET"/backups/pre-restore-*.db)
 if [[ "${#safety_copies[@]}" -ne 1 ]]; then
@@ -193,6 +200,7 @@ print(
     f"restore drill OK: integrity=ok, migration={report['schema_version']}, "
     f"tenants={report['tenant_count']}, galleries={report['gallery_count']}, "
     f"images={report['image_count']}, media_ok=1, safety_copy=ok, "
+    f"generation_manifest=ok, "
     f"synthetic_elapsed_ms={synthetic_elapsed_ms}, verify_elapsed_ms={report['elapsed_ms']}, "
     f"artifact_age_s={report['rpo_seconds']}, measurement_kind={report['measurement_kind']}, "
     f"correlation_id={cid} "
