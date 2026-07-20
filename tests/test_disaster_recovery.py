@@ -543,8 +543,15 @@ def test_interrupted_restore_marker_and_live_db_intact(tmp_path):
     source.mkdir()
     _seed_db_with_media(source / "hestia.db", source / "media", name="After Repair")
     artifact = _backup(source, tmp_path / "bak")
+    # Generation lists media — restore target must receive that media tree first.
+    shutil.copytree(source / "media", target / "media")
     _quiesce_db(target / "hestia.db")
-    result = _restore(target, artifact, backup_dir=tmp_path / "safety")
+    result = _restore(
+        target,
+        artifact,
+        backup_dir=tmp_path / "safety",
+        media_dir=target / "media",
+    )
     assert result.returncode == 0, result.stderr
     assert not (target / ".restore-in-progress").exists()
     names = {r[0] for r in sqlite3.connect(db).execute("SELECT name FROM tenants")}
@@ -888,3 +895,51 @@ def test_restore_drill_reports_generation_manifest(tmp_path):
     combined = result.stdout + result.stderr
     assert "generation_manifest=ok" in combined or "generation manifest" in combined.lower()
     assert "SYNTHETIC" in combined
+
+
+def test_restore_refuses_missing_media_dir_when_manifest_lists_media(tmp_path):
+    """Manifest with media cannot DB-only-gate: missing media dir refuses; target untouched."""
+    target = tmp_path / "target"
+    before = _seed_target_with_tenant(target, name="Pre-Media-Gate")
+    source = tmp_path / "src"
+    source.mkdir()
+    _seed_db_with_media(source / "hestia.db", source / "media", name="With Media")
+    artifact = _backup(source, tmp_path / "bak")
+    sidecar = Path(str(artifact) + ".manifest.json")
+    assert sidecar.is_file()
+    manifest = load_backup_manifest(sidecar)
+    assert int(manifest["media"]["file_count"]) >= 1
+    assert manifest["media"]["files"]
+
+    _quiesce_db(target / "hestia.db")
+    # Point media at a path that does not exist — generation lists media files.
+    missing_media = tmp_path / "no-such-media-tree"
+    assert not missing_media.exists()
+    result = _restore(
+        target,
+        artifact,
+        backup_dir=tmp_path / "safety",
+        media_dir=missing_media,
+        manifest=sidecar,
+        require_manifest=True,
+    )
+    assert result.returncode != 0, result.stdout + result.stderr
+    combined = (result.stdout + result.stderr).lower()
+    assert "media" in combined
+    # Live target must remain byte-identical (no rename / no half-apply).
+    assert (target / "hestia.db").read_bytes() == before
+    assert not list((target / "backups").glob("pre-restore-*.db")) if (target / "backups").exists() else True
+    assert not (target / ".restore-in-progress").exists()
+
+
+def test_verify_backup_set_refuses_media_dir_none_when_manifest_lists_media(tmp_path):
+    """Python gate: listed media + media_dir=None fails even without require_media=True."""
+    data = tmp_path / "data"
+    media = data / "media"
+    _seed_db_with_media(data / "hestia.db", media)
+    artifact = _backup(data, tmp_path / "bak")
+    sidecar = Path(str(artifact) + ".manifest.json")
+    m = load_backup_manifest(sidecar)
+    assert int(m["media"]["file_count"]) >= 1
+    with pytest.raises(RecoveryError, match="media_dir_required"):
+        verify_backup_set(db_artifact=artifact, manifest=m, media_dir=None)

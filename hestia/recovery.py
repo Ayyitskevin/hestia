@@ -829,8 +829,12 @@ def verify_backup_set(
 
     media_spec = manifest["media"]
     files: dict[str, Any] = media_spec.get("files") or {}
-    if require_media and int(media_spec.get("file_count") or 0) > 0 and media_dir is None:
+    listed = int(media_spec.get("file_count") or 0) or len(files)
+    # Fail-closed: a generation that recorded media cannot be verified as OK without
+    # a media tree — even when the caller omitted require_media.
+    if listed > 0 and media_dir is None:
         raise RecoveryError("manifest.media_dir_required")
+    # require_media with empty listed media is a no-op on media; still ok.
 
     if media_dir is not None:
         root = Path(media_dir)

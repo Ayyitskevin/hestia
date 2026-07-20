@@ -133,8 +133,25 @@ if [ -n "$REQUIRE_MANIFEST" ] && [ -z "$MANIFEST" ]; then
   exit 1
 fi
 if [ -n "$MANIFEST" ]; then
+  # If this generation listed media, media must be proven — never DB-only-gate and swap.
+  MEDIA_REQUIRED="$(python3 - "$MANIFEST" <<'PY'
+import json, sys
+from pathlib import Path
+m = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+media = m.get("media") or {}
+files = media.get("files") or {}
+n = int(media.get("file_count") or 0) or len(files)
+print("1" if n > 0 else "0")
+PY
+)"
   MEDIA_ARGS=()
-  if [ -d "$MEDIA_DIR" ]; then
+  if [ "$MEDIA_REQUIRED" = "1" ]; then
+    if [ ! -d "$MEDIA_DIR" ]; then
+      echo "ERROR: generation manifest lists media but media dir missing or not a directory: $MEDIA_DIR — live database untouched (correlation_id=$CORRELATION_ID)" >&2
+      exit 1
+    fi
+    MEDIA_ARGS=(--media-dir "$MEDIA_DIR" --require-media)
+  elif [ -d "$MEDIA_DIR" ]; then
     MEDIA_ARGS=(--media-dir "$MEDIA_DIR")
   fi
   if ! python3 -m hestia.recovery manifest-verify "$SRC" "$MANIFEST" \
