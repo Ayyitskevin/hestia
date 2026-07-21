@@ -11,6 +11,10 @@ with production-path refusal, integrity checks, and post-restore verification.
   against the live WAL database, no CLI dependency, no app downtime.
 - Backups land on the shared volume at `/data/backups/hestia-<stamp>.db.gz`,
   newest `HESTIA_BACKUP_KEEP` kept (default 14).
+- Each artifact gets a **generation manifest** sidecar:
+  `hestia-<stamp>.db.gz.manifest.json` — binds that DB file's SHA-256/size to the
+  media inventory (relative paths + SHA-256/size) under one `generation_id`. No
+  client PII or secrets. Written by `backup.sh` / `python -m hestia.recovery manifest-build`.
 - **Failure is loud**: a failed backup (missing DB, bad data dir) crash-loops the
   container. If `docker compose ps` shows `backup` restarting, investigate — do
   not ignore it.
@@ -134,13 +138,20 @@ Scratch and staging restores never need the override. The automated drill
    ```
    Safety rails, in order:
    - production-path refusal (see above)
-   - refuses while the app looks live (`hestia.db-wal` present) unless `--force`
+   - refuses while the app looks live (`hestia.db-wal` present) unless the loud
+     override **`--force-live-wal`** (plain `--force` is rejected — it must not mean
+     “the app is definitely stopped”)
+   - generation manifest (auto sidecar, `--manifest PATH`, or `--require-manifest`):
+     DB + media must match **one** `generation_id` before any live rename; refuse
+     missing/corrupt/size/checksum/cross-generation drift with target untouched
    - missing / unreadable backup → exit non-zero, **live DB untouched**
    - corrupt gzip → exit non-zero, **live DB untouched**
    - empty backup / bare SQLite that passes `PRAGMA integrity_check` but is not Hestia
      (no `schema_migrations`) → refused **before** any live rename
    - unsupported / unknown schema version → refused **before** any live rename
      (`assert_restorable_backup` / `python -m hestia.recovery gate-backup`)
+   - post-restore verify is **fail-closed**: expected-table errors become
+     `schema_query:…` reason codes (never an empty “clean” studio after a swallow)
    - disk preflight: refuses when free space cannot hold the unpacked backup + safety copy
    - writes via same-filesystem temp (`.restore-<stamp>.db`) + atomic `mv`
    - pre-restore safety copy always under `$HESTIA_DATA_DIR/backups/` (same FS as the
@@ -150,9 +161,13 @@ Scratch and staging restores never need the override. The automated drill
      the artifact only (no full path / client path leakage)
    - every run prints a `correlation_id=` you can grep in logs
 4. Restore **media** for the same recovery point (rclone pull, or object-store already
-   holds it when `HESTIA_STORAGE_BACKEND=s3`).
+   holds it when `HESTIA_STORAGE_BACKEND=s3`) so it matches the generation manifest.
 5. Verify before opening the door:
    ```sh
+   python -m hestia.recovery manifest-verify \
+     /data/backups/hestia-<stamp>.db.gz \
+     /data/backups/hestia-<stamp>.db.gz.manifest.json \
+     --media-dir /data/media --require-media
    python -m hestia.recovery verify /data/hestia.db \
      --media-dir /data/media \
      --backup /data/backups/hestia-<stamp>.db.gz \
@@ -160,8 +175,8 @@ Scratch and staging restores never need the override. The automated drill
      --json-out /tmp/hestia-verify.json
    ```
    Success looks like: `integrity_check=ok`, `ok=true`, empty `missing_blobs`, a
-   `representative_gallery` with `first_blob_present=true`, and printed
-   `rto_ms` / `rpo_s` fields.
+   `representative_gallery` with `first_blob_present=true`, generation manifest OK,
+   and printed `elapsed_ms` / `artifact_age_s` with `measurement_kind` (synthetic in CI).
 6. Start and smoke:
    ```sh
    docker compose start hestia

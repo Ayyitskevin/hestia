@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # Restore the Hestia database from a backup produced by scripts/backup.sh.
 #
-#   HESTIA_DATA_DIR=/path/to/scratch bash scripts/restore.sh <backup.db[.gz]> [--force] [--allow-production]
+#   HESTIA_DATA_DIR=/path/to/scratch bash scripts/restore.sh <backup.db[.gz]> \
+#       [--allow-production] [--force-live-wal] [--manifest PATH] [--require-manifest]
 #
 # Safety rails, in order:
 #   0. refuses production-like data dirs (incl. symlink→prod, …/hestia/data) unless
 #      --allow-production or HESTIA_ALLOW_PRODUCTION_RESTORE=1
-#   1. refuses while the app looks live (hestia.db-wal present) unless --force
+#   1. refuses while the app looks live (hestia.db-wal present) unless the loud,
+#      separately named --force-live-wal override (plain --force is refused)
 #   2. refuses missing / unreadable backup files before any write
-#   3. preflight: enough free disk (uses gzip uncompressed size when available)
-#   4. unpacks to a same-FS temp; integrity + Hestia schema gate BEFORE live touch
-#   5. writes .restore-in-progress only after the gate passes (no false "interrupted")
-#   6. pre-restore safety copy always on the same filesystem as hestia.db
-#   7. atomic mv of temp → live DB
+#   3. when a generation manifest is present (or --require-manifest), verifies
+#      DB (+ media) checksums for one generation before any live rename
+#   4. preflight: enough free disk (uses gzip uncompressed size when available)
+#   5. unpacks to a same-FS temp; integrity + Hestia schema gate BEFORE live touch
+#   6. writes .restore-in-progress only after the gate passes (no false "interrupted")
+#   7. pre-restore safety copy always on the same filesystem as hestia.db
+#   8. atomic mv of temp → live DB
 # Full drill: docs/backup-restore.md · automated: scripts/restore-drill.sh
 set -euo pipefail
 
@@ -21,16 +25,39 @@ DB="$DATA_DIR/hestia.db"
 # Operator backup archive location (may be off-box). Safety copies stay with the DB.
 OUT_DIR="${HESTIA_BACKUP_DIR:-$DATA_DIR/backups}"
 SAFETY_DIR="$DATA_DIR/backups"
+MEDIA_DIR="${HESTIA_MEDIA_DIR:-$DATA_DIR/media}"
 CORRELATION_ID="${HESTIA_RECOVERY_CORRELATION_ID:-$(python3 -c 'import uuid; print(uuid.uuid4().hex[:12])')}"
 export HESTIA_RECOVERY_CORRELATION_ID="$CORRELATION_ID"
 
 SRC=""
-FORCE=""
+FORCE_LIVE_WAL=""
 ALLOW_PRODUCTION=""
-for arg in "$@"; do
+MANIFEST=""
+REQUIRE_MANIFEST="${HESTIA_REQUIRE_BACKUP_MANIFEST:-}"
+args=("$@")
+i=0
+while [ "$i" -lt "${#args[@]}" ]; do
+  arg="${args[$i]}"
   case "$arg" in
-    --force) FORCE="--force" ;;
+    --force)
+      echo "ERROR: --force is no longer accepted for live-WAL override (correlation_id=$CORRELATION_ID)." >&2
+      echo "       Stop the app, or pass the loud override --force-live-wal (app may still be live)." >&2
+      exit 2
+      ;;
+    --force-live-wal) FORCE_LIVE_WAL="--force-live-wal" ;;
     --allow-production) ALLOW_PRODUCTION="--allow-production" ;;
+    --require-manifest) REQUIRE_MANIFEST=1 ;;
+    --manifest)
+      i=$((i + 1))
+      if [ "$i" -ge "${#args[@]}" ]; then
+        echo "ERROR: --manifest requires a path" >&2
+        exit 2
+      fi
+      MANIFEST="${args[$i]}"
+      ;;
+    --manifest=*)
+      MANIFEST="${arg#--manifest=}"
+      ;;
     -*)
       echo "ERROR: unknown flag $arg" >&2
       exit 2
@@ -43,9 +70,14 @@ for arg in "$@"; do
       fi
       ;;
   esac
+  i=$((i + 1))
 done
 
-[ -n "$SRC" ] || { echo "usage: restore.sh <backup.db[.gz]> [--force] [--allow-production]" >&2; exit 2; }
+if [ -z "${MANIFEST}" ] && [ -n "${HESTIA_BACKUP_MANIFEST:-}" ]; then
+  MANIFEST="$HESTIA_BACKUP_MANIFEST"
+fi
+
+[ -n "$SRC" ] || { echo "usage: restore.sh <backup.db[.gz]> [--allow-production] [--force-live-wal] [--manifest PATH] [--require-manifest]" >&2; exit 2; }
 [ -f "$SRC" ] || { echo "ERROR: no backup at $SRC (correlation_id=$CORRELATION_ID)" >&2; exit 1; }
 [ -r "$SRC" ] || { echo "ERROR: backup not readable: $SRC (correlation_id=$CORRELATION_ID)" >&2; exit 1; }
 
@@ -74,11 +106,61 @@ structured_diag(
 print(f"restore target accepted: {target} (correlation_id={cid})")
 PY
 
-# A WAL sidecar means the app is running or died mid-write. Stop it first
-# (docker compose stop hestia) so the pre-restore copy is complete and coherent.
-if [ -e "$DB-wal" ] && [ "$FORCE" != "--force" ]; then
-  echo "ERROR: $DB-wal exists — the app looks live. Stop it first, or pass --force. (correlation_id=$CORRELATION_ID)" >&2
+# Live-writer / WAL quiescence — plain --force is rejected above.
+python3 - "$DATA_DIR" "$FORCE_LIVE_WAL" "$CORRELATION_ID" <<'PY'
+import sys
+from hestia.recovery import RecoveryError, assert_writer_quiescent
+
+data_dir, force_flag, cid = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    assert_writer_quiescent(
+        data_dir,
+        force_live_wal=(force_flag == "--force-live-wal"),
+        correlation_id=cid,
+    )
+except RecoveryError as exc:
+    print(f"ERROR: {exc} (correlation_id={cid})", file=sys.stderr)
+    sys.exit(1)
+print(f"writer quiescence ok (correlation_id={cid})")
+PY
+
+# Generation manifest: auto-discover sidecar, or require when asked.
+if [ -z "$MANIFEST" ] && [ -f "${SRC}.manifest.json" ]; then
+  MANIFEST="${SRC}.manifest.json"
+fi
+if [ -n "$REQUIRE_MANIFEST" ] && [ -z "$MANIFEST" ]; then
+  echo "ERROR: --require-manifest set but no manifest next to $SRC (correlation_id=$CORRELATION_ID)" >&2
   exit 1
+fi
+if [ -n "$MANIFEST" ]; then
+  # If this generation listed media, media must be proven — never DB-only-gate and swap.
+  MEDIA_REQUIRED="$(python3 - "$MANIFEST" <<'PY'
+import json, sys
+from pathlib import Path
+m = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+media = m.get("media") or {}
+files = media.get("files") or {}
+n = int(media.get("file_count") or 0) or len(files)
+print("1" if n > 0 else "0")
+PY
+)"
+  MEDIA_ARGS=()
+  if [ "$MEDIA_REQUIRED" = "1" ]; then
+    if [ ! -d "$MEDIA_DIR" ]; then
+      echo "ERROR: generation manifest lists media but media dir missing or not a directory: $MEDIA_DIR — live database untouched (correlation_id=$CORRELATION_ID)" >&2
+      exit 1
+    fi
+    MEDIA_ARGS=(--media-dir "$MEDIA_DIR" --require-media)
+  elif [ -d "$MEDIA_DIR" ]; then
+    MEDIA_ARGS=(--media-dir "$MEDIA_DIR")
+  fi
+  if ! python3 -m hestia.recovery manifest-verify "$SRC" "$MANIFEST" \
+      "${MEDIA_ARGS[@]}" \
+      --correlation-id "$CORRELATION_ID"; then
+    echo "ERROR: generation manifest verification refused — live database untouched (correlation_id=$CORRELATION_ID)" >&2
+    exit 1
+  fi
+  echo "generation manifest OK (correlation_id=$CORRELATION_ID)"
 fi
 
 mkdir -p "$OUT_DIR" "$SAFETY_DIR" "$DATA_DIR"
