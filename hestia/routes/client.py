@@ -23,6 +23,7 @@ from ..proofing import (
     favorite_image_ids,
     list_favorites,
     selection_packet,
+    set_favorite,
     toggle_favorite,
 )
 from ..ratelimit import enforce
@@ -33,6 +34,7 @@ from ..vision import alt_text_map
 from .deps import db_conn, render, settings_of, storage_of
 
 router = APIRouter()
+_SQLITE_MAX_ROW_ID = (1 << 63) - 1
 
 
 def _resolve_unlocked(conn, request: Request, slug: str, gallery_slug: str):
@@ -43,6 +45,19 @@ def _resolve_unlocked(conn, request: Request, slug: str, gallery_slug: str):
         return tenant, None, False
     unlocked = not gallery["pin"] or request.cookies.get(f"g_{gallery['id']}") == gallery["pin"]
     return tenant, gallery, unlocked
+
+
+def _authorized_lightbox_image(value: str, image_ids: set[int]) -> int | None:
+    """Accept only a bounded ASCII image id already present in the rendered gallery."""
+    if not value or len(value) > 19 or not value.isascii() or not value.isdigit():
+        return None
+    image_id = int(value)
+    return image_id if _valid_image_id(image_id) and image_id in image_ids else None
+
+
+def _valid_image_id(image_id: int) -> bool:
+    """Keep untrusted path IDs within SQLite's positive signed row-id range."""
+    return 0 < image_id <= _SQLITE_MAX_ROW_ID
 
 
 def _hero_urls(conn, storage: Storage, tenant_id: str, image_ids: list[int]) -> list[dict]:
@@ -130,8 +145,18 @@ def client_gallery(request: Request, slug: str, gallery_slug: str):
         tenant, gallery, unlocked = _resolve_unlocked(conn, request, slug, gallery_slug)
         if not gallery:
             return render(request, "offer_missing.html", auth=None, status_code=404)
-        images = list_images(conn, gallery["id"], include_hidden=False) if unlocked else []
+        images = (
+            list_images(
+                conn,
+                gallery["id"],
+                include_hidden=False,
+                tenant_id=tenant["id"],
+            )
+            if unlocked
+            else []
+        )
         offer = None
+        lightbox_image_id = None
         if unlocked:
             record_gallery_view(conn, gallery["id"])      # client opened their proofing gallery
             from ..sales import get_offer_for_gallery, offer_public_url
@@ -139,24 +164,80 @@ def client_gallery(request: Request, slug: str, gallery_slug: str):
             o = get_offer_for_gallery(conn, tenant["id"], gallery["id"])
             if o:
                 offer = offer_public_url(settings_of(request), slug, o["token"])
-            favorites = favorite_image_ids(conn, gallery["id"], tenant_id=tenant["id"])
-            comments = comments_by_image(conn, gallery["id"], tenant_id=tenant["id"])
+            image_ids = {image["id"] for image in images}
+            favorites = favorite_image_ids(
+                conn, gallery["id"], tenant_id=tenant["id"]
+            ) & image_ids
+            comments = {
+                image_id: rows
+                for image_id, rows in comments_by_image(
+                    conn, gallery["id"], tenant_id=tenant["id"]
+                ).items()
+                if image_id in image_ids
+            }
             packet = selection_packet(conn, tenant["id"], gallery["id"])
-            alts = alt_text_map(conn, gallery["id"])      # AI captions for accessible/SEO alt text
+            alts = {
+                image_id: alt
+                for image_id, alt in alt_text_map(
+                    conn, gallery["id"], tenant_id=tenant["id"]
+                ).items()
+                if image_id in image_ids
+            }
+            lightbox_image_id = _authorized_lightbox_image(
+                request.query_params.get("lightbox", ""), image_ids
+            )
     return render(request, "client_gallery.html", auth=None, tenant=tenant, gallery=gallery,
                   images=images, unlocked=unlocked, storage=storage_of(request), offer_url=offer,
-                  favorites=favorites, comments=comments, selection_packet=packet, alts=alts)
+                  favorites=favorites, comments=comments, selection_packet=packet, alts=alts,
+                  lightbox_image_id=lightbox_image_id)
 
 
 @router.post("/g/{slug}/{gallery_slug}/favorite/{image_id}")
-def client_favorite(request: Request, slug: str, gallery_slug: str, image_id: int):
+def client_favorite(
+    request: Request,
+    slug: str,
+    gallery_slug: str,
+    image_id: int,
+    favorite: str | None = Form(None),
+    return_to: str = Form(""),
+):
     """Toggle a client favorite (only on an unlocked gallery)."""
     enforce(request, "checkout")
+    base = f"/g/{slug}/{gallery_slug}"
+    if not _valid_image_id(image_id):
+        return RedirectResponse(base, status_code=303)
+    result = None
     with db_conn(request) as conn:
         tenant, gallery, unlocked = _resolve_unlocked(conn, request, slug, gallery_slug)
         if gallery and unlocked:
-            toggle_favorite(conn, tenant_id=tenant["id"], gallery_id=gallery["id"], image_id=image_id)
-    return RedirectResponse(f"/g/{slug}/{gallery_slug}#img-{image_id}", status_code=303)
+            if favorite == "1":
+                result = set_favorite(
+                    conn,
+                    tenant_id=tenant["id"],
+                    gallery_id=gallery["id"],
+                    image_id=image_id,
+                    favorited=True,
+                )
+            elif favorite == "0":
+                result = set_favorite(
+                    conn,
+                    tenant_id=tenant["id"],
+                    gallery_id=gallery["id"],
+                    image_id=image_id,
+                    favorited=False,
+                )
+            elif favorite is None:  # Preserve existing callers while new forms post intent.
+                result = toggle_favorite(
+                    conn,
+                    tenant_id=tenant["id"],
+                    gallery_id=gallery["id"],
+                    image_id=image_id,
+                )
+    if result is None:
+        return RedirectResponse(base, status_code=303)
+    if result is not None and return_to == "lightbox":
+        return RedirectResponse(f"{base}?lightbox={image_id}#img-{image_id}", status_code=303)
+    return RedirectResponse(f"{base}#img-{image_id}", status_code=303)
 
 
 @router.post("/g/{slug}/{gallery_slug}/submit")
@@ -189,15 +270,30 @@ def client_submit_selections(request: Request, slug: str, gallery_slug: str):
 
 @router.post("/g/{slug}/{gallery_slug}/comment/{image_id}")
 def client_comment(request: Request, slug: str, gallery_slug: str, image_id: int,
-                   body: str = Form(""), author_name: str = Form("")):
+                   body: str = Form(""), author_name: str = Form(""),
+                   return_to: str = Form("")):
     """Leave a client comment on a frame (only on an unlocked gallery)."""
     enforce(request, "checkout")
+    base = f"/g/{slug}/{gallery_slug}"
+    if not _valid_image_id(image_id):
+        return RedirectResponse(base, status_code=303)
+    comment = None
     with db_conn(request) as conn:
         tenant, gallery, unlocked = _resolve_unlocked(conn, request, slug, gallery_slug)
         if gallery and unlocked:
-            add_comment(conn, tenant_id=tenant["id"], gallery_id=gallery["id"],
-                        image_id=image_id, body=body, author_name=author_name)
-    return RedirectResponse(f"/g/{slug}/{gallery_slug}#img-{image_id}", status_code=303)
+            comment = add_comment(
+                conn,
+                tenant_id=tenant["id"],
+                gallery_id=gallery["id"],
+                image_id=image_id,
+                body=body,
+                author_name=author_name,
+            )
+    if comment is None:
+        return RedirectResponse(base, status_code=303)
+    if comment and return_to == "lightbox":
+        return RedirectResponse(f"{base}?lightbox={image_id}#img-{image_id}", status_code=303)
+    return RedirectResponse(f"{base}#img-{image_id}", status_code=303)
 
 
 @router.post("/g/{slug}/{gallery_slug}/pin")

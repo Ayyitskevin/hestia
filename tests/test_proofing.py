@@ -12,6 +12,7 @@ from hestia.galleries import (
     create_gallery,
     get_gallery,
     publish_gallery,
+    set_image_hidden,
     submit_selections,
 )
 from hestia.proofing import (
@@ -24,6 +25,7 @@ from hestia.proofing import (
     list_favorites,
     selection_packet,
     selection_packet_text,
+    set_favorite,
     toggle_favorite,
 )
 from hestia.tenants import create_tenant
@@ -52,6 +54,106 @@ def test_toggle_favorite_idempotent(conn, storage):
     # and back on
     assert toggle_favorite(conn, tenant_id=t["id"], gallery_id=g["id"], image_id=img["id"]) is True
     assert favorite_count(conn, g["id"]) == 1
+
+
+def test_set_favorite_repeats_desired_state_without_reopening_packet(conn, storage):
+    t = _tenant(conn)
+    g = create_gallery(conn, tenant_id=t["id"], title="G")
+    img = _img(conn, storage, t["id"], g["id"])
+
+    assert set_favorite(
+        conn, tenant_id=t["id"], gallery_id=g["id"], image_id=img["id"], favorited=True
+    ) is True
+    assert set_favorite(
+        conn, tenant_id=t["id"], gallery_id=g["id"], image_id=img["id"], favorited=True
+    ) is True
+    assert favorite_count(conn, g["id"], tenant_id=t["id"]) == 1
+
+    assert submit_selections(conn, tenant_id=t["id"], gallery_id=g["id"]) is True
+    first_submission = get_gallery(conn, t["id"], g["id"])["selections_submitted_at"]
+    assert set_favorite(
+        conn, tenant_id=t["id"], gallery_id=g["id"], image_id=img["id"], favorited=True
+    ) is True
+    assert get_gallery(conn, t["id"], g["id"])["selections_submitted_at"] == first_submission
+
+    assert set_favorite(
+        conn, tenant_id=t["id"], gallery_id=g["id"], image_id=img["id"], favorited=False
+    ) is False
+    assert get_gallery(conn, t["id"], g["id"])["selections_submitted_at"] is None
+    assert set_favorite(
+        conn, tenant_id=t["id"], gallery_id=g["id"], image_id=img["id"], favorited=False
+    ) is False
+    assert favorite_count(conn, g["id"], tenant_id=t["id"]) == 0
+
+    assert submit_selections(conn, tenant_id=t["id"], gallery_id=g["id"]) is True
+    second_submission = get_gallery(conn, t["id"], g["id"])["selections_submitted_at"]
+    assert set_favorite(
+        conn, tenant_id=t["id"], gallery_id=g["id"], image_id=img["id"], favorited=False
+    ) is False
+    assert get_gallery(conn, t["id"], g["id"])["selections_submitted_at"] == second_submission
+
+
+def test_set_favorite_rejects_hidden_cross_gallery_and_cross_tenant_images(
+    conn, storage
+):
+    first_tenant = _tenant(conn, "First")
+    second_tenant = _tenant(conn, "Second")
+    gallery = create_gallery(conn, tenant_id=first_tenant["id"], title="Primary")
+    other_gallery = create_gallery(conn, tenant_id=first_tenant["id"], title="Other")
+    cross_tenant_gallery = create_gallery(
+        conn, tenant_id=second_tenant["id"], title="Cross tenant"
+    )
+    hidden = _img(conn, storage, first_tenant["id"], gallery["id"], "hidden.jpg")
+    other = _img(
+        conn, storage, first_tenant["id"], other_gallery["id"], "other.jpg"
+    )
+    cross_tenant = _img(
+        conn,
+        storage,
+        second_tenant["id"],
+        cross_tenant_gallery["id"],
+        "cross.jpg",
+    )
+
+    for tenant_id, gallery_id, image_id in (
+        (first_tenant["id"], gallery["id"], hidden["id"]),
+        (first_tenant["id"], other_gallery["id"], other["id"]),
+        (second_tenant["id"], cross_tenant_gallery["id"], cross_tenant["id"]),
+    ):
+        assert set_favorite(
+            conn,
+            tenant_id=tenant_id,
+            gallery_id=gallery_id,
+            image_id=image_id,
+            favorited=True,
+        ) is True
+    set_image_hidden(conn, first_tenant["id"], hidden["id"], True)
+
+    for image_id in (hidden["id"], other["id"], cross_tenant["id"]):
+        assert set_favorite(
+            conn,
+            tenant_id=first_tenant["id"],
+            gallery_id=gallery["id"],
+            image_id=image_id,
+            favorited=True,
+        ) is None
+        assert set_favorite(
+            conn,
+            tenant_id=first_tenant["id"],
+            gallery_id=gallery["id"],
+            image_id=image_id,
+            favorited=False,
+        ) is None
+
+    assert favorite_image_ids(
+        conn, gallery["id"], tenant_id=first_tenant["id"]
+    ) == {hidden["id"]}
+    assert favorite_image_ids(
+        conn, other_gallery["id"], tenant_id=first_tenant["id"]
+    ) == {other["id"]}
+    assert favorite_image_ids(
+        conn, cross_tenant_gallery["id"], tenant_id=second_tenant["id"]
+    ) == {cross_tenant["id"]}
 
 
 def test_favorite_rejects_foreign_image(conn, storage):

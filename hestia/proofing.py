@@ -63,6 +63,55 @@ def toggle_favorite(
     return True
 
 
+def set_favorite(
+    conn: sqlite3.Connection,
+    *,
+    tenant_id: str,
+    gallery_id: int,
+    image_id: int,
+    favorited: bool,
+) -> bool | None:
+    """Set one visible frame's favorite state and return the resulting state.
+
+    Unlike :func:`toggle_favorite`, repeating the same desired state is a no-op. The
+    write statement acquires SQLite's writer lock before the follow-up read, so a
+    concurrent cull cannot turn validation into a stale authorization decision. Only a
+    real state change reopens a previously submitted selection packet.
+    """
+    if favorited:
+        cur = conn.execute(
+            "INSERT INTO image_favorites (tenant_id, gallery_id, image_id) "
+            "SELECT ?, ?, ? FROM images "
+            "WHERE id = ? AND gallery_id = ? AND tenant_id = ? AND hidden = 0 "
+            "ON CONFLICT DO NOTHING",
+            (tenant_id, gallery_id, image_id, image_id, gallery_id, tenant_id),
+        )
+        if cur.rowcount == 1:
+            _reopen_submitted_selections(conn, tenant_id, gallery_id)
+            return True
+        row = conn.execute(
+            "SELECT 1 FROM image_favorites f "
+            "JOIN images i ON i.id = f.image_id AND i.gallery_id = f.gallery_id "
+            "AND i.tenant_id = f.tenant_id "
+            "WHERE f.tenant_id = ? AND f.gallery_id = ? AND f.image_id = ? "
+            "AND i.hidden = 0",
+            (tenant_id, gallery_id, image_id),
+        ).fetchone()
+        return True if row else None
+
+    cur = conn.execute(
+        "DELETE FROM image_favorites "
+        "WHERE tenant_id = ? AND gallery_id = ? AND image_id = ? "
+        "AND EXISTS (SELECT 1 FROM images WHERE id = ? AND gallery_id = ? "
+        "AND tenant_id = ? AND hidden = 0)",
+        (tenant_id, gallery_id, image_id, image_id, gallery_id, tenant_id),
+    )
+    if cur.rowcount == 1:
+        _reopen_submitted_selections(conn, tenant_id, gallery_id)
+        return False
+    return False if image_in_gallery(conn, tenant_id, gallery_id, image_id) else None
+
+
 def favorite_image_ids(
     conn: sqlite3.Connection,
     gallery_id: int,

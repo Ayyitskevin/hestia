@@ -607,15 +607,28 @@ def tenant_shot_type_facets(conn: sqlite3.Connection, tenant_id: str, *,
     return [{"shot_type": r["shot_type"], "count": r["n"]} for r in rows]
 
 
-def alt_text_map(conn: sqlite3.Connection, gallery_id: int) -> dict[int, str]:
+def alt_text_map(
+    conn: sqlite3.Connection,
+    gallery_id: int,
+    *,
+    tenant_id: str | None = None,
+) -> dict[int, str]:
     """Per-image AI alt text for a gallery: ``{image_id: alt_text}`` for the frames the
     vision pass captioned. Used on the client gallery and delivery so every delivered photo
     carries a real, descriptive ``alt`` (accessibility + SEO) instead of a bare filename —
-    callers fall back to the filename for any frame without a caption. Scoped by gallery_id,
-    which the caller has already resolved for the tenant/token (like ``list_images``)."""
-    rows = conn.execute(
-        "SELECT image_id, alt_text FROM image_analyses WHERE gallery_id = ?", (gallery_id,)
-    ).fetchall()
+    callers fall back to the filename for any frame without a caption. The image join
+    rejects internally inconsistent analysis rows; public callers also pass ``tenant_id``
+    so every business-object edge is scoped explicitly."""
+    sql = (
+        "SELECT a.image_id, a.alt_text FROM image_analyses a "
+        "JOIN images i ON i.id = a.image_id AND i.gallery_id = a.gallery_id "
+        "AND i.tenant_id = a.tenant_id WHERE a.gallery_id = ?"
+    )
+    params: list = [gallery_id]
+    if tenant_id is not None:
+        sql += " AND a.tenant_id = ? AND i.tenant_id = ?"
+        params.extend((tenant_id, tenant_id))
+    rows = conn.execute(sql, params).fetchall()
     return {r["image_id"]: r["alt_text"] for r in rows if (r["alt_text"] or "").strip()}
 
 

@@ -113,9 +113,12 @@ substitute for them.
 
 1. Surface the proofing URL immediately after publication and make its send/automation
    context explicit. Do not widen anonymous media authority before D3 is closed.
-2. Build a gallery lightbox with large-image navigation, favorites and notes in context,
-   mobile gestures, branded cover/story controls, and a clear proofing-to-final-download
-   transition.
+2. Gallery lightbox V1 is implemented with server/access-control coverage: authorized
+   large-image navigation, keyboard and mobile gesture controls, focus-safe close/return
+   behavior, and favorites/notes in context preserve the existing proofing packet with a
+   no-JavaScript fallback. Manual native-dialog, gesture, and 320px browser acceptance remains
+   a release check. Branded cover/story controls and the proofing-to-final-download transition
+   remain open; neither widens anonymous media authority before D3 is closed.
 3. Add client-selectable proposal collections/add-ons and typed questionnaire fields
    before pursuing generalized document-builder depth.
 4. Define timezone ownership and external-busy synchronization. Implement it after the
@@ -138,7 +141,7 @@ large lab catalog wait until the pilot earns revenue.
 |---|---|---|
 | Client home | Ranked action room exists but enable/send and return context are fragmented | One intentional portal lifecycle and uninterrupted booking checklist |
 | Booking economics | Deposits exist; remaining package balance is not consistently created | Total/deposit/balance invariant with approved settlement semantics |
-| Gallery delivery | Upload, publish, proofing, favorites, comments, cull, offer, and download exist | Owner-visible proof link plus lightbox-quality client presentation |
+| Gallery delivery | Upload, publish, proofing, favorites, comments, cull, offer, download, and lightbox V1 code/server coverage exist; browser acceptance is pending | Owner-visible proof link, browser acceptance, branded cover/story controls, and an approved final-download transition |
 | Communication/calendar | Outbound email and calendar subscription exist | Approved two-way messaging and timezone-aware external-busy sync |
 | Print commerce | Stable offers, orders, and a generic lab seam exist | Selected frames/options/shipping, one real lab, and reconciliation |
 | AI moat | Vision and favorites already curate offers | Historical provenance, labeled benchmark, editable recommendation, measured sales lift |

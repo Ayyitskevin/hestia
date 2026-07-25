@@ -6,6 +6,10 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Added
 
+- Client proofing galleries now include a progressively enhanced, responsive large-photo
+  viewer with bounded previous/next navigation, keyboard and swipe controls, focus return,
+  and favorites and notes in context. Hidden frames stay out of viewer navigation and media
+  links while existing selection-packet semantics and the no-JavaScript path are preserved.
 - Studios can now attach, move, or clear a gallery's project after creation. The
   tenant-scoped, idempotent repair updates client portal visibility immediately and
   records only real association changes in the audit trail.

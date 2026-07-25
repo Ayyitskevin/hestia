@@ -6,6 +6,7 @@
   <meta name="robots" content="noindex">
   <title>{{ gallery.title }} — {{ tenant.name }}</title>
   <link rel="stylesheet" href="/static/hestia.css">
+  {% if unlocked and images %}<script src="/static/client-gallery.js" defer></script>{% endif %}
 </head>
 <body class="client">
   <header class="client-header">
@@ -32,56 +33,82 @@
           <a class="offer-url" href="{{ offer_url }}">View your print &amp; album collection →</a>
         </div>
         {% endif %}
-        {% if selection_packet %}
-        <div class="card stack" style="margin-bottom:14px">
-          <strong>Your selection packet</strong>
-          <p class="muted">
-            {{ selection_packet.favorite_count }} favorited so far
-            · {{ selection_packet.comment_count }} note{{ '' if selection_packet.comment_count == 1 else 's' }}
-            {% if gallery.selections_submitted_at %}
-              · sent to {{ tenant.name }}
-            {% else %}
-              · ready to send when you are done
-            {% endif %}
-          </p>
-        </div>
-        {% endif %}
-        {% if gallery.selections_submitted_at %}
+        <div id="proofing-actions" tabindex="-1">
+          {% if selection_packet %}
           <div class="card stack" style="margin-bottom:14px">
-            <strong>✓ You've sent {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }} to {{ tenant.name }}.</strong>
-            <p class="muted">They'll use these to build your album and prints. If you change a heart or add a note,
-              Hestia will reopen this packet so you can send the updated list.</p>
+            <strong>Your selection packet</strong>
+            <p class="muted">
+              {{ selection_packet.favorite_count }} favorited so far
+              · {{ selection_packet.comment_count }} note{{ '' if selection_packet.comment_count == 1 else 's' }}
+              {% if gallery.selections_submitted_at %}
+                · sent to {{ tenant.name }}
+              {% else %}
+                · ready to send when you are done
+              {% endif %}
+            </p>
           </div>
-        {% else %}
-          <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/submit" style="margin-bottom:14px"
-                data-confirm="Send your {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }} to {{ tenant.name }}?">
-            <button class="btn" type="submit">✓ I'm done — send my {{ favorites|length }} favorite{{ '' if favorites|length == 1 else 's' }} to {{ tenant.name }}</button>
-          </form>
-        {% endif %}
-        <section class="thumb-grid client-grid">
-          {% for img in images %}
-            <figure class="thumb proof" id="img-{{ img.id }}">
-              <img src="{{ storage.thumb_url(img) }}" alt="{{ alts.get(img.id) or img.filename }}" loading="lazy">
-              <div class="proof-bar">
-                <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/favorite/{{ img.id }}">
-                  <button class="fav-btn {{ 'on' if img.id in favorites else '' }}" type="submit"
-                          title="{{ 'Remove favorite' if img.id in favorites else 'Add to favorites' }}">{{ '♥' if img.id in favorites else '♡' }}</button>
-                </form>
-                <details class="proof-note">
-                  <summary>💬 {{ comments.get(img.id, [])|length or '' }}</summary>
-                  {% for c in comments.get(img.id, []) %}
-                    <p class="proof-comment"><strong>{{ c.author_name or 'You' }}:</strong> {{ c.body }}</p>
-                  {% endfor %}
-                  <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/comment/{{ img.id }}">
-                    <input type="text" name="author_name" placeholder="Your name (optional)">
-                    <textarea name="body" rows="2" placeholder="Add a note…" required></textarea>
-                    <button class="btn secondary" type="submit">Add note</button>
+          {% endif %}
+          {% if gallery.selections_submitted_at %}
+            <div class="card stack" style="margin-bottom:14px">
+              <strong>✓ You've sent {{ selection_packet.favorite_count }} favorite{{ '' if selection_packet.favorite_count == 1 else 's' }} to {{ tenant.name }}.</strong>
+              <p class="muted">They'll use these to build your album and prints. If you change a heart or add a note,
+                Hestia will reopen this packet so you can send the updated list.</p>
+            </div>
+          {% else %}
+            <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/submit" style="margin-bottom:14px"
+                  data-confirm="Send your {{ selection_packet.favorite_count }} favorite{{ '' if selection_packet.favorite_count == 1 else 's' }} to {{ tenant.name }}?">
+              <button class="btn" type="submit">✓ I'm done — send my {{ selection_packet.favorite_count }} favorite{{ '' if selection_packet.favorite_count == 1 else 's' }} to {{ tenant.name }}</button>
+            </form>
+          {% endif %}
+        </div>
+        {% if images %}
+          <p class="gallery-help">Choose a photo to view it large. Use the heart and notes to build your selection.</p>
+          <section class="thumb-grid client-grid" aria-label="Gallery photos">
+            {% for img in images %}
+              {% set is_favorite = img.id in favorites %}
+              <figure class="thumb proof {{ 'is-fav' if is_favorite else '' }}" id="img-{{ img.id }}"
+                      data-gallery-item data-image-id="{{ img.id }}">
+                <a class="proof-image-link" href="{{ storage.image_url(img) }}" data-lightbox-open
+                   aria-label="Open photo {{ loop.index }} of {{ images|length }} in image viewer">
+                  <img src="{{ storage.thumb_url(img) }}" alt="{{ alts.get(img.id) or img.filename }}" loading="lazy">
+                </a>
+                <figcaption>{{ img.filename }}</figcaption>
+                <div class="proof-bar">
+                  <form class="proof-favorite-form" method="post"
+                        action="/g/{{ tenant.slug }}/{{ gallery.slug }}/favorite/{{ img.id }}">
+                    <input type="hidden" name="favorite" value="{{ '0' if is_favorite else '1' }}">
+                    <button class="fav-btn {{ 'on' if is_favorite else '' }}" type="submit"
+                            aria-pressed="{{ 'true' if is_favorite else 'false' }}"
+                            aria-label="{{ 'Remove photo from favorites' if is_favorite else 'Add photo to favorites' }}"
+                            title="{{ 'Remove favorite' if is_favorite else 'Add to favorites' }}">{{ '♥' if is_favorite else '♡' }}</button>
                   </form>
-                </details>
-              </div>
-            </figure>
-          {% endfor %}
-        </section>
+                  <details class="proof-note">
+                    <summary>Notes{% if comments.get(img.id, []) %} ({{ comments.get(img.id, [])|length }}){% endif %}</summary>
+                    <div class="proof-comments" data-proof-comments>
+                      {% for c in comments.get(img.id, []) %}
+                        <p class="proof-comment"><strong>{{ c.author_name or 'You' }}:</strong> {{ c.body }}</p>
+                      {% endfor %}
+                    </div>
+                    <form class="proof-comment-form" method="post"
+                          action="/g/{{ tenant.slug }}/{{ gallery.slug }}/comment/{{ img.id }}">
+                      <label for="author-{{ img.id }}">Your name <span class="muted">(optional)</span></label>
+                      <input type="text" id="author-{{ img.id }}" name="author_name" autocomplete="name">
+                      <label for="comment-{{ img.id }}">Note about this photo</label>
+                      <textarea id="comment-{{ img.id }}" name="body" rows="2" required></textarea>
+                      <button class="btn secondary" type="submit">Add note</button>
+                    </form>
+                  </details>
+                </div>
+              </figure>
+            {% endfor %}
+          </section>
+          {% include "_client_gallery_lightbox.html" %}
+        {% else %}
+          <div class="card gallery-empty" role="status">
+            <h2>No photos are available in this gallery yet.</h2>
+            <p class="muted">Please check back after {{ tenant.name }} finishes preparing it.</p>
+          </div>
+        {% endif %}
       {% endif %}
     </div>
   </main>
