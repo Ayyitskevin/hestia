@@ -1,0 +1,55 @@
+{% set first = images[0] %}
+{% set first_favorite = first.id in favorites %}
+<dialog class="gallery-lightbox" id="gallery-lightbox" aria-modal="true"
+        aria-labelledby="lightbox-title" aria-describedby="lightbox-help"
+        data-reopen-image="{{ lightbox_image_id or '' }}">
+  <div class="lightbox-shell">
+    <header class="lightbox-header">
+      <div>
+        <p class="lightbox-position" data-lightbox-position aria-live="polite">1 of {{ images|length }}</p>
+        <h2 id="lightbox-title" data-lightbox-title>{{ first.filename }}</h2>
+      </div>
+      <button class="lightbox-icon" type="button" data-lightbox-close aria-label="Close image viewer">×</button>
+    </header>
+    <div class="lightbox-layout">
+      <section class="lightbox-stage" aria-label="Selected gallery photo">
+        <button class="lightbox-nav previous" type="button" data-lightbox-prev{% if images|length == 1 %} disabled{% endif %}
+                aria-label="Previous image">‹</button>
+        <img data-lightbox-image alt="">
+        <button class="lightbox-nav next" type="button" data-lightbox-next{% if images|length == 1 %} disabled{% endif %}
+                aria-label="Next image">›</button>
+      </section>
+      <aside class="lightbox-proofing" aria-label="Photo proofing controls">
+        <p id="lightbox-help" class="muted">Use the arrow keys or swipe to move between photos. Escape closes the viewer.</p>
+        <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/favorite/{{ first.id }}"
+              data-lightbox-favorite-form>
+          <input type="hidden" name="favorite" value="{{ '0' if first_favorite else '1' }}" data-lightbox-favorite-value>
+          <input type="hidden" name="return_to" value="lightbox">
+          <button class="lightbox-favorite {{ 'on' if first_favorite else '' }}" type="submit"
+                  aria-pressed="{{ 'true' if first_favorite else 'false' }}" data-lightbox-favorite>
+            <span aria-hidden="true">{{ '♥' if first_favorite else '♡' }}</span>
+            <span data-lightbox-favorite-label>{{ 'Remove favorite' if first_favorite else 'Add to favorites' }}</span>
+          </button>
+        </form>
+        <div class="lightbox-selection-state" aria-live="polite" data-lightbox-selection-state>
+          {{ 'Selected as a favorite' if first_favorite else 'Not selected as a favorite' }}
+        </div>
+        <section class="lightbox-notes" aria-labelledby="lightbox-notes-title">
+          <h3 id="lightbox-notes-title">Notes</h3>
+          <div data-lightbox-comments></div>
+          <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/comment/{{ first.id }}"
+                data-lightbox-comment-form>
+            <input type="hidden" name="return_to" value="lightbox">
+            <label for="lightbox-author">Your name <span class="muted">(optional)</span></label>
+            <input type="text" id="lightbox-author" name="author_name" autocomplete="name">
+            <label for="lightbox-comment">Note about this photo</label>
+            <textarea id="lightbox-comment" name="body" rows="3" required></textarea>
+            <button class="btn secondary" type="submit">Add note</button>
+          </form>
+        </section>
+        <button class="btn secondary lightbox-review" type="button" data-lightbox-review>Review and send selections</button>
+        {% if offer_url %}<a class="lightbox-offer" href="{{ offer_url }}">View prints &amp; albums →</a>{% endif %}
+      </aside>
+    </div>
+  </div>
+</dialog>

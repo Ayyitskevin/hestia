@@ -53,7 +53,9 @@ def delivery_page(request: Request, token: str):
         favorites = favorite_image_ids(
             conn, gallery["id"], tenant_id=gallery["tenant_id"]
         )   # frames they hearted in proofing
-        alts = alt_text_map(conn, gallery["id"])          # AI captions for accessible/SEO alt text
+        alts = alt_text_map(
+            conn, gallery["id"], tenant_id=gallery["tenant_id"]
+        )  # AI captions for accessible/SEO alt text
     total_bytes = sum(img.get("bytes") or 0 for img in images)
     return render(request, "delivery.html", auth=None, gallery=gallery, images=images,
                   token=token, total_bytes=total_bytes, favorites=favorites, alts=alts)

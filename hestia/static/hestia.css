@@ -860,6 +860,84 @@ body.client th, body.client td { border-color: rgba(255, 255, 255, .06); }
 .bundle-foot { margin-top: auto; padding-top: 14px; display: flex; align-items: center; justify-content: space-between; }
 .bundle-foot .price { font-size: 1.3rem; font-weight: 700; }
 
+/* ── Client gallery lightbox ────────────────────────────────────────────── */
+.gallery-help { color: var(--ink-client-2); margin: 22px 0 14px; }
+.gallery-empty { margin-top: 22px; text-align: center; }
+.gallery-empty h2 { color: var(--ink-client); margin-top: 0; }
+.proof-image-link { display: block; background: #090806; overflow: hidden; }
+.proof-image-link img { transition: transform .2s ease, opacity .2s ease; }
+.proof-image-link:hover img { transform: scale(1.015); opacity: .94; }
+.proof-image-link:focus-visible, .fav-btn:focus-visible, .gallery-lightbox button:focus-visible,
+.gallery-lightbox a:focus-visible, #proofing-actions:focus-visible {
+  outline: 3px solid var(--ember-soft); outline-offset: 3px;
+}
+.proof .proof-bar { align-items: flex-start; }
+.proof .proof-note { flex: 1; min-width: 0; }
+.proof-comment-form label { display: block; margin-top: 8px; color: var(--ink-client-2); }
+.proof-comment-form .btn { margin-top: 8px; }
+
+body.lightbox-open { overflow: hidden; }
+.gallery-lightbox {
+  width: min(1180px, calc(100vw - 40px));
+  height: min(820px, 92vh); height: min(820px, 92dvh);
+  max-width: none; max-height: none; margin: auto; padding: 0;
+  color: var(--ink-client); background: #0e0d0b;
+  border: 1px solid rgba(255, 255, 255, .14); border-radius: var(--radius-card);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .8); overflow: hidden;
+}
+.gallery-lightbox:not([open]) { display: none; }
+.gallery-lightbox::backdrop { background: rgba(0, 0, 0, .88); backdrop-filter: blur(7px); }
+.lightbox-shell { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.lightbox-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  min-height: 68px; padding: 10px 14px 10px 20px; border-bottom: 1px solid var(--hairline);
+}
+.lightbox-header h2 { color: var(--ink-client); font-size: .98rem; margin: 2px 0 0; overflow-wrap: anywhere; }
+.lightbox-position { color: var(--ink-client-2); font-size: .76rem; margin: 0; font-variant-numeric: tabular-nums; }
+.lightbox-icon, .lightbox-nav {
+  display: inline-grid; place-items: center; min-width: 44px; min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, .16); border-radius: 999px;
+  background: rgba(15, 14, 12, .82); color: var(--ink-client); cursor: pointer;
+}
+.lightbox-icon { font-size: 1.65rem; line-height: 1; }
+.lightbox-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; flex: 1; min-height: 0; }
+.lightbox-stage {
+  position: relative; display: grid; place-items: center; min-width: 0; min-height: 0;
+  padding: 28px 66px; background: #050504; overflow: hidden; touch-action: pan-y pinch-zoom;
+}
+.lightbox-stage img {
+  display: block; width: 100%; height: 100%; min-height: 0; max-width: 100%; max-height: 100%;
+  object-fit: contain; user-select: none; -webkit-user-drag: none;
+}
+.lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; font-size: 2rem; }
+.lightbox-nav.previous { left: 12px; }
+.lightbox-nav.next { right: 12px; }
+.lightbox-nav:hover:not(:disabled), .lightbox-icon:hover { background: rgba(50, 47, 42, .95); }
+.lightbox-nav:disabled { opacity: .3; cursor: default; }
+.lightbox-proofing { padding: 20px; border-left: 1px solid var(--hairline); overflow-y: auto; }
+.lightbox-proofing > :first-child { margin-top: 0; }
+.lightbox-favorite {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 18px;
+  padding: 10px 13px; border: 1px solid rgba(255, 255, 255, .14); border-radius: var(--radius-control);
+  color: var(--ink-client); background: var(--fill); font: inherit; font-weight: 600; cursor: pointer;
+}
+.lightbox-favorite > [aria-hidden="true"] { color: var(--ink-client-2); font-size: 1.45rem; line-height: 1; }
+.lightbox-favorite.on > [aria-hidden="true"] { color: var(--danger); }
+.lightbox-selection-state { color: var(--ink-client-2); font-size: .76rem; margin: 7px 0 18px; }
+.lightbox-notes { border-top: 1px solid var(--hairline); padding-top: 16px; }
+.lightbox-notes h3 { color: var(--ink-client); font-size: .95rem; margin: 0 0 8px; }
+.lightbox-notes label { display: block; color: var(--ink-client-2); font-size: .78rem; margin: 10px 0 4px; }
+.lightbox-notes input, .lightbox-notes textarea { width: 100%; }
+.lightbox-notes .btn { margin-top: 10px; }
+.lightbox-notes .proof-comment { padding-bottom: 8px; border-bottom: 1px solid var(--hairline-2); overflow-wrap: anywhere; }
+.lightbox-no-notes { font-size: .8rem; }
+.lightbox-review { width: 100%; justify-content: center; margin-top: 18px; }
+.lightbox-offer { display: block; margin-top: 16px; color: var(--ember-soft) !important; font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .proof-image-link img { transition: none; }
+}
+
 /* Owner-side multi-column forms (e.g. launch-a-sale) — collapse on mobile. */
 .inline-grid-form { display: grid; gap: 10px; grid-template-columns: 1fr auto auto auto; align-items: end; }
 
@@ -941,6 +1019,24 @@ body.client th, body.client td { border-color: rgba(255, 255, 255, .06); }
   .portal-actions { grid-template-columns: 1fr; }
   .portal-action em { white-space: normal; }
 
+  /* The viewer becomes a true edge-to-edge mobile surface with proofing below. */
+  .gallery-lightbox {
+    width: 100vw; height: 100vh; height: 100dvh; border: none; border-radius: 0;
+  }
+  .lightbox-header { min-height: 60px; padding: 8px 10px 8px 16px; }
+  .lightbox-layout { grid-template-columns: 1fr; grid-template-rows: minmax(48vh, 1fr) auto; grid-template-rows: minmax(48dvh, 1fr) auto; overflow-y: auto; }
+  .lightbox-stage { min-height: 48vh; min-height: 48dvh; padding: 16px 54px; }
+  .lightbox-proofing { overflow: visible; border-left: 0; border-top: 1px solid var(--hairline); padding: 18px 16px 32px; }
+
   /* Testimonial rows stack their actions under the text. */
   .testimonial-row { flex-direction: column; }
+}
+
+@media (max-width: 420px) {
+  .client-grid { grid-template-columns: 1fr; }
+  .client-grid .thumb img { height: min(72vw, 300px); }
+  .lightbox-header h2 { max-width: 220px; font-size: .88rem; }
+  .lightbox-stage { min-height: 52vh; min-height: 52dvh; padding: 12px 48px; }
+  .lightbox-nav.previous { left: 4px; }
+  .lightbox-nav.next { right: 4px; }
 }
