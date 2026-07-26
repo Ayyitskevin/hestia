@@ -105,9 +105,10 @@ failure alone does not make successful SMTP delivery exactly-once.
 1. The autonomous continuity queue is landed: gallery/project association repair plus
    bounded dashboard gallery, client/project count, and booking-availability reads now
    preserve the same owner workflow without hydrating unbounded detail rows.
-2. Make the client action room the canonical destination. Once its token contract is
-   approved, create and send it intentionally, return clients there after sign/pay/form/
-   gallery/album actions, and add proposal creation to the project hub.
+2. The project hub now launches proposal creation with its current project/client context
+   and retains both through package choice. Make the client action room the canonical
+   destination; once its token contract is approved, create and send it intentionally and
+   return clients there after sign/pay/form/gallery/album actions.
 3. Stop fragmenting repeat clients. Design normalized-email matching plus an explicit
    duplicate-review/merge tool; do not silently merge records from public input.
 4. After the money contract is approved, enforce `package total = deposit + scheduled

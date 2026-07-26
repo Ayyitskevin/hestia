@@ -1,5 +1,9 @@
 """Proposals — package-backed quote, agreement, and deposit flow."""
 
+import html
+import re
+from urllib.parse import parse_qs, urlsplit
+
 from conftest import CSRFClient, login_owner, onboard_studio
 
 from hestia.contracts import get_contract
@@ -352,6 +356,120 @@ def test_http_proposal_publish_and_accept_flow(client, app):
         assert proposal["invoice_status"] == "sent"
         outbox = list_emails(conn, tid)
         assert any(f"/proposal/{token}" in m["body"] for m in outbox)
+    finally:
+        conn.close()
+
+
+def test_project_hub_proposal_link_preserves_booking_context(client, app):
+    creds = onboard_studio(
+        client,
+        name="Continuity Studio",
+        email="continuity@example.com",
+    )
+    login_owner(client, creds)
+
+    created_client = client.post(
+        "/clients",
+        data={"name": "Continuity Client", "email": "client@example.com"},
+    )
+    client_id = int(created_client.url.path.rstrip("/").split("/")[-1])
+    created_project = client.post(
+        "/projects",
+        data={
+            "name": "Continuity Wedding",
+            "client_id": str(client_id),
+            "shoot_type": "wedding",
+            "status": "lead",
+        },
+    )
+    project_id = int(created_project.url.path.rstrip("/").split("/")[-1])
+    client.post(
+        "/packages",
+        data={
+            "name": "Continuity Collection",
+            "description": "One linked booking path.",
+            "price": "2400",
+            "deposit": "600",
+        },
+    )
+
+    conn = connect(app.state.settings.db_path)
+    try:
+        tenant_id = _tid(conn, creds["email"])
+        package_id = list_packages(conn, tenant_id)[0]["id"]
+    finally:
+        conn.close()
+
+    project_page = client.get(f"/projects/{project_id}")
+    proposal_link = re.search(
+        r'href="([^"]+)">\+ Proposal</a>',
+        project_page.text,
+    )
+    assert proposal_link is not None
+    proposal_href = html.unescape(proposal_link.group(1))
+    proposal_target = urlsplit(proposal_href)
+    assert proposal_target.path == "/proposals/new"
+    assert parse_qs(proposal_target.query) == {
+        "project_id": [str(project_id)],
+        "client_id": [str(client_id)],
+    }
+
+    proposal_page = client.get(proposal_href)
+    assert (
+        f'<option value="{client_id}" selected>Continuity Client</option>'
+        in proposal_page.text
+    )
+    assert (
+        f'<option value="{project_id}" selected>Continuity Wedding</option>'
+        in proposal_page.text
+    )
+    package_link = re.search(
+        rf'href="([^"]*package_id={package_id}[^"]*)">Continuity Collection</a>',
+        proposal_page.text,
+    )
+    assert package_link is not None
+    package_href = html.unescape(package_link.group(1))
+    package_target = urlsplit(package_href)
+    assert package_target.path == "/proposals/new"
+    assert parse_qs(package_target.query) == {
+        "package_id": [str(package_id)],
+        "client_id": [str(client_id)],
+        "project_id": [str(project_id)],
+    }
+
+    package_page = client.get(package_href)
+    assert (
+        f'<option value="{package_id}" selected>Continuity Collection</option>'
+        in package_page.text
+    )
+    assert (
+        f'<option value="{client_id}" selected>Continuity Client</option>'
+        in package_page.text
+    )
+    assert (
+        f'<option value="{project_id}" selected>Continuity Wedding</option>'
+        in package_page.text
+    )
+
+    created = client.post(
+        "/proposals",
+        data={
+            "package_id": str(package_id),
+            "title": "Continuity proposal",
+            "client_id": str(client_id),
+            "project_id": str(project_id),
+        },
+    )
+    proposal_id = int(created.url.path.rstrip("/").split("/")[-1])
+
+    conn = connect(app.state.settings.db_path)
+    try:
+        proposal = get_proposal(conn, tenant_id, proposal_id)
+        contract = get_contract(conn, tenant_id, proposal["contract_id"])
+        invoice = get_invoice(conn, tenant_id, proposal["invoice_id"])
+        for record in (proposal, contract, invoice):
+            assert record["client_id"] == client_id
+            assert record["project_id"] == project_id
     finally:
         conn.close()
 
