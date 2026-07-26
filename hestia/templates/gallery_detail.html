@@ -435,13 +435,13 @@
             or (qfilter == 'duplicates' and cull and img.id in cull.duplicate_ids)
             or (qfilter == 'hidden' and img.hidden) %}
           {% if show %}
-          <figure class="thumb{{ ' is-fav' if img.id in favorites else '' }}{{ ' is-culled' if cull and img.id in cull.culled_ids else '' }}{{ ' is-hidden' if img.hidden else '' }}{{ ' is-cover' if img.id == cover_id else '' }}">
+          <figure class="thumb{{ ' is-fav' if img.id in favorites else '' }}{{ ' is-culled' if cull and img.id in cull.culled_ids else '' }}{{ ' is-hidden' if img.hidden else '' }}{{ ' is-cover' if img.id == client_story_cover_id else '' }}">
             <img src="{{ storage.thumb_url(img) }}" alt="{{ img.filename }}" loading="lazy">
             {% if img.id in favorites %}<span class="fav-badge" title="Client favorite">♥</span>{% endif %}
             {% if img.hidden %}<span class="cull-badge" title="Hidden from client">🚫</span>
             {% elif cull and img.id in cull.blink_ids %}<span class="cull-badge" title="Likely blink">👁</span>
             {% elif cull and img.id in cull.duplicate_ids %}<span class="cull-badge" title="Duplicate frame">⧉</span>{% endif %}
-            <figcaption>{% if img.id == cover_id %}<span title="Gallery cover">★</span> {% endif %}{{ img.filename }}</figcaption>
+            <figcaption>{% if img.id == client_story_cover_id %}<span title="Client gallery cover">★</span> {% endif %}{{ img.filename }}</figcaption>
             {% if a %}
             <div class="thumb-meta" title="What the AI saw">
               {% if a.keeper %}<span class="meta-keeper" title="Strong keeper">★</span>{% endif %}
@@ -475,7 +475,7 @@
 
     {% set subj_ns = namespace(img=None) %}
     {% for img in images %}
-      {% if img.id == cover_id and not subj_ns.img %}{% set subj_ns.img = img %}{% endif %}
+      {% if img.id == client_story_cover_id and not subj_ns.img %}{% set subj_ns.img = img %}{% endif %}
     {% endfor %}
     {% if not subj_ns.img and hero_ids %}
       {% for img in images %}
@@ -487,7 +487,18 @@
     <aside class="inspector">
       <div class="inspector-photo"><img src="{{ storage.public_path(subject.storage_key) }}" alt="{{ subject.filename }}" loading="lazy"></div>
       <div>
-        <div class="inspector-title"><span class="name">{{ subject.filename }}</span>{% if subject.id == cover_id %}<span class="pill ember">cover</span>{% endif %}</div>
+        <div class="inspector-title"><span class="name">{{ subject.filename }}</span>{% if subject.id == client_story_cover_id %}<span class="pill ember">client cover</span>{% endif %}</div>
+        {% if client_story_cover_id and client_story_cover_id == cover_id %}
+        <p class="hint" style="margin:5px 0 0">This cover opens the client gallery.
+          Choose another visible frame to change it.</p>
+        {% elif client_story_cover_id %}
+        <p class="hint" style="margin:5px 0 0">This visible frame opens the client gallery because
+          the saved cover is hidden, unavailable, or has no browse thumbnail. Set it as cover to
+          make the choice explicit.</p>
+        {% else %}
+        <p class="hint" style="margin:5px 0 0">The client gallery keeps its text header because
+          no visible frame has a browse thumbnail.</p>
+        {% endif %}
       </div>
       {% if sa %}
       <div class="ai-read-card">

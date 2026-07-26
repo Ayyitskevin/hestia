@@ -277,6 +277,20 @@ def test_gallery_proofing_journey(browser: Browser, live_hestia: str) -> None:
         desktop_page.goto(client_url)
         desktop_items = desktop_page.locator("[data-gallery-item]")
         expect(desktop_items).to_have_count(2)
+        desktop_story = desktop_page.locator(".client-gallery-story")
+        desktop_story_image = desktop_story.locator(".client-gallery-story-media")
+        desktop_story_action = desktop_story.locator(".client-gallery-story-action")
+        expect(desktop_story).to_be_visible()
+        _assert_image_loaded(desktop_page, desktop_story_image)
+        assert desktop_story_image.get_attribute("src") == desktop_items.nth(0).locator(
+            ".proof-image-link img"
+        ).get_attribute("src")
+        assert desktop_story.locator("[data-gallery-item]").count() == 0
+        assert desktop_story.locator("[data-lightbox-open]").count() == 0
+        _assert_minimum_target(desktop_story_action)
+        desktop_story_action.click()
+        expect(desktop_page).to_have_url(re.compile(r"#gallery-photos$"))
+        expect(desktop_page.locator("#gallery-photos")).to_be_visible()
         for index in range(2):
             _assert_image_loaded(
                 desktop_page,
@@ -337,6 +351,13 @@ def test_gallery_proofing_journey(browser: Browser, live_hestia: str) -> None:
         mobile_page.goto(client_url)
         mobile_items = mobile_page.locator("[data-gallery-item]")
         expect(mobile_items).to_have_count(2)
+        mobile_story = mobile_page.locator(".client-gallery-story")
+        expect(mobile_story).to_be_visible()
+        _assert_image_loaded(
+            mobile_page,
+            mobile_story.locator(".client-gallery-story-media"),
+        )
+        _assert_minimum_target(mobile_story.locator(".client-gallery-story-action"))
         _assert_no_horizontal_overflow(mobile_page)
         mobile_items.nth(0).locator("[data-lightbox-open]").click()
         mobile_dialog = mobile_page.locator("#gallery-lightbox")

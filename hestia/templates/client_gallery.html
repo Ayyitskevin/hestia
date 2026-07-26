@@ -6,15 +6,31 @@
   <meta name="robots" content="noindex">
   <title>{{ gallery.title }} — {{ tenant.name }}</title>
   <link rel="stylesheet" href="/static/hestia.css">
+  <link rel="stylesheet" href="/static/client-gallery-story.css">
   {% if unlocked and images %}<script src="/static/client-gallery.js" defer></script>{% endif %}
 </head>
 <body class="client">
+  {% if unlocked and story_cover_image %}
+  <header class="client-gallery-story" data-client-gallery-story>
+    <img class="client-gallery-story-media" src="{{ storage.thumb_url(story_cover_image) }}"
+         alt="{{ alts.get(story_cover_image.id) or story_cover_image.filename }}">
+    <div class="client-gallery-story-content">
+      <div class="client-gallery-story-copy">
+        <div class="client-gallery-story-eyebrow">{{ tenant.name }}</div>
+        <h1>{{ gallery.title }}</h1>
+        <p>{{ images|length }} photograph{{ '' if images|length == 1 else 's' }} · selected for you</p>
+        <a class="client-gallery-story-action" href="#gallery-photos">View gallery</a>
+      </div>
+    </div>
+  </header>
+  {% else %}
   <header class="client-header">
     <div class="wrap">
       <div class="eyebrow">{{ tenant.name }}</div>
       <h1>{{ gallery.title }}</h1>
     </div>
   </header>
+  {% endif %}
   <main>
     <div class="wrap">
       {% if not unlocked %}
@@ -63,7 +79,8 @@
         </div>
         {% if images %}
           <p class="gallery-help">Choose a photo to view it large. Use the heart and notes to build your selection.</p>
-          <section class="thumb-grid client-grid" aria-label="Gallery photos">
+          <section class="thumb-grid client-grid" id="gallery-photos" tabindex="-1"
+                   aria-label="Gallery photos">
             {% for img in images %}
               {% set is_favorite = img.id in favorites %}
               <figure class="thumb proof {{ 'is-fav' if is_favorite else '' }}" id="img-{{ img.id }}"
