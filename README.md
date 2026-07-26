@@ -294,6 +294,8 @@ Details: [`docs/architecture.md`](docs/architecture.md)
 ## Verification
 
 ```bash
+python -m playwright install chromium  # one-time local browser install
+bash scripts/browser-acceptance.sh     # Chromium desktop nav + full 320x568 proofing
 bash scripts/ci-smoke.sh        # ruff + pytest + health/privacy + magic-moment dogfood
 bash scripts/coverage.sh        # blocking hosted-CI aggregate line-coverage floor
 bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke

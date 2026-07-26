@@ -133,8 +133,11 @@ failure alone does not make successful SMTP delivery exactly-once.
 2. Gallery lightbox V1 is implemented with server/access-control coverage: authorized
    large-image navigation, keyboard and mobile gesture controls, focus-safe close/return
    behavior, and favorites/notes in context preserve the existing proofing packet with a
-   no-JavaScript fallback. Manual native-dialog, gesture, and 320px browser acceptance remains
-   a release check. Branded cover/story controls and the proofing-to-final-download transition
+   no-JavaScript fallback. Pinned Chromium acceptance now exercises native-dialog
+   navigation, keyboard guards, and focus behavior at 1280x900, plus the complete touch,
+   favorite/note, confirmed-submission, reload, and owner-visible packet journey at 320x568.
+   Firefox/WebKit and physical-device checks remain release checks. Branded cover/story
+   controls and the proofing-to-final-download transition
    remain open; neither widens anonymous media authority before D3 is closed.
 3. Add client-selectable proposal collections/add-ons and typed questionnaire fields
    before pursuing generalized document-builder depth.
@@ -158,7 +161,7 @@ large lab catalog wait until the pilot earns revenue.
 |---|---|---|
 | Client home | Ranked action room exists but enable/send and return context are fragmented | One intentional portal lifecycle and uninterrupted booking checklist |
 | Booking economics | Deposits exist; remaining package balance is not consistently created | Total/deposit/balance invariant with approved settlement semantics |
-| Gallery delivery | Upload, publish, owner-visible proof handoff, optional proof-link automation context, favorites, comments, cull, offer, download, and lightbox V1 code/server coverage exist; browser acceptance is pending | Browser acceptance, branded cover/story controls, and an approved final-download transition |
+| Gallery delivery | Upload, publish, owner-visible proof handoff, optional proof-link automation context, favorites, comments, cull, offer, download, lightbox V1 code/server coverage, and pinned Chromium desktop-navigation/full-320x568 acceptance exist | Firefox/WebKit and physical-device acceptance, branded cover/story controls, and an approved final-download transition |
 | Communication/calendar | Outbound email and calendar subscription exist | Approved two-way messaging and timezone-aware external-busy sync |
 | Print commerce | Stable offers, orders, and a generic lab seam exist | Selected frames/options/shipping, one real lab, and reconciliation |
 | AI moat | Vision and favorites already curate offers | Historical provenance, labeled benchmark, editable recommendation, measured sales lift |

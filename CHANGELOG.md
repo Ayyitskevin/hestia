@@ -6,6 +6,11 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Added
 
+- Added a dedicated, isolated Chromium acceptance gate for public proofing: native-dialog
+  navigation, keyboard guards, and focus return at 1280x900, plus the complete 320x568
+  touch, favorite, note, confirmed-submission, reload, and owner-visible packet journey.
+  The fixture binds loopback, blocks external browser traffic, overrides parent paths and
+  providers before app import, and uses disposable mock-only state.
 - Durable automation email now has a fail-closed `HESTIA_AUTOMATION_EMAIL_ENABLED`
   operator gate. While paused, enabled rules stay queued without consuming attempts; owner
   surfaces disclose the pause, and hosted preflight rejects enabling it until stable
@@ -39,6 +44,8 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Fixed
 
+- Prevented the narrow gallery lightbox stage from overlapping proofing controls when a
+  mobile browser resolves dynamic viewport units smaller than its layout viewport.
 - Gallery-published automations now resolve the published gallery's current project and
   client at send time, so delayed work cannot email a former client after reassignment.
   Pre-upgrade jobs without gallery authority remain compatible when they do not request a
