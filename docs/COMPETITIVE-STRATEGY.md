@@ -147,10 +147,13 @@ failure alone does not make successful SMTP delivery exactly-once.
    a ranked studio-dashboard handoff queue and owner digest with exact favorite/note
    counts: submitted packets first (oldest first), then proofing in progress, then awaiting
    selections. Submitted work deep-links to the existing owner proofing packet. The queue
-   reuses tenant-scoped state and adds no media or mutation authority. Firefox/WebKit and
-   physical-device checks remain release checks. Persisted story-copy/layout controls and
-   the proofing-to-final-download transition remain open; neither change widens anonymous
-   media authority before D3.
+   reuses tenant-scoped state and adds no media or mutation authority. Owners now also get
+   a redacted, failure-first gallery-processing health queue: failed or unknown work joins
+   Needs attention and the owner digest, while queued/running/completed state remains
+   visible without exposing provider errors or job internals. Firefox/WebKit and
+   physical-device checks remain release checks. Persisted story-copy/layout controls,
+   processing retry controls, and the proofing-to-final-download transition remain open;
+   none widens anonymous media authority before D3.
 3. Add client-selectable proposal collections/add-ons and typed questionnaire fields
    before pursuing generalized document-builder depth.
 4. Define timezone ownership and external-busy synchronization. Implement it after the
@@ -173,7 +176,7 @@ large lab catalog wait until the pilot earns revenue.
 |---|---|---|
 | Client home | Ranked action room exists but enable/send and return context are fragmented | One intentional portal lifecycle and uninterrupted booking checklist |
 | Booking economics | Deposits exist; remaining package balance is not consistently created | Total/deposit/balance invariant with approved settlement semantics |
-| Gallery delivery | Upload, publish, owner-visible proof handoff, optional proof-link automation context, favorites, comments, cull, offer, download, lightbox V1 code/server coverage, pinned Chromium desktop-navigation/full-320x568 acceptance, a cover-led client opening, server-rendered selected-photo review, and a ranked studio-dashboard handoff queue/digest exist | Firefox/WebKit and physical-device acceptance, persisted story controls, and an approved final-download transition |
+| Gallery delivery | Upload, publish, owner-visible proof handoff, optional proof-link automation context, favorites, comments, cull, offer, download, lightbox V1 code/server coverage, pinned Chromium desktop-navigation/full-320x568 acceptance, a cover-led client opening, server-rendered selected-photo review, a ranked studio-dashboard handoff queue/digest, and redacted failure-first processing health exist | Firefox/WebKit and physical-device acceptance, persisted story controls, approved retry controls, and an approved final-download transition |
 | Communication/calendar | Outbound email and calendar subscription exist | Approved two-way messaging and timezone-aware external-busy sync |
 | Print commerce | Stable offers, orders, and a generic lab seam exist | Selected frames/options/shipping, one real lab, and reconciliation |
 | AI moat | Vision and favorites already curate offers | Historical provenance, labeled benchmark, editable recommendation, measured sales lift |

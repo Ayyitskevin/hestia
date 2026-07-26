@@ -6,6 +6,13 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Added
 
+- Studio dashboards now show a redacted Gallery processing queue that keeps failed,
+  running, queued, and completed work in operational order using each run's latest
+  state change. Old runs that are re-queued remain visible, gallery titles appear only
+  through exact tenant-matched relationships, and raw errors, step details, offer URLs,
+  malformed identifiers, and provider data never enter the dashboard view model.
+  Failed or unknown work also appears in Needs attention and the owner digest, while
+  fixed state treatments and explicit UTC timestamps keep the queue unambiguous.
 - Studio dashboards now surface a Gallery handoffs queue for published galleries that
   have not reached final delivery. Submitted selection packets rank first (oldest first),
   followed by proofing in progress and untouched galleries; exact favorite and note

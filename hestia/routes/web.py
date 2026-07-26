@@ -22,6 +22,7 @@ from ..dashboard import (
     hot_leads,
     money_snapshot,
     needs_attention,
+    pipeline_health,
     reconnect_due,
     send_owner_digest_now,
     setup_checklist,
@@ -42,7 +43,6 @@ from ..interest import (
 from ..invoices import money
 from ..mini_sessions import hydrate_mini_session_displays, list_published_mini_sessions
 from ..packages import list_packages
-from ..pipeline import list_runs
 from ..presets import preset_applied
 from ..private_surfaces import PRIVATE_SURFACE_PREFIXES
 from ..proposals import proposal_metrics
@@ -565,7 +565,7 @@ def dashboard(request: Request):
         tenant = get_tenant(conn, auth.tenant["id"])
         flags = tenant_flags(tenant)
         galleries = recent_galleries(conn, tenant["id"], limit=6)
-        runs = list_runs(conn, tenant["id"], limit=6)
+        runs = pipeline_health(conn, tenant["id"], limit=6)
         plan = plan_status(tenant, subscription_backend=settings.subscription_backend)
         unpaid = conn.execute(
             # plan installments are tracked under their plan, not the flat invoice list
@@ -580,7 +580,7 @@ def dashboard(request: Request):
             "unpaid": unpaid,
         }
         profile = get_profile(conn, tenant["id"])
-        attention = needs_attention(conn, tenant["id"])
+        attention = needs_attention(conn, tenant["id"], pipeline_runs=runs)
         snapshot = money_snapshot(conn, tenant["id"])
         proposal_stats = proposal_metrics(conn, tenant["id"])
         lead_intelligence = hot_leads(conn, tenant["id"])

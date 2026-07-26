@@ -210,7 +210,7 @@ Hestia is a modular monolith, not a bundle of disconnected services.
 | `portal` | One branded client hub with a ranked client action room |
 | `growth` / `automations` | Review/referral flywheel, workflow rules, delayed retention, owner digest |
 | `subscriptions` | Flat hosted SaaS billing |
-| `pipeline` / `jobs` | Durable background processing |
+| `pipeline` / `jobs` | Durable background processing with a redacted, failure-first owner health queue |
 
 ## Local Development
 
