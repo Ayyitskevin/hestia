@@ -52,6 +52,10 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Fixed
 
+- Installed-wheel verification now proves the spawned artifact owns its probe, rejects
+  missing, unexpected, or byte-drifted static assets, and fetches every one from that
+  artifact. This closes false greens for port collisions, client-gallery JavaScript, and
+  story styling that exist only in an editable checkout.
 - Prevented the narrow gallery lightbox stage from overlapping proofing controls when a
   mobile browser resolves dynamic viewport units smaller than its layout viewport.
 - Gallery-published automations now resolve the published gallery's current project and

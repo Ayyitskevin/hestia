@@ -42,9 +42,12 @@ echo "== install wheel =="
 python -m pip install --no-deps --target "$SITE" "${WHEELS[0]}"
 
 EXPECTED_MIGRATIONS="$(find "$ROOT/hestia/migrations" -maxdepth 1 -type f -name '*.sql' | wc -l)"
-export EXPECTED_MIGRATIONS SITE
+SOURCE_STATIC="$ROOT/hestia/static"
+WHEEL_SMOKE_SENTINEL="$TMP"
+export EXPECTED_MIGRATIONS SITE SOURCE_STATIC WHEEL_SMOKE_SENTINEL
 cd "$TMP"
 PYTHONPATH="$SITE" python -c '
+from hashlib import sha256
 import os
 from pathlib import Path
 import hestia
@@ -68,7 +71,36 @@ assert actual == expected, f"wheel has {actual}/{expected} migrations"
 source = _source_inventory(root / "migrations")
 assert source["repository_state"] == "manifest_clean"
 assert source["count"] == expected
-print(f"installed package: {root} ({actual} migrations)")
+
+
+def inventory(directory):
+    return {
+        path.relative_to(directory).as_posix(): sha256(path.read_bytes()).hexdigest()
+        for path in sorted(directory.rglob("*"))
+        if path.is_file()
+    }
+
+
+source_static = inventory(Path(os.environ["SOURCE_STATIC"]).resolve())
+installed_static = inventory(root / "static")
+missing_static = sorted(source_static.keys() - installed_static.keys())
+unexpected_static = sorted(installed_static.keys() - source_static.keys())
+changed_static = sorted(
+    name
+    for name in source_static.keys() & installed_static.keys()
+    if source_static[name] != installed_static[name]
+)
+assert source_static, "source static inventory is empty"
+assert not (missing_static or unexpected_static or changed_static), (
+    "wheel static inventory mismatch: "
+    f"missing={missing_static}, unexpected={unexpected_static}, changed={changed_static}"
+)
+sentinel_path = root / "static" / ".hestia-wheel-smoke"
+sentinel_path.write_text(os.environ["WHEEL_SMOKE_SENTINEL"], encoding="utf-8")
+print(
+    f"installed package: {root} "
+    f"({actual} migrations, {len(installed_static)} exact static assets)"
+)
 '
 
 echo "== boot installed wheel =="
@@ -94,22 +126,79 @@ if ! curl -sf "http://127.0.0.1:$PORT/healthz" >"$TMP/healthz.json"; then
   exit 1
 fi
 
-python -c '
+if ! kill -0 "$PID" 2>/dev/null; then
+  echo "FAIL: installed wheel process exited before ownership verification" >&2
+  sed -n '1,160p' "$TMP/server.log" >&2
+  exit 1
+fi
+
+if ! python -c '
 import json
 import os
 import struct
 from pathlib import Path
+from urllib.error import URLError
+from urllib.parse import quote
 from urllib.request import urlopen
+
+
+def fetch_static(relative):
+    encoded_relative = quote(relative, safe="/")
+    port = os.environ.get("HESTIA_WHEEL_SMOKE_PORT", "8602")
+    url = f"http://127.0.0.1:{port}/static/{encoded_relative}"
+    try:
+        with urlopen(url, timeout=5) as response:
+            status = response.status
+            content_type = response.headers.get_content_type()
+            data = response.read()
+    except (OSError, URLError) as exc:
+        raise AssertionError(
+            f"could not fetch static asset {relative} from {url}: {exc}"
+        ) from exc
+    assert status == 200, f"static asset {relative} returned HTTP {status}"
+    return data, content_type
+
 
 health = json.loads(Path("healthz.json").read_text(encoding="utf-8"))
 assert health.get("db") == "ok", health
-port = os.environ.get("HESTIA_WHEEL_SMOKE_PORT", "8602")
-with urlopen(f"http://127.0.0.1:{port}/static/og-cover.png", timeout=5) as response:
-    data = response.read()
-    assert response.headers.get_content_type() == "image/png"
-assert data[:8] == b"\x89PNG\r\n\x1a\n"
-assert struct.unpack(">II", data[16:24]) == (1200, 630)
-print(f"healthz: {health}; og-cover.png: {len(data)} bytes")
-'
+source_static = Path(os.environ["SOURCE_STATIC"]).resolve()
+served = {}
+for path in sorted(source_static.rglob("*")):
+    if not path.is_file():
+        continue
+    relative = path.relative_to(source_static).as_posix()
+    data, content_type = fetch_static(relative)
+    if relative == "og-cover.png":
+        assert content_type == "image/png", (
+            f"og-cover.png content type: expected image/png, got {content_type!r}"
+        )
+    expected = path.read_bytes()
+    assert data == expected, f"served static bytes differ: {relative}"
+    served[relative] = data
+
+sentinel, _ = fetch_static(".hestia-wheel-smoke")
+assert sentinel.decode("utf-8") == os.environ["WHEEL_SMOKE_SENTINEL"], (
+    "installed wheel server ownership probe mismatch"
+)
+cover = served["og-cover.png"]
+assert cover[:8] == b"\x89PNG\r\n\x1a\n"
+assert struct.unpack(">II", cover[16:24]) == (1200, 630)
+print(
+    f"healthz: {health}; "
+    f"{len(served)} static assets served byte-exact; "
+    f"ownership probe matched; "
+    f"og-cover.png: {len(cover)} bytes"
+)
+'; then
+  echo "FAIL: installed wheel static or ownership probe failed" >&2
+  sed -n '1,160p' "$TMP/server.log" >&2
+  exit 1
+fi
+
+if ! kill -0 "$PID" 2>/dev/null; then
+  echo "FAIL: installed wheel process exited during static verification" >&2
+  sed -n '1,160p' "$TMP/server.log" >&2
+  exit 1
+fi
 
 echo "== wheel-smoke OK =="
