@@ -299,7 +299,7 @@ bash scripts/browser-acceptance.sh     # Chromium desktop nav + full 320x568 pro
 bash scripts/ci-smoke.sh        # ruff + pytest + health/privacy + magic-moment dogfood
 bash scripts/coverage.sh        # blocking hosted-CI aggregate line-coverage floor
 bash scripts/dogfood-hestia.sh  # end-to-end magic moment smoke
-bash scripts/wheel-smoke.sh     # build, install, and boot the distributable artifact
+bash scripts/wheel-smoke.sh     # build/install/boot; prove ownership + every static byte
 bash scripts/container-smoke.sh # build and boot the non-root production container
 bash scripts/lock-dependencies.sh --check  # prove Python 3.12 locks match their declared inputs
 python -m pip_audit --strict --require-hashes --disable-pip \
