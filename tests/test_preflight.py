@@ -24,6 +24,7 @@ def _hosted_settings(settings, tmp_path: Path, **overrides):
         stripe_secret_key="sk_live_123",
         stripe_webhook_secret="whsec_123",
         email_backend="smtp",
+        automation_email_enabled=False,
         smtp_host="smtp.example.com",
         smtp_from="hello@hestia.test",
         trial_days=14,
@@ -44,7 +45,15 @@ def test_hosted_preflight_accepts_production_shaped_config(settings, tmp_path):
     assert not [check for check in checks if check.level == "fail"]
     assert by_name["flat price"].level == "pass"
     assert by_name["trial length"].level == "pass"
+    assert by_name["automation email delivery"].level == "pass"
     assert by_name["runtime probe"].level == "warn"
+
+
+def test_hosted_preflight_blocks_unattended_automation_email(settings, tmp_path):
+    enabled = _hosted_settings(settings, tmp_path, automation_email_enabled=True)
+    check = _by_name(run_preflight(enabled, root=Path(".")))["automation email delivery"]
+    assert check.level == "fail"
+    assert "HESTIA_AUTOMATION_EMAIL_ENABLED=false" in check.detail
 
 
 def test_hosted_preflight_fails_on_launch_blockers(settings, tmp_path):

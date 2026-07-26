@@ -39,6 +39,7 @@ def test_local_env_example_is_non_saas_mock_first():
     assert env["HESTIA_SAAS_MODE"] == "false"
     assert env["HESTIA_SIGNUP_ENABLED"] == "false"
     assert env["HESTIA_STORAGE_BACKEND"] == "local"
+    assert env["HESTIA_AUTOMATION_EMAIL_ENABLED"] == "true"
     for key in MOCK_BACKENDS:
         assert env[key] == "mock"
 

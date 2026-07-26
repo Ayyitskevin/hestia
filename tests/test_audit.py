@@ -46,6 +46,12 @@ def test_invoice_send_and_void_are_audited(client, conn):
 def test_gallery_publish_is_audited(client, conn):
     login_owner(client, onboard_studio(client, email="aud@gal.com"))
     gid = client.post("/galleries", data={"title": "Wedding"}).url.path.rstrip("/").split("/")[-1]
+    uploaded = client.post(
+        f"/galleries/{gid}/images",
+        files=[("files", ("proof.jpg", b"image-bytes", "image/jpeg"))],
+        follow_redirects=False,
+    )
+    assert uploaded.status_code == 303
     client.post(f"/galleries/{gid}/publish")
     tid = conn.execute("SELECT tenant_id FROM galleries WHERE id = ?", (gid,)).fetchone()["tenant_id"]
     pub = [e for e in list_audit(conn, tid) if e["action"] == "gallery.published"]
@@ -55,6 +61,12 @@ def test_gallery_publish_is_audited(client, conn):
 def test_activity_view_renders_humanized(client, conn):
     login_owner(client, onboard_studio(client, email="aud@act.com"))
     gid = client.post("/galleries", data={"title": "Seaside"}).url.path.rstrip("/").split("/")[-1]
+    uploaded = client.post(
+        f"/galleries/{gid}/images",
+        files=[("files", ("proof.jpg", b"image-bytes", "image/jpeg"))],
+        follow_redirects=False,
+    )
+    assert uploaded.status_code == 303
     client.post(f"/galleries/{gid}/publish")
     page = client.get("/settings/activity")
     assert page.status_code == 200

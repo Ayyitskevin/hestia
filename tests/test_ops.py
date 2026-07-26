@@ -54,11 +54,26 @@ def test_admin_system_renders_for_admin(app):
     assert page.status_code == 200
     assert "System" in page.text
     assert "Job queue" in page.text and "Backends" in page.text
+    assert "may dead-letter" in page.text
+    assert "automation email" in page.text
+    assert '<span class="pill on">enabled</span>' in page.text
     assert "0001_baseline" in page.text  # migration ledger is surfaced
     assert "fulfillment" in page.text    # every seam is listed, incl. the latest
 
 
 # --- dead-letter introspection + requeue ------------------------------------
+
+def test_admin_system_shows_paused_automation_email(app):
+    import dataclasses
+
+    app.state.settings = dataclasses.replace(
+        app.state.settings,
+        automation_email_enabled=False,
+    )
+    page = _admin(app).get("/admin/system")
+    assert "automation email" in page.text
+    assert '<span class="pill off">paused</span>' in page.text
+
 
 def test_failed_jobs_lists_only_dead_letter(db_path):
     with get_db(db_path) as conn:

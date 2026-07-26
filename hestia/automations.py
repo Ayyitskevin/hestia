@@ -11,7 +11,8 @@ Two halves, deliberately decoupled:
   via the email seam, recording every outcome in ``automation_runs``.
 
 The first action is ``email_client``; the model leaves room for more. Templates
-support ``{client_name}``, ``{studio_name}``, ``{project_name}``, ``{title}``.
+support ``{client_name}``, ``{studio_name}``, ``{project_name}``, ``{title}``,
+and the event-specific ``{gallery_url}``.
 """
 
 from __future__ import annotations
@@ -19,8 +20,8 @@ from __future__ import annotations
 import sqlite3
 
 from .config import Settings
-from .email import notify
-from .jobs import enqueue, register
+from .email import delivery_ok, notify
+from .jobs import NonRetryableJobError, enqueue, register
 
 # The events a rule can trigger on — value is the human label for the UI.
 TRIGGERS: dict[str, str] = {
@@ -41,7 +42,7 @@ ACTIONS: dict[str, str] = {
     "email_client": "Email the client",
 }
 
-PLACEHOLDERS = ("client_name", "studio_name", "project_name", "title")
+PLACEHOLDERS = ("client_name", "studio_name", "project_name", "title", "gallery_url")
 
 
 def emit_event(
@@ -80,6 +81,8 @@ def _run_automation(settings: Settings, payload: dict) -> None:
 
     automation_id = int(payload["automation_id"])
     ctx = payload.get("context", {})
+    if not isinstance(ctx, dict):
+        ctx = {}
     with get_db(settings.db_path) as conn:
         row = conn.execute(
             "SELECT * FROM automations WHERE id = ?", (automation_id,)
@@ -87,6 +90,8 @@ def _run_automation(settings: Settings, payload: dict) -> None:
         # Rule may have been disabled or deleted between emit and run — that's fine.
         if not row or not row["enabled"]:
             return
+        if not settings.automation_email_enabled:
+            raise RuntimeError("automation email delivery pause was bypassed")
         auto = dict(row)
         status, detail = _execute(conn, settings, auto, ctx)
         conn.execute(
@@ -94,26 +99,75 @@ def _run_automation(settings: Settings, payload: dict) -> None:
             "VALUES (?, ?, ?, ?, ?)",
             (auto["tenant_id"], auto["id"], auto["trigger"], status, detail),
         )
+        if status == "failed":
+            # Preserve the generic failed run, then dead-letter the job. SMTP can fail
+            # after accepting a message but before acknowledging it, so blind replay can
+            # duplicate client mail. An operator must review this ambiguous outcome.
+            conn.commit()
+            raise NonRetryableJobError(detail)
 
 
 def _execute(conn: sqlite3.Connection, settings: Settings, auto: dict, ctx: dict) -> tuple[str, str]:
     from .crm import get_client, get_project
+    from .galleries import gallery_proofing_url, get_gallery
     from .tenants import get_tenant
 
     tenant_id = auto["tenant_id"]
-    project = None
-    if ctx.get("project_id"):
-        project = get_project(conn, tenant_id, int(ctx["project_id"]))
-    client_id = ctx.get("client_id") or (project or {}).get("client_id")
-    client = get_client(conn, tenant_id, int(client_id)) if client_id else None
     tenant = get_tenant(conn, tenant_id)
+    gallery_url = ""
+    gallery = None
+    needs_gallery_url = any(
+        "{gallery_url}" in (auto.get(field) or "") for field in ("subject", "body")
+    )
+    is_gallery_publish = auto["trigger"] == "gallery.published"
+    if needs_gallery_url and not is_gallery_publish:
+        return "skipped", "gallery_url unavailable for automation trigger"
+    legacy_gallery_publish = is_gallery_publish and "gallery_id" not in ctx
+    if legacy_gallery_publish and needs_gallery_url:
+        return "skipped", "queued gallery authority is missing"
+    has_gallery_context = is_gallery_publish and not legacy_gallery_publish
+    if has_gallery_context:
+        raw_gallery_id = ctx.get("gallery_id")
+        if isinstance(raw_gallery_id, bool):
+            gallery_id = None
+        elif isinstance(raw_gallery_id, int):
+            gallery_id = raw_gallery_id
+        elif (
+            isinstance(raw_gallery_id, str)
+            and 1 <= len(raw_gallery_id) <= 19
+            and raw_gallery_id.isascii()
+            and raw_gallery_id.isdecimal()
+        ):
+            gallery_id = int(raw_gallery_id)
+        else:
+            gallery_id = None
+        if not gallery_id or not 0 < gallery_id <= (1 << 63) - 1:
+            return "skipped", "gallery unavailable for automation"
+        gallery = get_gallery(conn, tenant_id, gallery_id)
+        if not gallery or gallery["status"] != "published" or not tenant:
+            return "skipped", "gallery unavailable for automation"
+        gallery_url = gallery_proofing_url(settings, tenant["slug"], gallery["slug"])
+
+    project_id = gallery.get("project_id") if gallery else ctx.get("project_id")
+    project = get_project(conn, tenant_id, int(project_id)) if project_id else None
+    if is_gallery_publish:
+        # New jobs follow the current gallery relationship. Legacy pre-upgrade jobs
+        # have only project authority, so they still re-resolve that project's current
+        # client and never trust a queued client snapshot.
+        client_id = (project or {}).get("client_id")
+    else:
+        client_id = ctx.get("client_id") or (project or {}).get("client_id")
+    client = get_client(conn, tenant_id, int(client_id)) if client_id else None
     project_name = ctx.get("project_name") or (project or {}).get("name", "")
     fields = {
         "client_name": (client or {}).get("name") or "there",
         "studio_name": (tenant or {}).get("name", ""),
         "project_name": project_name,
         "title": ctx.get("title") or project_name,
+        "gallery_url": gallery_url,
     }
+    if needs_gallery_url and not gallery_url:
+        return "skipped", "gallery unavailable for gallery_url placeholder"
     subject = _render(auto["subject"], fields)
     body = _render(auto["body"], fields)
 
@@ -121,7 +175,16 @@ def _execute(conn: sqlite3.Connection, settings: Settings, auto: dict, ctx: dict
     to = (client or {}).get("email", "")
     if not to:
         return "skipped", "no client email on file"
-    notify(conn, settings, to=to, subject=subject, body=body, tenant_id=tenant_id)
+    email_status = notify(
+        conn,
+        settings,
+        to=to,
+        subject=subject,
+        body=body,
+        tenant_id=tenant_id,
+    )
+    if not delivery_ok(email_status):
+        return "failed", "email delivery failed; manual review required"
     return "sent", f"emailed {to}"
 
 
@@ -133,6 +196,9 @@ def create_automation(
     subject: str, body: str, action: str = "email_client", delay_days: int = 0,
 ) -> dict | None:
     if trigger not in TRIGGERS or action not in ACTIONS:
+        return None
+    uses_gallery_url = "{gallery_url}" in subject or "{gallery_url}" in body
+    if uses_gallery_url and trigger != "gallery.published":
         return None
     cur = conn.execute(
         "INSERT INTO automations (tenant_id, name, trigger, action, subject, body, delay_days) "

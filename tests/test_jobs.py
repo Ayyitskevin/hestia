@@ -7,6 +7,7 @@ from conftest import login_owner, onboard_studio
 from hestia import jobs as jobs_mod
 from hestia.db import get_db
 from hestia.jobs import (
+    NonRetryableJobError,
     claim_next,
     drain,
     enqueue,
@@ -19,7 +20,7 @@ from hestia.jobs import (
 
 # Test handlers, registered once at import. Unique kinds avoid colliding with
 # the real "pipeline.run" handler or each other; module state tracks invocations.
-_calls = {"ok": 0, "flaky": 0, "boom": 0}
+_calls = {"ok": 0, "flaky": 0, "boom": 0, "terminal": 0}
 
 
 @register("test.ok")
@@ -40,6 +41,12 @@ def _boom(settings, payload):
     raise RuntimeError("always fails")
 
 
+@register("test.terminal")
+def _terminal(settings, payload):
+    _calls["terminal"] += 1
+    raise NonRetryableJobError("manual review required")
+
+
 def _enq(db_path, **kw):
     with get_db(db_path) as conn:
         return enqueue(conn, **kw)
@@ -55,6 +62,19 @@ def test_enqueue_and_atomic_claim(db_path):
     job = claim_next(db_path)
     assert job["id"] == jid and job["status"] == "running" and job["attempts"] == 1
     assert claim_next(db_path) is None  # already claimed → nothing left
+
+
+def test_claim_next_skips_blocked_kind_without_consuming_attempt(db_path):
+    paused = _enq(db_path, kind="automation.run")
+    ready = _enq(db_path, kind="test.ok")
+
+    claimed = claim_next(db_path, blocked_kinds=("automation.run",))
+
+    assert claimed["id"] == ready
+    paused_job = _job(db_path, paused)
+    assert paused_job["status"] == "queued"
+    assert paused_job["attempts"] == 0
+    assert paused_job["started_at"] is None
 
 
 def test_run_next_dispatches_and_completes(db_path, settings):
@@ -84,6 +104,20 @@ def test_failure_retries_with_backoff_then_errors(db_path, settings):
     run_next(db_path, settings)                       # attempt 2 → exhausted → error
     job = _job(db_path, jid)
     assert job["status"] == "error" and job["attempts"] == 2
+
+
+def test_non_retryable_failure_dead_letters_on_first_attempt(db_path, settings):
+    before = _calls["terminal"]
+    jid = _enq(db_path, kind="test.terminal", max_attempts=5)
+
+    assert run_next(db_path, settings) == "test.terminal"
+
+    job = _job(db_path, jid)
+    assert _calls["terminal"] == before + 1
+    assert job["status"] == "error"
+    assert job["attempts"] == 1
+    assert job["last_error"] == "manual review required"
+    assert job["finished_at"]
 
 
 def test_flaky_job_succeeds_on_retry(db_path, settings):

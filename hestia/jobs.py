@@ -2,7 +2,11 @@
 
 Replaces fire-and-forget ``BackgroundTasks`` for work that must survive a restart.
 A job is a row; it's claimed atomically, run by a registered handler, and retried
-with exponential backoff on failure. Two things drain the queue:
+with exponential backoff on ordinary failure. Queue policy can exclude paused job
+kinds before claim, without consuming an attempt. A handler can raise
+:class:`NonRetryableJobError` when replaying an ambiguous external side effect would
+be unsafe; that job moves directly to the dead-letter queue. Two things drain the
+queue:
 
 - a **worker thread** started in the app lifespan (the durable backstop — picks up
   retries and jobs orphaned by a crash, via :func:`reclaim_stale`), and
@@ -36,6 +40,10 @@ HANDLERS: dict[str, Callable] = {}
 MAX_BACKOFF_SECONDS = 300
 
 
+class NonRetryableJobError(RuntimeError):
+    """A visible terminal failure whose external side effect must not be replayed."""
+
+
 def register(kind: str):
     """Decorator: register a handler for a job kind."""
     def deco(fn: Callable) -> Callable:
@@ -63,13 +71,21 @@ def enqueue(conn, *, kind: str, payload: dict | None = None, tenant_id: str | No
     return cur.lastrowid
 
 
-def claim_next(db_path: str | Path) -> dict | None:
-    """Atomically claim the oldest runnable queued job (or None)."""
+def claim_next(
+    db_path: str | Path,
+    *,
+    blocked_kinds: tuple[str, ...] = (),
+) -> dict | None:
+    """Atomically claim the oldest runnable, non-paused queued job (or None)."""
+    query = "SELECT id FROM jobs WHERE status='queued' AND run_at <= datetime('now')"
+    params: tuple[str, ...] = ()
+    if blocked_kinds:
+        placeholders = ",".join("?" for _ in blocked_kinds)
+        query += f" AND kind NOT IN ({placeholders})"
+        params = blocked_kinds
+    query += " ORDER BY id LIMIT 1"
     with get_db(db_path) as conn:
-        row = conn.execute(
-            "SELECT id FROM jobs WHERE status='queued' AND run_at <= datetime('now') "
-            "ORDER BY id LIMIT 1"
-        ).fetchone()
+        row = conn.execute(query, params).fetchone()
         if not row:
             return None
         cur = conn.execute(
@@ -109,9 +125,20 @@ def _fail(db_path: str | Path, job: dict, error: str) -> None:
             )
 
 
+def _fail_terminal(db_path: str | Path, job_id: int, error: str) -> None:
+    """Move a claimed job straight to the dead-letter queue without replay."""
+    with get_db(db_path) as conn:
+        conn.execute(
+            "UPDATE jobs SET status='error', last_error=?, finished_at=datetime('now'), "
+            "updated_at=datetime('now') WHERE id=?",
+            (error[:1000], job_id),
+        )
+
+
 def run_next(db_path: str | Path, settings: Settings) -> str | None:
     """Claim and run one job. Returns the kind run, or None if nothing was runnable."""
-    job = claim_next(db_path)
+    blocked_kinds = ("automation.run",) if not settings.automation_email_enabled else ()
+    job = claim_next(db_path, blocked_kinds=blocked_kinds)
     if not job:
         return None
     handler = HANDLERS.get(job["kind"])
@@ -119,6 +146,9 @@ def run_next(db_path: str | Path, settings: Settings) -> str | None:
         if handler is None:
             raise RuntimeError(f"no handler registered for job kind '{job['kind']}'")
         handler(settings, json.loads(job["payload_json"] or "{}"))
+    except NonRetryableJobError as exc:
+        _fail_terminal(db_path, job["id"], str(exc))
+        return job["kind"]
     except Exception as exc:  # noqa: BLE001 - failures are recorded + retried, never raised out
         _fail(db_path, job, str(exc))
         return job["kind"]

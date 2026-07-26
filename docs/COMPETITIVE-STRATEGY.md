@@ -3,7 +3,7 @@
 Originally derived from a verified competitive deep-research pass (2026-06; 24
 adversarially verified claims across HoneyBook, Dubsado, Pixieset, Pic-Time,
 Aftershoot, and Bain pricing data). Pricing, gallery capability, and Hestia build
-status were re-verified against official sources on 2026-07-17. Pairs with
+status were re-verified against official sources on 2026-07-25. Pairs with
 [`HESTIA-DOCTRINE.md`](HESTIA-DOCTRINE.md) (the *what/why*); this doc is the
 *competitive landscape + what-to-build-next*.
 
@@ -78,7 +78,7 @@ Each item is a vertical slice through the tenant → client → project → gall
 
 The repository is already broad enough. The next quarter should deepen the transitions
 that make the breadth feel like one product, not add another module. The exact planning
-base is `804523fc469f8e2f2a8b5ed685273aa97baf47f8`.
+base is `00eaf84da1b8d82bb1dde5b5ac308a8e1249b0af`.
 
 The competitive bar moved again: HoneyBook now ships native galleries and mini sessions,
 while also pushing two-way texting and Tap to Pay; Pixieset and Pic-Time remain much deeper
@@ -94,7 +94,11 @@ separate committed runtime-release boundary are approved, implemented, and verif
 The same security review should close raw capability paths in exception logs. Custom-domain
 edge activation, SQLite WAL-reset patch evidence, subscription event ordering, and
 license/release truth remain independent gates; a green deterministic CI run does not
-substitute for them.
+substitute for them. Unattended SMTP automation delivery is also held until a stable
+per-job delivery/outbox identity closes the crash-after-send replay window. The fail-closed
+`HESTIA_AUTOMATION_EMAIL_ENABLED=false` gate keeps matching jobs queued without consuming
+attempts and hosted preflight rejects enabling it; terminalizing an explicit transport
+failure alone does not make successful SMTP delivery exactly-once.
 
 ### Days 0–30 — one client home and complete booking state
 
@@ -111,8 +115,21 @@ substitute for them.
 
 ### Days 31–60 — a delivery experience clients remember
 
-1. Surface the proofing URL immediately after publication and make its send/automation
-   context explicit. Do not widen anonymous media authority before D3 is closed.
+1. The publication-to-proofing handoff is now explicit: before the one-way action, the
+   authenticated studio user sees which proof-link automations will be queued, their delay, and
+   whether the current recipient is ready; empty galleries are blocked. After the first
+   publish, the stable configured-domain proofing URL appears with PIN,
+   manual-share, and separate final-delivery context. `gallery.published` automations can
+   include `{gallery_url}`; the worker persists no URL or slug and re-resolves the
+   tenant-owned, currently published gallery plus its current project/client at send time.
+   Stored project snapshots cannot select a former recipient, missing or malformed gallery
+   authority fails closed, and an explicit mail transport failure becomes a terminal,
+   generic manual-review outcome instead of an unsafe automatic replay. Pre-upgrade publish
+   jobs without gallery authority remain compatible only when they do not request the proofing
+   URL; they re-resolve the queued project's current client and ignore client snapshots.
+   Publishing still sends nothing unless the studio created the rule beforehand and a valid
+   current recipient exists when the rule runs.
+   This does not widen anonymous media authority before D3 closes.
 2. Gallery lightbox V1 is implemented with server/access-control coverage: authorized
    large-image navigation, keyboard and mobile gesture controls, focus-safe close/return
    behavior, and favorites/notes in context preserve the existing proofing packet with a
@@ -141,7 +158,7 @@ large lab catalog wait until the pilot earns revenue.
 |---|---|---|
 | Client home | Ranked action room exists but enable/send and return context are fragmented | One intentional portal lifecycle and uninterrupted booking checklist |
 | Booking economics | Deposits exist; remaining package balance is not consistently created | Total/deposit/balance invariant with approved settlement semantics |
-| Gallery delivery | Upload, publish, proofing, favorites, comments, cull, offer, download, and lightbox V1 code/server coverage exist; browser acceptance is pending | Owner-visible proof link, browser acceptance, branded cover/story controls, and an approved final-download transition |
+| Gallery delivery | Upload, publish, owner-visible proof handoff, optional proof-link automation context, favorites, comments, cull, offer, download, and lightbox V1 code/server coverage exist; browser acceptance is pending | Browser acceptance, branded cover/story controls, and an approved final-download transition |
 | Communication/calendar | Outbound email and calendar subscription exist | Approved two-way messaging and timezone-aware external-busy sync |
 | Print commerce | Stable offers, orders, and a generic lab seam exist | Selected frames/options/shipping, one real lab, and reconciliation |
 | AI moat | Vision and favorites already curate offers | Historical provenance, labeled benchmark, editable recommendation, measured sales lift |
@@ -158,7 +175,7 @@ large lab catalog wait until the pilot earns revenue.
 
 ## Pricing & packaging
 
-Official monthly prices re-verified 2026-07-17 (annual commitments shown as their
+Official monthly prices re-verified 2026-07-25 (annual commitments shown as their
 advertised monthly equivalent):
 
 | Product | Entry | More comparable integrated tier |
@@ -195,6 +212,13 @@ financial decisions.
   added native galleries and mini sessions; strategy must not rely on the old
   “weak galleries” characterization.
 - Vendor revenue claims ("$2k in 30 days", "5× print sales") are promotional, not audited.
+- The owner handoff shows whether a proofing PIN exists but intentionally does not reveal
+  or rotate it. Design an authenticated recovery/rotation flow without widening anonymous
+  gallery or media authority before D3 is approved.
+- SMTP failures are terminal and visible rather than blindly replayed, but a worker crash
+  after the server accepts a successful message can still leave an ambiguous stale job.
+  Approve and implement a stable outbox/provider-idempotency contract before unattended
+  production automation delivery.
 - The "Dubsado is best" verdict is one affiliate blogger; its workflow *depth* is
   independently confirmed.
 - **Under-covered, worth a follow-up research pass:** Táve / Studio Ninja / Iris Works

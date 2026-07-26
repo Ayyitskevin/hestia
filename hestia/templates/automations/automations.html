@@ -13,6 +13,11 @@
   </div>
 </div>
 
+{% if not automation_email_enabled %}
+<div class="alert" style="margin-bottom:14px"><strong>Automation email delivery is paused.</strong>
+  Matching durable jobs remain queued without consuming attempts until an operator enables delivery.</div>
+{% endif %}
+
 <div class="card stack" style="margin-bottom:14px">
   <h3>Retention recipes</h3>
   <p class="muted">One-click re-engagement flows — they fire automatically, days after the moment.</p>
@@ -67,7 +72,7 @@
 {% endif %}
 
 <div class="card stack" style="margin-top:14px">
-  <h3>Recent runs</h3>
+  <h3 id="recent-runs">Recent runs</h3>
   {% if runs %}
     <table>
       <thead><tr><th>When</th><th>Automation</th><th>Trigger</th><th>Result</th></tr></thead>

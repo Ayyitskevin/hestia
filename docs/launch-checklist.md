@@ -119,6 +119,11 @@ platform-charge invoice path.
 - [ ] Replace test/procedural holds only with those approved implementations: configure
       live studio-subscription Stripe plus the approved D2 client-payment path, then set
       self-service signup to the approved state.
+- [ ] Confirm `HESTIA_AUTOMATION_EMAIL_ENABLED=false` until a stable per-job
+      outbox/provider-idempotency contract is approved, implemented, and verified. The
+      runtime leaves matching jobs queued without consuming attempts, and hosted preflight
+      fails if the flag is enabled. Passing SMTP checks proves transactional-mail
+      configuration only; it does not close crash-after-send replay for automations.
 - [ ] Activate the prepared DNS records and open only ports 80/443.
 - [ ] Register the live Stripe endpoint with the events required by studio subscriptions
       and the implemented D2 Connect contract.
