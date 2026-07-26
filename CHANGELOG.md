@@ -6,6 +6,9 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Added
 
+- Project hubs can now launch the existing proposal flow with the current project and
+  client preselected. Choosing a package preserves both so the resulting proposal,
+  contract, and invoice stay attached to the same job.
 - Client proofing galleries now open after unlock with the owner-selected visible cover
   when it has a browse thumbnail, otherwise the first authorized visible browse image.
   Galleries without one keep the text header. The responsive, no-JavaScript presentation
