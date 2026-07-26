@@ -6,6 +6,16 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Added
 
+- Durable automation email now has a fail-closed `HESTIA_AUTOMATION_EMAIL_ENABLED`
+  operator gate. While paused, enabled rules stay queued without consuming attempts; owner
+  surfaces disclose the pause, and hosted preflight rejects enabling it until stable
+  delivery idempotency is implemented.
+- Gallery publication now starts with a tenant-scoped one-way/send preflight and blocks
+  zero-visible-frame handoffs before any automation is queued. The preflight lists only
+  enabled proof-link rules with their delay and current recipient readiness, links to a
+  prefilled compatible rule form, and then lands on the stable configured-domain client
+  URL with PIN and accurate proofing-versus-delivery guidance. The published handoff also
+  provides a progressively enhanced copy control with a raw-link fallback.
 - Client proofing galleries now include a progressively enhanced, responsive large-photo
   viewer with bounded previous/next navigation, keyboard and swipe controls, focus return,
   and favorites and notes in context. Hidden frames stay out of viewer navigation and media
@@ -29,6 +39,17 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Fixed
 
+- Gallery-published automations now resolve the published gallery's current project and
+  client at send time, so delayed work cannot email a former client after reassignment.
+  Pre-upgrade jobs without gallery authority remain compatible when they do not request a
+  proofing URL: they re-resolve the queued project's current client and ignore stored client
+  snapshots. A legacy job that requests `{gallery_url}` still fails closed because no safe
+  gallery authority can be reconstructed.
+- Automation email transport failures now create a generic failed run and move the durable
+  job directly to terminal error with manual review required. This avoids blindly replaying
+  an SMTP outcome that may already have been accepted. A stable delivery/outbox identity is
+  still required before unattended SMTP launch can safely recover from a process crash after
+  a successful send.
 - Replaced the dashboard's full client and project list hydration with direct,
   tenant-scoped counts. Rich CRM rows remain available to their dedicated screens
   without materializing every client, invoice, tag, project, or gallery relationship.
@@ -52,6 +73,9 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Security
 
+- Proofing handoffs use only the configured public origin, persist no URL, slug, PIN, or
+  capability token in queued automation context, and fail closed for missing, malformed,
+  draft, foreign, or wrong-trigger gallery authority.
 - Raised the optional image-processing floor to the current audited Pillow 12.3
   release, excluding older versions with known advisories, and added a hash-locked
   focused CI gate for the lower-bound image delivery and perceptual-hash paths.

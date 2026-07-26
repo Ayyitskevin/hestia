@@ -7,7 +7,7 @@
 <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap">
   <div>
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-      <span style="font-size:1.05rem; font-weight:600; letter-spacing:-.01em">{{ gallery.title }}</span>
+      <h1 style="font-size:1.05rem; margin:0">{{ gallery.title }}</h1>
       <span class="pill {{ 'on' if gallery.status == 'published' else 'off' }}">{{ gallery.status }}</span>
     </div>
     <div class="muted" style="font-size:.72rem; margin-top:2px">
@@ -46,13 +46,135 @@
       {% endif %}
     {% endif %}
     {% if gallery.status != 'published' %}
-      <form method="post" action="/galleries/{{ gallery.id }}/publish">
-        {% include "_csrf.html" %}
-        <button class="btn secondary" type="submit">Publish</button>
-      </form>
+      <a class="btn secondary" href="#proofing-preflight">Review &amp; publish</a>
     {% endif %}
   </div>
 </div>
+
+{% if gallery.status != 'published' %}
+<section class="card stack" id="proofing-preflight" tabindex="-1"
+         aria-labelledby="proofing-preflight-title"
+         style="margin-bottom:14px; scroll-margin-top:18px">
+  <div>
+    <div class="eyebrow">Publication preflight</div>
+    <h2 id="proofing-preflight-title" style="font-size:1.17em; margin:2px 0 0">Review &amp; publish</h2>
+  </div>
+  {% if publish_blocked %}
+    <div class="alert error" role="alert" style="margin:0">Publication was blocked because
+      this gallery has no visible photos.</div>
+  {% endif %}
+  <p class="muted" style="margin:0">Publishing is one-way: it makes the client proofing page
+    available and queues existing enabled <strong>Gallery published</strong> automations once.</p>
+  <p style="margin:0"><strong>{{ visible_image_count }} visible photo{{ '' if visible_image_count == 1 else 's' }}</strong>
+    will appear on the client proofing page.</p>
+  {% if not visible_image_count %}
+    <div class="alert error" style="margin:0">Add at least one visible photo before publishing.
+      Hidden photos do not count.</div>
+  {% endif %}
+  <div class="alert" style="margin:0">
+    <strong>Email handoff</strong>
+    {% if not automation_email_enabled %}
+      <p style="margin:5px 0 0"><span class="pill off">Automation delivery paused</span>
+        Matching durable jobs remain queued without consuming attempts until an operator enables delivery.</p>
+    {% endif %}
+    {% if proof_link_automations %}
+      <p style="margin:5px 0 0">{{ proof_link_automations|length }} enabled proof-link rule{{ '' if proof_link_automations|length == 1 else 's' }} will include the proofing URL:</p>
+      <ul style="margin:6px 0 0; padding-left:20px; overflow-wrap:anywhere; word-break:break-word">
+        {% for rule in proof_link_automations %}
+          <li><strong>{{ rule.name }}</strong> — {% if rule.delay_days %}becomes runnable after {{ rule.delay_days }} day{{ '' if rule.delay_days == 1 else 's' }}{% else %}queues immediately{% endif %}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p style="margin:5px 0 0">No enabled proof-link rule will include the proofing URL.</p>
+    {% endif %}
+    {% if proof_recipient_status == 'ready' %}
+      <p style="margin:5px 0 0"><span class="pill on">Client email is ready</span>
+        {{ proof_recipient_name }} is linked now. Hestia re-checks the gallery's current
+        project and client when each rule runs.</p>
+    {% elif proof_recipient_status == 'no_project' %}
+      <p style="margin:5px 0 0"><span class="pill off">No project is linked</span>
+        Link the gallery below before publishing if a rule should email the client.</p>
+    {% elif proof_recipient_status == 'no_client' %}
+      <p style="margin:5px 0 0"><span class="pill off">No client is linked</span>
+        The current project needs a client before a rule can send.</p>
+    {% else %}
+      <p style="margin:5px 0 0"><span class="pill off">Client email is missing</span>
+        Add an email to the current client before publishing.</p>
+    {% endif %}
+    <p style="margin:5px 0 0"><a href="/automations/new?trigger=gallery.published&amp;gallery_id={{ gallery.id }}">Create a proof-link automation before publishing</a>.</p>
+    {% if other_publish_automation_count %}
+      <p class="hint" style="margin:5px 0 0">{{ other_publish_automation_count }} other enabled publish
+        rule{{ '' if other_publish_automation_count == 1 else 's' }} will also be queued without the proofing URL.</p>
+    {% endif %}
+  </div>
+  {% if gallery.pin %}
+    <div class="alert" style="margin:0"><strong>PIN protected.</strong> Keep the PIN you set and
+      confirm the client has it before publishing. Hestia cannot reveal or reset it here yet.</div>
+  {% else %}
+    <div class="alert" style="margin:0"><strong>No PIN is set.</strong> Anyone with the proofing
+      link can open this gallery.</div>
+  {% endif %}
+  <form method="post" action="/galleries/{{ gallery.id }}/publish"
+        data-confirm="Publish this gallery permanently? Existing enabled Gallery published automations will be queued once.">
+    {% include "_csrf.html" %}
+    <button class="btn secondary" type="submit" {{ 'disabled' if not visible_image_count else '' }}>Publish gallery</button>
+  </form>
+</section>
+{% endif %}
+
+{% if proofing_link %}
+<section class="card stack" id="client-proofing" tabindex="-1" aria-labelledby="client-proofing-title"
+         style="margin-bottom:14px; scroll-margin-top:18px">
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+    <div>
+      <div class="eyebrow">Client handoff</div>
+      <h2 id="client-proofing-title" style="font-size:1.17em; margin:2px 0 0">Client proofing link</h2>
+    </div>
+    <span class="pill on" style="margin-left:auto">Published</span>
+  </div>
+  <p class="muted" style="margin:0">Share this page when you want the client to review the gallery,
+    favorite frames, leave notes, and submit their selections.</p>
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+    <a class="offer-url" href="{{ proofing_link }}" target="_blank" rel="noopener"
+       data-proofing-url style="display:block; flex:1; min-width:0; overflow-wrap:anywhere; word-break:break-word">{{ proofing_link }}</a>
+    <button class="btn secondary" type="button" data-copy-proofing hidden>Copy link</button>
+    <span class="hint" data-copy-status role="status" aria-live="polite"></span>
+  </div>
+  <p class="hint" style="margin:0">The proofing page opens in new tab.</p>
+  <div class="alert" style="margin:0">
+    <strong>Send context</strong>
+    {% if not automation_email_enabled %}
+      <p style="margin:5px 0 0"><span class="pill off">Automation delivery paused</span>
+        Any still-pending job remains queued. Review
+        <a href="/automations#recent-runs">Recent runs</a> for prior outcomes.</p>
+    {% else %}
+      <p style="margin:5px 0 0">If an enabled proof-link automation existed before publication,
+        Hestia queued it. The worker re-checks the gallery's current project and client when the rule
+        runs. Queued is not delivered—review <a href="/automations#recent-runs">Recent runs</a>.
+        Otherwise, share this link manually.</p>
+    {% endif %}
+    <p style="margin:5px 0 0">A rule created now applies only to future galleries.
+      <a href="/automations/new?trigger=gallery.published&amp;gallery_id={{ gallery.id }}">Set up a proof-link rule</a>.</p>
+  </div>
+  {% if gallery.pin %}
+    <p class="hint" style="margin:0"><span class="pill">PIN prompt enabled</span>
+      Send the gallery PIN separately so your client can open the proofing page.</p>
+  {% else %}
+    <p class="hint" style="margin:0"><span class="pill off">No PIN</span>
+      Anyone with this link can open the proofing gallery.</p>
+  {% endif %}
+  {% if delivery_link and not delivery_is_expired %}
+    <p class="hint" style="margin:0">Visible originals remain openable one at a time in proofing.
+      Digital delivery below adds the explicit final-file download handoff.</p>
+  {% elif delivery_link %}
+    <p class="hint" style="margin:0">Visible originals remain openable one at a time in proofing.
+      The separate final-file delivery link below is expired until you renew it.</p>
+  {% else %}
+    <p class="hint" style="margin:0">Visible originals remain openable one at a time in proofing.
+      Digital delivery is off, so there is no separate final-file download link.</p>
+  {% endif %}
+</section>
+{% endif %}
 
 <div class="card" style="margin-bottom:14px">
   <form method="post" action="/galleries/{{ gallery.id }}/project"
@@ -87,7 +209,7 @@
 </div>
 
 <div class="card stack" style="margin-top:14px">
-  <h3>Sale</h3>
+  <h2 style="font-size:1.17em">Sale</h2>
   {% if campaign %}
     <p class="muted">Running: <strong>{{ campaign.headline or 'Sale' }}</strong> ·
       <span class="pill on">{{ campaign.discount_pct }}% off</span> · ends {{ campaign.ends_at }}.
@@ -118,11 +240,16 @@
 {% endif %}
 
 <div class="card stack" style="margin-top:14px">
-  <h3>Digital delivery</h3>
+  <h2 style="font-size:1.17em">Digital delivery</h2>
   {% if delivery_link %}
-    <p class="muted">Your client's private download link — every high-res original,
+    {% if delivery_is_expired %}
+      <div class="alert error" role="alert">This delivery link is expired and returns 410 Gone.
+        Clear or extend its expiry below before sharing it.</div>
+    {% endif %}
+    <p class="muted">Your client's private download link — every visible high-res original,
       individually or as one zip. Share it however you like.</p>
-    <a class="offer-url" href="{{ delivery_link }}" target="_blank">{{ delivery_link }}</a>
+    <a class="offer-url" href="{{ delivery_link }}" target="_blank" rel="noopener"
+       style="display:block; min-width:0; overflow-wrap:anywhere; word-break:break-word">{{ delivery_link }}</a>
     <form method="post" action="/galleries/{{ gallery.id }}/delivery/expiry" style="margin-top:10px">
       {% include "_csrf.html" %}
       <label for="expires_at" class="muted" style="font-size:.85rem">Link expires <span class="muted">(optional — clients can download through this date)</span></label>
@@ -148,7 +275,7 @@
 </div>
 
 <div class="card stack" style="margin-top:14px">
-  <h3>Engagement</h3>
+  <h2 style="font-size:1.17em">Engagement</h2>
   <p class="muted">Whether your client has opened and downloaded their gallery.</p>
   <div class="health-strip">
     <div class="health-item"><span class="svc">{{ gallery.view_count or 0 }}</span> <span class="url">views</span></div>
@@ -163,7 +290,7 @@
 
 {% if orders %}
 <div class="card stack" style="margin-top:14px">
-  <h3>Orders · {{ orders|length }}</h3>
+  <h2 style="font-size:1.17em">Orders · {{ orders|length }}</h2>
   <table>
     <thead><tr><th>Item</th><th>Amount</th><th>Order</th><th>Fulfillment</th></tr></thead>
     <tbody>
@@ -190,7 +317,7 @@
 
 {% if selection_packet and (selection_packet.favorite_count or selection_packet.comment_count or selection_packet.submitted_at) %}
 <div class="card stack" style="margin-top:14px">
-  <h3>Client proofing</h3>
+  <h2 style="font-size:1.17em">Proofing activity</h2>
   <p class="muted">
     <span class="pill {{ 'on' if selection_packet.status == 'submitted' else 'off' }}">{{ selection_packet.status_label }}</span>
     {{ selection_packet.comment_count }} note{{ '' if selection_packet.comment_count == 1 else 's' }}
@@ -226,7 +353,7 @@
 {% endif %}
 
 <div class="card stack" style="margin-top:14px">
-  <h3>Upload images</h3>
+  <h2 style="font-size:1.17em">Upload images</h2>
   <form method="post" action="/galleries/{{ gallery.id }}/images" enctype="multipart/form-data">
     {% include "_csrf.html" %}
     <input type="file" name="files" multiple accept="image/*" required>
@@ -396,4 +523,25 @@
 {% else %}
 <p class="muted" style="margin-top:14px">No frames yet — upload a few to enable processing.</p>
 {% endif %}
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var button = document.querySelector("[data-copy-proofing]");
+  var link = document.querySelector("[data-proofing-url]");
+  var status = document.querySelector("[data-copy-status]");
+  if (!button || !link || !status || !navigator.clipboard ||
+      typeof navigator.clipboard.writeText !== "function") return;
+  button.hidden = false;
+  button.addEventListener("click", function () {
+    navigator.clipboard.writeText(link.href).then(function () {
+      button.textContent = "Copied";
+      status.textContent = "Proofing link copied.";
+      window.setTimeout(function () { button.textContent = "Copy link"; }, 1800);
+    }, function () {
+      status.textContent = "Copy failed. Select the link and copy it manually.";
+    });
+  });
+})();
+</script>
 {% endblock %}

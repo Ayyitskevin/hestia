@@ -20,6 +20,7 @@ from .contracts import contract_public_url, list_contracts
 from .crm import galleries_for_client, get_client, list_projects
 from .crypto import new_session_token
 from .delivery import delivery_url
+from .galleries import gallery_proofing_url
 from .invoices import client_statement, invoice_public_url, list_invoices
 from .payment_plans import get_payment_plan, list_payment_plans
 from .project_files import list_client_files
@@ -210,7 +211,7 @@ def assemble_portal(conn: sqlite3.Connection, settings: Settings, client: dict) 
     all_galleries = galleries_for_client(conn, tenant_id, client["id"])
     galleries = [g for g in all_galleries if g["status"] == "published"]
     for g in galleries:
-        g["view_url"] = f"{settings.public_url.rstrip('/')}/g/{slug}/{g['slug']}"
+        g["view_url"] = gallery_proofing_url(settings, slug, g["slug"])
         # If the studio has enabled digital delivery, the client downloads here too.
         g["download_url"] = delivery_url(settings, g["delivery_token"]) if g.get("delivery_token") else None
 

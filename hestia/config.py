@@ -92,6 +92,9 @@ class Settings:
     # Email (transactional). mock = record to the outbox, send nothing (testable
     # default). smtp = deliver over SMTP and still record. See hestia/email.py.
     email_backend: str = "mock"  # mock | smtp
+    # Durable automation sends stay paused until an operator explicitly enables
+    # them. Transactional mail (verification, resets, receipts) is unaffected.
+    automation_email_enabled: bool = False
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""
@@ -147,6 +150,7 @@ class Settings:
             flat_price_cents=4000,
             trial_days=int(os.getenv("HESTIA_TRIAL_DAYS", "14")),
             email_backend=os.getenv("HESTIA_EMAIL_BACKEND", "mock"),
+            automation_email_enabled=_env_bool("HESTIA_AUTOMATION_EMAIL_ENABLED", False),
             smtp_host=os.getenv("HESTIA_SMTP_HOST", ""),
             smtp_port=int(os.getenv("HESTIA_SMTP_PORT", "587")),
             smtp_user=os.getenv("HESTIA_SMTP_USER", ""),
@@ -203,6 +207,11 @@ class Settings:
             )
         if self.email_backend == "smtp" and not self.smtp_host:
             warn.append("email_backend=smtp but HESTIA_SMTP_HOST is unset")
+        if self.email_backend == "smtp" and self.automation_email_enabled:
+            warn.append(
+                "HESTIA_AUTOMATION_EMAIL_ENABLED is on with SMTP; hosted preflight "
+                "will fail until durable delivery idempotency is implemented"
+            )
         xai = [b for b in ("vision", "album", "content", "product")
                if getattr(self, f"{b}_backend") == "xai"]
         if xai and not self.xai_api_key:

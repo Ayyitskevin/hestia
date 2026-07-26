@@ -29,8 +29,9 @@
       <div class="health-item"><span class="svc">{{ k }}</span><span class="url">{{ v }}</span></div>
       {% endfor %}
     </div>
-    <p class="hint">At-least-once: failed jobs retry with backoff, then dead-letter below.
-      Orphaned 'running' jobs are reclaimed automatically after 15 min.</p>
+    <p class="hint">Ordinary failures retry with backoff, then dead-letter below. Queue
+      policy can pause a job before claim without consuming an attempt; a handler may dead-letter
+      immediately when replay is unsafe. Orphaned 'running' jobs are reclaimed after 15 min.</p>
   </div>
 
   <div class="card stack">
@@ -40,6 +41,8 @@
       <div class="health-item"><span class="svc">{{ k }}</span>
         <span class="url"><span class="pill {{ 'on' if v != 'mock' and v != 'local' else '' }}">{{ v }}</span></span></div>
       {% endfor %}
+      <div class="health-item"><span class="svc">automation email</span>
+        <span class="url"><span class="pill {{ 'on' if info.automation_email_enabled else 'off' }}">{{ 'enabled' if info.automation_email_enabled else 'paused' }}</span></span></div>
     </div>
     <p class="hint">logs: {{ info.log_format }} · signup: {{ 'on' if info.signup_enabled else 'off' }}</p>
   </div>
@@ -48,9 +51,9 @@
 <div class="card stack" style="margin-top:18px">
   <h3>Dead-letter queue · {{ info.failed|length }} failed</h3>
   {% if info.failed %}
-    <p class="muted">Jobs that exhausted their retries. Fix the cause, then requeue — each
-      requeue grants one fresh run (it doesn't reset the retry budget, so a still-broken
-      job won't loop).</p>
+    <p class="muted">Jobs that exhausted their retries or were marked unsafe to replay.
+      Before requeueing an external-side-effect job, confirm the action did not already complete.
+      Each requeue grants one fresh run; it does not reset the retry budget.</p>
     <table>
       <thead><tr><th>#</th><th>Kind</th><th>Studio</th><th>Tries</th><th>Last error</th><th>Failed at</th><th></th></tr></thead>
       <tbody>

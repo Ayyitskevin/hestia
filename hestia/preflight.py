@@ -355,6 +355,18 @@ def run_preflight(
             ),
         )
     )
+    checks.append(
+        _check(
+            "pass" if not settings.automation_email_enabled else "fail",
+            "automation email delivery",
+            (
+                "durable automation email is paused pending stable delivery idempotency"
+                if not settings.automation_email_enabled
+                else "set HESTIA_AUTOMATION_EMAIL_ENABLED=false until a stable outbox or "
+                "provider-idempotency contract is implemented and verified"
+            ),
+        )
+    )
 
     # Live AI vision is the product's wedge. mock is runnable but the magic moment
     # (real culls) is fake — warn so the operator knows demos run on simulated AI.

@@ -18,7 +18,13 @@ from ..campaigns import (
 from ..crm import assign_gallery_to_project, get_client, get_project, list_projects
 from ..csv_export import csv_response
 from ..db import audit
-from ..delivery import delivery_url, enable_delivery, regenerate_delivery_token, set_delivery_expiry
+from ..delivery import (
+    delivery_expired,
+    delivery_url,
+    enable_delivery,
+    regenerate_delivery_token,
+    set_delivery_expiry,
+)
 from ..email import notify
 from ..fulfillment import list_fulfillments
 from ..galleries import (
@@ -26,7 +32,9 @@ from ..galleries import (
     apply_cull,
     apply_quality_cull,
     create_gallery,
+    gallery_proofing_url,
     get_gallery,
+    image_count,
     list_galleries,
     list_images,
     publish_gallery,
@@ -131,7 +139,12 @@ def gallery_create(
 
 
 @router.get("/{gallery_id}")
-def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
+def gallery_detail(
+    request: Request,
+    gallery_id: int,
+    too_large: int = 0,
+    publish_blocked: int = 0,
+):
     with db_conn(request) as conn:
         auth = _require_user(request, conn)
         if not auth:
@@ -147,6 +160,11 @@ def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
         ).fetchone()
         flags = tenant_flags(get_tenant(conn, auth.tenant["id"]))
         project = get_project(conn, auth.tenant["id"], gallery["project_id"]) if gallery.get("project_id") else None
+        project_client = (
+            get_client(conn, auth.tenant["id"], project["client_id"])
+            if project and project.get("client_id")
+            else None
+        )
         projects = list_projects(conn, auth.tenant["id"])
         album = get_album_for_gallery(conn, auth.tenant["id"], gallery_id)
         product_set = get_set_for_gallery(conn, auth.tenant["id"], gallery_id)
@@ -163,6 +181,27 @@ def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
         hero_ids = hero_suggestions(conn, auth.tenant["id"], gallery_id)
         ai_usage = gallery_usage_summary(conn, auth.tenant["id"], gallery_id)
         ai_subsidy = tenant_subsidy_status(conn, settings_of(request), auth.tenant["id"])
+        publish_automation_count = int(
+            conn.execute(
+                "SELECT COUNT(*) AS n FROM automations "
+                "WHERE tenant_id = ? AND trigger = 'gallery.published' AND enabled = 1",
+                (auth.tenant["id"],),
+            ).fetchone()["n"]
+        )
+        proof_link_automations = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT name, delay_days FROM automations "
+                "WHERE tenant_id = ? AND trigger = 'gallery.published' AND enabled = 1 "
+                "AND (instr(subject, '{gallery_url}') > 0 "
+                "OR instr(body, '{gallery_url}') > 0) "
+                "ORDER BY delay_days, name",
+                (auth.tenant["id"],),
+            ).fetchall()
+        ]
+        delivery_is_expired = bool(
+            gallery.get("delivery_token") and delivery_expired(conn, gallery)
+        )
     culled_ids = cull.get("culled_ids") or set()
     # How many flagged frames are still visible (the "apply" button only matters if > 0),
     # and how many are currently hidden (so the owner can see/undo the cull state).
@@ -171,9 +210,23 @@ def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
     flagged_pending = sum(1 for im in images
                           if (analysis.get(im["id"]) or {}).get("flags") and not im["hidden"])
     hidden_count = sum(1 for im in images if im["hidden"])
+    visible_image_count = len(images) - hidden_count
+    if not project:
+        proof_recipient_status = "no_project"
+    elif not project_client:
+        proof_recipient_status = "no_client"
+    elif not (project_client.get("email") or "").strip():
+        proof_recipient_status = "no_email"
+    else:
+        proof_recipient_status = "ready"
     settings = settings_of(request)
     offer_url = offer_public_url(settings, auth.tenant["slug"], offer["token"]) if offer else None
     delivery_link = delivery_url(settings, gallery["delivery_token"]) if gallery.get("delivery_token") else None
+    proofing_link = (
+        gallery_proofing_url(settings, auth.tenant["slug"], gallery["slug"])
+        if gallery["status"] == "published"
+        else None
+    )
     return render(request, "gallery_detail.html", auth=auth, gallery=gallery, images=images,
                   offer=offer, offer_url=offer_url, run=dict(run) if run else None,
                   storage=storage_of(request), flags=flags, project=project, album=album,
@@ -184,7 +237,18 @@ def gallery_detail(request: Request, gallery_id: int, too_large: int = 0):
                   cull=cull, cull_pending=cull_pending, hidden_count=hidden_count, analysis=analysis, hero_ids=hero_ids,
                   flagged_pending=flagged_pending, too_large=too_large,
                   cover_id=gallery.get("cover_image_id"), delivery_link=delivery_link,
-                  ai_usage=ai_usage, ai_subsidy=ai_subsidy)
+                  delivery_is_expired=delivery_is_expired,
+                  proofing_link=proofing_link, ai_usage=ai_usage, ai_subsidy=ai_subsidy,
+                  publish_automation_count=publish_automation_count,
+                  proof_link_automations=proof_link_automations,
+                  other_publish_automation_count=(
+                      publish_automation_count - len(proof_link_automations)
+                  ),
+                  proof_recipient_status=proof_recipient_status,
+                  proof_recipient_name=(project_client or {}).get("name", ""),
+                  visible_image_count=visible_image_count,
+                  automation_email_enabled=settings.automation_email_enabled,
+                  publish_blocked=bool(publish_blocked))
 
 
 @router.post("/{gallery_id}/project")
@@ -406,6 +470,7 @@ async def gallery_upload(request: Request, gallery_id: int, files: list[UploadFi
 
 @router.post("/{gallery_id}/publish")
 def gallery_publish(request: Request, gallery_id: int):
+    published = False
     with db_conn(request) as conn:
         auth = _require_user(request, conn)
         if not auth:
@@ -413,10 +478,23 @@ def gallery_publish(request: Request, gallery_id: int):
         gallery = get_gallery(conn, auth.tenant["id"], gallery_id)
         if not gallery:
             return RedirectResponse("/galleries", status_code=303)
+        if gallery["status"] == "draft" and image_count(
+            conn,
+            gallery_id,
+            include_hidden=False,
+        ) == 0:
+            return RedirectResponse(
+                f"/galleries/{gallery_id}?publish_blocked=1#proofing-preflight",
+                status_code=303,
+            )
         if publish_gallery(conn, auth.tenant["id"], gallery_id):
+            published = True
             audit(conn, actor="owner", action="gallery.published",
                   tenant_id=auth.tenant["id"], detail=gallery["title"])
-    return RedirectResponse(f"/galleries/{gallery_id}", status_code=303)
+    target = f"/galleries/{gallery_id}"
+    if published:
+        target += "#client-proofing"
+    return RedirectResponse(target, status_code=303)
 
 
 @router.post("/{gallery_id}/process")

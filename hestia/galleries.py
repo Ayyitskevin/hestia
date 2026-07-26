@@ -13,6 +13,7 @@ import sqlite3
 from typing import BinaryIO
 
 from .automations import emit_event
+from .config import Settings
 from .crypto import new_session_token
 from .storage import Storage, image_key
 
@@ -61,6 +62,15 @@ def safe_inline_type(content_type: str | None) -> str:
 
 def _slugify(value: str) -> str:
     return _SLUG_RE.sub("-", (value or "").strip().lower()).strip("-") or "gallery"
+
+
+def gallery_proofing_url(settings: Settings, tenant_slug: str, gallery_slug: str) -> str:
+    """Canonical client proofing URL on the configured public origin.
+
+    Never derive this from the request Host header: owner pages and delayed
+    automations must share the deployment's configured, trusted public origin.
+    """
+    return f"{settings.public_url.rstrip('/')}/g/{tenant_slug}/{gallery_slug}"
 
 
 # ── Galleries ───────────────────────────────────────────────────────────────
@@ -219,8 +229,16 @@ def publish_gallery(conn: sqlite3.Connection, tenant_id: str, gallery_id: int) -
         "SELECT title, project_id FROM galleries WHERE id = ? AND tenant_id = ?",
         (gallery_id, tenant_id),
     ).fetchone()
-    emit_event(conn, tenant_id=tenant_id, event="gallery.published",
-               context={"project_id": g["project_id"], "title": g["title"]})
+    emit_event(
+        conn,
+        tenant_id=tenant_id,
+        event="gallery.published",
+        context={
+            "gallery_id": gallery_id,
+            "project_id": g["project_id"],
+            "title": g["title"],
+        },
+    )
     return True
 
 

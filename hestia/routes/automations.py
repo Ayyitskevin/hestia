@@ -18,11 +18,27 @@ from ..automations import (
     set_automation_enabled,
 )
 from ..db import audit
-from .deps import db_conn, render, tenant_user
+from .deps import db_conn, render, settings_of, tenant_user
 
 router = APIRouter(prefix="/automations")
+_SQLITE_INT64_MAX = (1 << 63) - 1
 
 
+def _gallery_return_path(conn, tenant_id: str, raw_gallery_id: str) -> str | None:
+    value = (raw_gallery_id or "").strip()
+    if not value or len(value) > 19 or not value.isascii() or not value.isdecimal():
+        return None
+    gallery_id = int(value)
+    if not 1 <= gallery_id <= _SQLITE_INT64_MAX:
+        return None
+    gallery = conn.execute(
+        "SELECT status FROM galleries WHERE id = ? AND tenant_id = ?",
+        (gallery_id, tenant_id),
+    ).fetchone()
+    if not gallery:
+        return None
+    fragment = "proofing-preflight" if gallery["status"] == "draft" else "client-proofing"
+    return f"/galleries/{gallery_id}#{fragment}"
 
 
 @router.get("")
@@ -33,28 +49,61 @@ def automations_list(request: Request):
             return RedirectResponse("/login", status_code=303)
         automations = list_automations(conn, auth.tenant["id"])
         runs = list_runs(conn, auth.tenant["id"], limit=25)
-    return render(request, "automations/automations.html", auth=auth,
-                  automations=automations, runs=runs, recipes=RETENTION_RECIPES)
+    return render(
+        request,
+        "automations/automations.html",
+        auth=auth,
+        automations=automations,
+        runs=runs,
+        recipes=RETENTION_RECIPES,
+        automation_email_enabled=settings_of(request).automation_email_enabled,
+    )
 
 
 @router.get("/new")
-def automation_new(request: Request):
+def automation_new(
+    request: Request,
+    trigger: str = "",
+    gallery_id: str = "",
+    error: str = "",
+):
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
-    return render(request, "automations/automation_new.html", auth=auth,
-                  triggers=TRIGGERS, actions=ACTIONS)
+        return_path = _gallery_return_path(conn, auth.tenant["id"], gallery_id)
+    selected_trigger = trigger if trigger in TRIGGERS else next(iter(TRIGGERS))
+    return render(
+        request,
+        "automations/automation_new.html",
+        auth=auth,
+        triggers=TRIGGERS,
+        actions=ACTIONS,
+        selected_trigger=selected_trigger,
+        gallery_id=gallery_id if return_path else "",
+        gallery_prefill=selected_trigger == "gallery.published",
+        return_path=return_path,
+        automation_error=error == "invalid",
+        automation_email_enabled=settings_of(request).automation_email_enabled,
+    )
 
 
 @router.post("")
-def automation_create(request: Request, name: str = Form(...), trigger: str = Form(...),
-                      subject: str = Form(""), body: str = Form(""),
-                      action: str = Form("email_client"), delay_days: str = Form("0")):
+def automation_create(
+    request: Request,
+    name: str = Form(...),
+    trigger: str = Form(...),
+    subject: str = Form(""),
+    body: str = Form(""),
+    action: str = Form("email_client"),
+    delay_days: str = Form("0"),
+    gallery_id: str = Form(""),
+):
     with db_conn(request) as conn:
         auth = tenant_user(request, conn)
         if not auth:
             return RedirectResponse("/login", status_code=303)
+        return_path = _gallery_return_path(conn, auth.tenant["id"], gallery_id)
         try:
             delay = int(delay_days)
         except (ValueError, TypeError):
@@ -64,7 +113,12 @@ def automation_create(request: Request, name: str = Form(...), trigger: str = Fo
         if auto:
             audit(conn, actor="owner", action="automation.created", tenant_id=auth.tenant["id"],
                   detail=f"{auto['name']} · on {trigger}")
-    return RedirectResponse("/automations", status_code=303)
+    if not auto:
+        target = "/automations/new?error=invalid"
+        if return_path:
+            target += f"&trigger=gallery.published&gallery_id={gallery_id}"
+        return RedirectResponse(target, status_code=303)
+    return RedirectResponse(return_path or "/automations", status_code=303)
 
 
 @router.post("/recipe")

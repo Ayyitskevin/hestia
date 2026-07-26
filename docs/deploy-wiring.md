@@ -68,6 +68,10 @@ new studio can never verify its email and activate.
 - `HESTIA_SMTP_HOST`, `HESTIA_SMTP_PORT` (587 STARTTLS by default),
   `HESTIA_SMTP_USER`, `HESTIA_SMTP_PASSWORD`.
 - `HESTIA_SMTP_FROM` is the visible `From:` — falls back to `HESTIA_SMTP_USER` if unset.
+- Keep `HESTIA_AUTOMATION_EMAIL_ENABLED=false` on the hosted release candidate. This
+  pauses durable client-email jobs without consuming their attempt budget; SMTP remains
+  available for transactional verification/reset/receipt mail. Enable automation delivery
+  only after the stable outbox/provider-idempotency contract is approved and verified.
 - Use a sender on your own domain with **SPF + DKIM** published, or verification mail
   lands in spam and studios can't onboard.
 

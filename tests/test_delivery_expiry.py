@@ -87,3 +87,17 @@ def test_owner_sets_expiry_via_route(client, conn, storage):
     client.post(f"/galleries/{g['id']}/delivery/expiry", data={"expires_at": _future()})
     assert conn.execute("SELECT delivery_expires_at FROM galleries WHERE id=?",
                         (g["id"],)).fetchone()[0] == _future()
+
+
+def test_owner_gallery_labels_expired_delivery_link(client, conn, storage):
+    login_owner(client, onboard_studio(client, email="expired@owner.com"))
+    tid = conn.execute("SELECT id FROM tenants ORDER BY id DESC LIMIT 1").fetchone()[0]
+    g = create_gallery(conn, tenant_id=tid, title="Expired Finals")
+    enable_delivery(conn, tid, g["id"])
+    set_delivery_expiry(conn, tid, g["id"], _past())
+    conn.commit()
+
+    page = client.get(f"/galleries/{g['id']}")
+    assert page.status_code == 200
+    assert "This delivery link is expired and returns 410 Gone" in page.text
+    assert "every visible high-res original" in page.text

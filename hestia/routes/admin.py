@@ -331,6 +331,7 @@ def system(request: Request):
             "failed": failed_jobs(conn),
             "stale": stale_jobs(conn),
             "migrations": applied_migrations(conn),
+            "automation_email_enabled": settings.automation_email_enabled,
             "seams": {
                 "vision": settings.vision_backend,
                 "album": settings.album_backend,

@@ -35,6 +35,7 @@ def test_production_template_pins_release_candidate_backends():
     assert env["HESTIA_PAYMENTS_BACKEND"] == "mock"
     assert env["HESTIA_STRIPE_SECRET_KEY"].startswith("sk_test_")
     assert env["HESTIA_EMAIL_BACKEND"] == "smtp"
+    assert env["HESTIA_AUTOMATION_EMAIL_ENABLED"] == "false"
     assert env["HESTIA_PUBLIC_URL"].startswith("https://")
     assert env["HESTIA_TRIAL_DAYS"] == "14"
 

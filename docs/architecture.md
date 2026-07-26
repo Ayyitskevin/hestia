@@ -175,8 +175,11 @@ makes an exact same-time POST response-idempotent without re-alerting either par
 | Failure | Behavior |
 |---------|----------|
 | Vision / offer error | run → `error` at that step; no offer minted |
-| Job handler raises | recorded on the job, retried with backoff, then `error` |
-| Worker crash mid-job | the job is reclaimed and re-queued; the queue is at-least-once |
-| SMTP send error | recorded on the email outbox; the handler returns, so the job is `done` rather than retried |
+| Ordinary job handler raises | recorded on the job, retried with backoff, then `error` |
+| Automation delivery paused | `automation.run` is excluded before claim, so jobs stay queued without consuming attempts |
+| Handler raises `NonRetryableJobError` | recorded directly as terminal `error`; no automatic replay |
+| Worker crash mid-job | the job is reclaimed and re-queued; the queue is at-least-once and may repeat an external action |
+| Automation SMTP send error | recorded in the email outbox and automation runs; the job becomes terminal `error` with manual review required |
+| SMTP accepts mail, then the worker crashes | the stale job can be reclaimed and repeat the send; unattended automations remain launch-held pending stable delivery identity |
 | Real backend (Stripe/xAI) error | degrades to the safe path; never 500s the request |
 | Re-process | reuses the completed vision + the single offer token |

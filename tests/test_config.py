@@ -15,6 +15,11 @@ def test_unconfigured_saas_mode_default_remains_fail_closed(monkeypatch):
     assert Settings.from_env().saas_mode is True
 
 
+def test_unconfigured_automation_email_default_is_paused(monkeypatch):
+    monkeypatch.delenv("HESTIA_AUTOMATION_EMAIL_ENABLED", raising=False)
+    assert Settings.from_env().automation_email_enabled is False
+
+
 def test_stripe_payments_without_key_warns(settings):
     s = dataclasses.replace(settings, payments_backend="stripe", stripe_secret_key="")
     assert any("payments_backend=stripe" in w for w in s.config_warnings)
@@ -43,6 +48,16 @@ def test_public_s3_media_base_warns(settings):
 def test_smtp_without_host_warns(settings):
     s = dataclasses.replace(settings, email_backend="smtp", smtp_host="")
     assert any("email_backend=smtp" in w for w in s.config_warnings)
+
+
+def test_enabled_smtp_automation_delivery_warns(settings):
+    s = dataclasses.replace(
+        settings,
+        email_backend="smtp",
+        smtp_host="smtp.example.com",
+        automation_email_enabled=True,
+    )
+    assert any("HESTIA_AUTOMATION_EMAIL_ENABLED" in w for w in s.config_warnings)
 
 
 def test_xai_backend_without_key_warns(settings):

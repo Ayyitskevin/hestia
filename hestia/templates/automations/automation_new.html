@@ -5,14 +5,26 @@
 <div class="card stack">
   <h1>New automation</h1>
   <p class="muted">Pick a trigger and write the email Hestia should send the client when it fires.</p>
+  {% if not automation_email_enabled %}
+    <div class="alert"><strong>Delivery is paused.</strong> You can configure this rule now;
+      matching durable jobs will remain queued until an operator enables automation email.</div>
+  {% endif %}
+  {% if automation_error %}
+    <div class="alert error">Choose a valid trigger and action. The
+      <span class="mono">{gallery_url}</span> placeholder is accepted only for
+      <strong>Gallery published</strong>.</div>
+  {% endif %}
   <form method="post" action="/automations">
     {% include "_csrf.html" %}
+    {% if gallery_id %}<input type="hidden" name="gallery_id" value="{{ gallery_id }}">{% endif %}
     <label for="name">Name <span class="muted">(for your reference)</span></label>
-    <input type="text" id="name" name="name" placeholder="Welcome after signing" required autofocus>
+    <input type="text" id="name" name="name"
+           value="{{ 'Send gallery proofing link' if gallery_prefill else '' }}"
+           placeholder="Welcome after signing" required autofocus>
 
     <label for="trigger">When this happens</label>
     <select id="trigger" name="trigger" required>
-      {% for key, label in triggers.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      {% for key, label in triggers.items() %}<option value="{{ key }}" {{ 'selected' if key == selected_trigger else '' }}>{{ label }}</option>{% endfor %}
     </select>
 
     <label for="delay_days">Wait this many days before sending <span class="muted">(0 = right away; e.g. 3 for a review request, 365 for an anniversary)</span></label>
@@ -26,19 +38,28 @@
     </div>
 
     <label for="subject">Email subject</label>
-    <input type="text" id="subject" name="subject" placeholder="Welcome to {studio_name}, {client_name}!" required>
+    <input type="text" id="subject" name="subject"
+           value="{{ 'Your gallery is ready' if gallery_prefill else '' }}"
+           placeholder="Welcome to {studio_name}, {client_name}!" required>
 
     <label for="body">Email body</label>
     <textarea id="body" name="body" rows="8"
-      placeholder="Hi {client_name},&#10;&#10;Thank you for booking with {studio_name} — we can't wait for {project_name}. Here's what happens next...&#10;&#10;Warmly,&#10;{studio_name}"></textarea>
+      placeholder="Hi {client_name},&#10;&#10;Thank you for booking with {studio_name} — we can't wait for {project_name}. Here's what happens next...&#10;&#10;Warmly,&#10;{studio_name}">{% if gallery_prefill %}Hi {client_name},
+
+Your proofing gallery is ready: {gallery_url}
+
+Warmly,
+{studio_name}{% endif %}</textarea>
 
     <p class="hint">Placeholders: <span class="mono">{client_name}</span>,
       <span class="mono">{studio_name}</span>, <span class="mono">{project_name}</span>,
-      <span class="mono">{title}</span> — filled in when the automation runs.</p>
+      <span class="mono">{title}</span>, <span class="mono">{gallery_url}</span>
+      <span class="muted">(Gallery published only; incompatible rules are rejected)</span>
+      — filled in when the automation runs.</p>
 
     <div class="form-actions">
       <button class="btn" type="submit">Create automation</button>
-      <a class="btn ghost" href="/automations">Cancel</a>
+      <a class="btn ghost" href="{{ return_path or '/automations' }}">Cancel</a>
     </div>
   </form>
 </div>

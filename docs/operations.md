@@ -150,12 +150,15 @@ Background work is **at-least-once**. After a crash, stale `running` jobs are re
 and handlers may run again. Money and lifecycle transitions are claim-before-act:
 
 - invoice settle (`mark_paid` / Stripe webhook) — status guard; second delivery is a no-op
-- gallery publish — only `draft → published` wins; automations fire once
+- gallery publish — only `draft → published` wins; matching automation jobs are queued once
 - appointment confirm/book — only `proposed → confirmed` wins; one notify pair
-- SMTP down — outbox records `error:…`; no silent success
+- automation SMTP error — outbox + failed run are recorded and the job dead-letters for manual review
 
-Requeue dead-letter jobs from `/admin/system` only after fixing the underlying cause.
-Duplicate Stripe events are expected and safe.
+Keep `HESTIA_AUTOMATION_EMAIL_ENABLED=false` until stable delivery idempotency is approved.
+Paused automation jobs stay queued without consuming attempts. Requeue any external-side-effect
+job from `/admin/system` only after both fixing the cause and confirming the action did not
+already complete. Duplicate Stripe events are expected and safe; SMTP delivery is not
+exactly-once across a worker crash.
 
 ### Reading recovery diagnostics
 

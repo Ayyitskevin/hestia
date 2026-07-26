@@ -59,6 +59,7 @@ def settings(tmp_path: Path) -> Settings:
         payments_backend="mock",
         subscription_backend="mock",
         email_backend="mock",
+        automation_email_enabled=True,
         fulfillment_backend="mock",
         public_url="http://testserver",
     )
