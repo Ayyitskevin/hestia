@@ -33,6 +33,7 @@ def _context(
     width: int,
     height: int,
     mobile: bool = False,
+    java_script_enabled: bool = True,
 ) -> BrowserContext:
     origin = urlsplit(base_url)
     context = browser.new_context(
@@ -41,6 +42,7 @@ def _context(
         is_mobile=mobile,
         has_touch=mobile,
         device_scale_factor=1,
+        java_script_enabled=java_script_enabled,
     )
     context.set_default_timeout(10_000)
     context.set_default_navigation_timeout(15_000)
@@ -188,7 +190,13 @@ def test_gallery_proofing_journey(browser: Browser, live_hestia: str) -> None:
     blocked_external: list[str] = []
     browser_issues: list[str] = []
 
-    def make_context(*, width: int, height: int, mobile: bool = False) -> BrowserContext:
+    def make_context(
+        *,
+        width: int,
+        height: int,
+        mobile: bool = False,
+        java_script_enabled: bool = True,
+    ) -> BrowserContext:
         context = _context(
             browser,
             live_hestia,
@@ -196,6 +204,7 @@ def test_gallery_proofing_journey(browser: Browser, live_hestia: str) -> None:
             width=width,
             height=height,
             mobile=mobile,
+            java_script_enabled=java_script_enabled,
         )
         contexts.append(context)
         return context
@@ -307,7 +316,9 @@ def test_gallery_proofing_journey(browser: Browser, live_hestia: str) -> None:
         desktop_previous = desktop_page.locator("[data-lightbox-prev]")
         desktop_next = desktop_page.locator("[data-lightbox-next]")
         desktop_layout = desktop_page.locator(".lightbox-layout")
-        desktop_stage = desktop_page.locator(".lightbox-stage")
+        desktop_stage = desktop_page.get_by_role(
+            "region", name="Current gallery photo", exact=True
+        )
         desktop_proofing = desktop_page.locator(".lightbox-proofing")
         expect(desktop_close).to_be_focused()
         _assert_image_loaded(desktop_page, desktop_page.locator("[data-lightbox-image]"))
@@ -439,6 +450,124 @@ def test_gallery_proofing_journey(browser: Browser, live_hestia: str) -> None:
         proofing_actions = mobile_page.locator("#proofing-actions")
         expect(proofing_actions).to_be_focused()
         _assert_no_horizontal_overflow(mobile_page)
+
+        mobile_view_nav = mobile_page.get_by_role("navigation", name="Gallery view")
+        mobile_all_photos = mobile_view_nav.get_by_role("link", name=re.compile(r"All photos\s+2"))
+        mobile_selected_photos = mobile_view_nav.get_by_role(
+            "link", name=re.compile(r"Selected photos\s+1")
+        )
+        expect(mobile_all_photos).to_have_attribute("aria-current", "page")
+        assert mobile_selected_photos.get_attribute("aria-current") is None
+        for view_link in (mobile_all_photos, mobile_selected_photos):
+            _assert_minimum_target(view_link)
+
+        mobile_selected_photos.click()
+        expect(mobile_page).to_have_url(re.compile(r"\?view=selected#gallery-view-heading$"))
+        selected_items = mobile_page.locator("[data-gallery-item]")
+        expect(selected_items).to_have_count(1)
+        selected_heading = mobile_page.get_by_role(
+            "heading", name="Selected photos", exact=True
+        )
+        expect(selected_heading).to_be_visible()
+        expect(selected_heading).to_be_focused()
+        expect(
+            mobile_page.get_by_role("link", name=re.compile(r"Selected photos\s+1"))
+        ).to_have_attribute("aria-current", "page")
+        assert (
+            mobile_page.get_by_role("link", name=re.compile(r"All photos\s+2")).get_attribute(
+                "aria-current"
+            )
+            is None
+        )
+        _assert_no_horizontal_overflow(mobile_page)
+
+        selected_items.locator("[data-lightbox-open]").click()
+        expect(mobile_page.locator("#gallery-lightbox")).to_be_visible()
+        expect(mobile_page.locator("[data-lightbox-position]")).to_have_text("1 of 1")
+        expect(mobile_page.locator("[data-lightbox-prev]")).to_be_disabled()
+        expect(mobile_page.locator("[data-lightbox-next]")).to_be_disabled()
+        assert re.search(r"\?view=selected&lightbox=\d+#img-\d+$", mobile_page.url)
+        mobile_page.keyboard.press("Escape")
+        expect(mobile_page.locator("#gallery-lightbox")).not_to_be_visible()
+        expect(mobile_page).to_have_url(re.compile(r"\?view=selected#img-\d+$"))
+
+        selected_items.locator(".fav-btn").click()
+        expect(mobile_page).to_have_url(re.compile(r"\?view=selected#gallery-view-heading$"))
+        expect(selected_heading).to_be_focused()
+        expect(mobile_page.locator("[data-gallery-item]")).to_have_count(0)
+        expect(mobile_page.locator("#gallery-lightbox")).to_have_count(0)
+        expect(mobile_page.get_by_role("heading", name="No selected photos yet.")).to_be_visible()
+        show_all = mobile_page.get_by_role("link", name="Show all photos", exact=True)
+        _assert_minimum_target(show_all)
+        _assert_no_horizontal_overflow(mobile_page)
+
+        show_all.click()
+        expect(mobile_page).to_have_url(re.compile(r"#gallery-view-heading$"))
+        expect(
+            mobile_page.get_by_role("heading", name="All photos", exact=True)
+        ).to_be_focused()
+        mobile_items = mobile_page.locator("[data-gallery-item]")
+        expect(mobile_items).to_have_count(2)
+        expect(
+            mobile_page.get_by_role("link", name=re.compile(r"All photos\s+2"))
+        ).to_have_attribute("aria-current", "page")
+        _assert_minimum_target(mobile_items.nth(1).locator(".fav-btn"))
+        mobile_items.nth(1).locator(".fav-btn").click()
+        expect(mobile_page.locator("[data-gallery-item]").nth(1)).to_have_class(
+            re.compile(r"\bis-fav\b")
+        )
+        _assert_no_horizontal_overflow(mobile_page)
+
+        no_script_context = make_context(
+            width=320,
+            height=568,
+            mobile=True,
+            java_script_enabled=False,
+        )
+        no_script_page = no_script_context.new_page()
+        _instrument(no_script_page, live_hestia, browser_issues)
+        no_script_page.goto(f"{client_url}?view=selected#gallery-view-heading")
+        no_script_selected_heading = no_script_page.get_by_role(
+            "heading", name="Selected photos", exact=True
+        )
+        expect(no_script_selected_heading).to_be_focused()
+        no_script_items = no_script_page.locator("[data-gallery-item]")
+        expect(no_script_items).to_have_count(1)
+        _assert_minimum_target(no_script_items.locator(".fav-btn"))
+        _assert_no_horizontal_overflow(no_script_page)
+
+        no_script_items.locator(".fav-btn").click()
+        expect(no_script_page).to_have_url(
+            re.compile(r"\?view=selected#gallery-view-heading$")
+        )
+        expect(no_script_selected_heading).to_be_focused()
+        expect(no_script_page.locator("[data-gallery-item]")).to_have_count(0)
+        expect(no_script_page.locator("#gallery-lightbox")).to_have_count(0)
+        expect(
+            no_script_page.get_by_role("heading", name="No selected photos yet.")
+        ).to_be_visible()
+        expect(
+            no_script_page.locator('script[src="/static/client-gallery.js"]')
+        ).to_have_count(0)
+        no_script_show_all = no_script_page.get_by_role(
+            "link", name="Show all photos", exact=True
+        )
+        _assert_minimum_target(no_script_show_all)
+        _assert_no_horizontal_overflow(no_script_page)
+
+        no_script_show_all.click()
+        expect(no_script_page).to_have_url(re.compile(r"#gallery-view-heading$"))
+        expect(
+            no_script_page.get_by_role("heading", name="All photos", exact=True)
+        ).to_be_focused()
+        no_script_items = no_script_page.locator("[data-gallery-item]")
+        expect(no_script_items).to_have_count(2)
+        _assert_minimum_target(no_script_items.nth(1).locator(".fav-btn"))
+        no_script_items.nth(1).locator(".fav-btn").click()
+        expect(no_script_page.locator("[data-gallery-item]").nth(1)).to_have_class(
+            re.compile(r"\bis-fav\b")
+        )
+        _assert_no_horizontal_overflow(no_script_page)
 
         submit_button = proofing_actions.get_by_role(
             "button", name=re.compile(r"I'm done")

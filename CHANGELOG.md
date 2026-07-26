@@ -6,6 +6,12 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Added
 
+- Client proofing galleries now provide ordinary, server-rendered All photos and
+  Selected photos views with visible counts, gallery-order filtering, safe lightbox
+  continuity, and a distinct selected-empty recovery path. The view projects only from
+  the existing authorized visible-image list, preserves full-gallery story identity and
+  historical packet totals, keeps PIN-locked pages media-dark, and works without
+  JavaScript.
 - Project hubs can now launch the existing proposal flow with the current project and
   client preselected. Choosing a package preserves both so the resulting proposal,
   contract, and invoice stay attached to the same job.

@@ -139,9 +139,13 @@ failure alone does not make successful SMTP delivery exactly-once.
    favorite/note, confirmed-submission, reload, and owner-visible packet journey at 320x568.
    The existing owner-selected cover now opens the unlocked client gallery, falls back only
    to an authorized visible browse thumbnail, and keeps PIN-locked responses media-dark;
-   galleries without such a thumbnail keep the text header. Firefox/WebKit and physical-device
-   checks remain release checks. Persisted story-copy/layout controls and the proofing-to-final-
-   download transition remain open; neither change widens anonymous media authority before D3.
+   galleries without such a thumbnail keep the text header. Clients can now switch between
+   all visible photos and a server-rendered selected-photo review, including safe lightbox
+   continuity and an honest selected-empty recovery path at 320px. The filter is only a
+   projection of the existing authorized visible-image set; it is not media or mutation
+   authority. Firefox/WebKit and physical-device checks remain release checks. Persisted
+   story-copy/layout controls and the proofing-to-final-download transition remain open;
+   neither change widens anonymous media authority before D3.
 3. Add client-selectable proposal collections/add-ons and typed questionnaire fields
    before pursuing generalized document-builder depth.
 4. Define timezone ownership and external-busy synchronization. Implement it after the
@@ -164,7 +168,7 @@ large lab catalog wait until the pilot earns revenue.
 |---|---|---|
 | Client home | Ranked action room exists but enable/send and return context are fragmented | One intentional portal lifecycle and uninterrupted booking checklist |
 | Booking economics | Deposits exist; remaining package balance is not consistently created | Total/deposit/balance invariant with approved settlement semantics |
-| Gallery delivery | Upload, publish, owner-visible proof handoff, optional proof-link automation context, favorites, comments, cull, offer, download, lightbox V1 code/server coverage, pinned Chromium desktop-navigation/full-320x568 acceptance, and a cover-led client opening exist | Firefox/WebKit and physical-device acceptance, persisted story controls, and an approved final-download transition |
+| Gallery delivery | Upload, publish, owner-visible proof handoff, optional proof-link automation context, favorites, comments, cull, offer, download, lightbox V1 code/server coverage, pinned Chromium desktop-navigation/full-320x568 acceptance, a cover-led client opening, and server-rendered selected-photo review exist | Firefox/WebKit and physical-device acceptance, persisted story controls, and an approved final-download transition |
 | Communication/calendar | Outbound email and calendar subscription exist | Approved two-way messaging and timezone-aware external-busy sync |
 | Print commerce | Stable offers, orders, and a generic lab seam exist | Selected frames/options/shipping, one real lab, and reconciliation |
 | AI moat | Vision and favorites already curate offers | Historical provenance, labeled benchmark, editable recommendation, measured sales lift |
