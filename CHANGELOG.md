@@ -6,6 +6,11 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Added
 
+- Studio dashboards now surface a Gallery handoffs queue for published galleries that
+  have not reached final delivery. Submitted selection packets rank first (oldest first),
+  followed by proofing in progress and untouched galleries; exact favorite and note
+  counts appear in both the dashboard and owner digest, and submitted work links directly
+  to the owner proofing packet. The queue reuses existing state and remains tenant-scoped.
 - Client proofing galleries now provide ordinary, server-rendered All photos and
   Selected photos views with visible counts, gallery-order filtering, safe lightbox
   continuity, and a distinct selected-empty recovery path. The view projects only from

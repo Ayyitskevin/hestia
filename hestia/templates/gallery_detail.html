@@ -1,5 +1,15 @@
 {% extends "base.html" %}
 {% block title %}{{ gallery.title }} — Hestia{% endblock %}
+{% block head_extra %}
+<style>
+  #proofing-activity { scroll-margin-top: 72px; }
+  #proofing-activity:target,
+  #proofing-activity:focus-visible {
+    outline: 3px solid var(--ember-soft);
+    outline-offset: 3px;
+  }
+</style>
+{% endblock %}
 {% block content %}
 {% if too_large %}
   <div class="alert">{{ too_large }} file{{ '' if too_large == 1 else 's' }} weren't uploaded — each image must be under 75&nbsp;MB. Export a smaller version and try again.</div>
@@ -316,8 +326,9 @@
 {% endif %}
 
 {% if selection_packet and (selection_packet.favorite_count or selection_packet.comment_count or selection_packet.submitted_at) %}
-<div class="card stack" style="margin-top:14px">
-  <h2 style="font-size:1.17em">Proofing activity</h2>
+<div class="card stack" id="proofing-activity" tabindex="-1"
+     aria-labelledby="proofing-activity-title" style="margin-top:14px">
+  <h2 id="proofing-activity-title" style="font-size:1.17em">Proofing activity</h2>
   <p class="muted">
     <span class="pill {{ 'on' if selection_packet.status == 'submitted' else 'off' }}">{{ selection_packet.status_label }}</span>
     {{ selection_packet.comment_count }} note{{ '' if selection_packet.comment_count == 1 else 's' }}
