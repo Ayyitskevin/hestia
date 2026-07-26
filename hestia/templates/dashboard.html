@@ -232,9 +232,20 @@
       {% endif %}
       {% if attention.to_deliver %}
       <div class="stack" style="gap:6px">
-        <div class="label"><span class="dot info" style="margin-right:5px"></span>Ready to deliver · {{ attention.to_deliver|length }}</div>
+        <div class="label"><span class="dot info" style="margin-right:5px"></span>Gallery handoffs · {{ attention.to_deliver|length }}</div>
         {% for g in attention.to_deliver %}
-        <div><a href="/galleries/{{ g.id }}">{{ g.title }}</a> <span class="muted">· enable download</span></div>
+        <div>
+          {% if g.proofing_status == 'awaiting' %}
+          <a href="/galleries/{{ g.id }}">{{ g.title }}</a>
+          {% else %}
+          <a href="/galleries/{{ g.id }}#proofing-activity">{{ g.title }}</a>
+          {% endif %}
+          <span class="pill {{ 'on' if g.proofing_status == 'submitted' else 'off' }}">{{ g.handoff_label }}</span>
+          <span class="muted">· {{ g.favorite_count }} favorite{{ '' if g.favorite_count == 1 else 's' }} · {{ g.comment_count }} note{{ '' if g.comment_count == 1 else 's' }}</span>
+          {% if g.proofing_status == 'submitted' %}
+          <span class="muted">·</span> <a href="/galleries/{{ g.id }}#proofing-activity">Review proofing</a>
+          {% endif %}
+        </div>
         {% endfor %}
       </div>
       {% endif %}

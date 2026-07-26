@@ -52,7 +52,7 @@ full hosted operating system:
 | Proposal app | Package-backed proposals with view tracking, automated follow-up nudges, agreement, and deposit |
 | Contract tool | Templates, sent agreements, typed e-signature, audit trail |
 | Intake forms | Questionnaires, reusable templates, client portal responses |
-| Gallery host | Native galleries, delivery links, proofing, favorites, comments, selection packets |
+| Gallery host | Native galleries, delivery links, proofing, favorites, comments, dashboard handoffs, selection packets |
 | AI helper apps | Culling, hero picks, metadata, offer curation, album drafts, copy |
 | Gallery sales automation | Ready-to-monetize gallery queue, one-click campaigns, and cooldown-safe print offer emails |
 | Invoicing app | Invoices, payment plans, deposits, receipts, Stripe checkout |

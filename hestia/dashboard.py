@@ -77,13 +77,47 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         "ORDER BY datetime(a.starts_at) ASC LIMIT ?",
         (tenant_id, limit))]
 
-    # Published galleries the client can see but can't yet download — finish the job.
+    # Published galleries the client can proof but can't yet download. Materialize the
+    # tenant's candidate galleries once, then use the existing gallery-leading proofing
+    # indexes for each count. This stays one bounded SQL read without globally scanning
+    # every studio's proofing rows or hydrating an N+1 packet. Both counts include the
+    # image spine, so relationship-inconsistent rows cannot inflate another studio.
     to_deliver = [dict(r) for r in conn.execute(
-        "SELECT id, title FROM galleries "
-        "WHERE tenant_id = ? AND status = 'published' "
-        "AND (delivery_token IS NULL OR delivery_token = '') "
-        "ORDER BY id DESC LIMIT ?",
+        "WITH handoffs AS MATERIALIZED ("
+        "  SELECT g.id, g.title, g.tenant_id, g.selections_submitted_at, "
+        "         (SELECT COUNT(*) FROM image_favorites f "
+        "          JOIN images i ON i.id = f.image_id "
+        "             AND i.tenant_id = f.tenant_id AND i.gallery_id = f.gallery_id "
+        "          WHERE f.tenant_id = g.tenant_id AND f.gallery_id = g.id"
+        "         ) AS favorite_count, "
+        "         (SELECT COUNT(*) FROM image_comments c "
+        "          JOIN images i ON i.id = c.image_id "
+        "             AND i.tenant_id = c.tenant_id AND i.gallery_id = c.gallery_id "
+        "          WHERE c.tenant_id = g.tenant_id AND c.gallery_id = g.id"
+        "         ) AS comment_count "
+        "  FROM galleries g "
+        "  WHERE g.tenant_id = ? AND g.status = 'published' "
+        "  AND (g.delivery_token IS NULL OR g.delivery_token = '')"
+        ") "
+        "SELECT id, title, selections_submitted_at, favorite_count, comment_count, "
+        "       CASE WHEN selections_submitted_at IS NOT NULL THEN 'submitted' "
+        "            WHEN favorite_count > 0 OR comment_count > 0 THEN 'in_progress' "
+        "            ELSE 'awaiting' END AS proofing_status "
+        "FROM handoffs "
+        "ORDER BY CASE WHEN selections_submitted_at IS NOT NULL THEN 0 "
+        "              WHEN favorite_count > 0 OR comment_count > 0 THEN 1 "
+        "              ELSE 2 END, "
+        "         CASE WHEN selections_submitted_at IS NOT NULL "
+        "              THEN selections_submitted_at END ASC, "
+        "         id ASC LIMIT ?",
         (tenant_id, limit))]
+    handoff_labels = {
+        "submitted": "Selections submitted",
+        "in_progress": "Client choosing",
+        "awaiting": "Awaiting selections",
+    }
+    for gallery in to_deliver:
+        gallery["handoff_label"] = handoff_labels[gallery["proofing_status"]]
 
     # Sessions still awaiting a confirmed time: every 'proposed' appointment — a public
     # booking request the studio should confirm, or an owner-sent time-picker the client
@@ -571,7 +605,17 @@ def build_owner_digest(conn: sqlite3.Connection, tenant_id: str,
             lambda x: x["title"] + (f" — {x['client_name']}" if x.get("client_name") else ""))
     section("\U0001f4d6", "Album change requests", att["album_changes"],
             lambda x: f"{x['gallery_title']}: “{x['change_request']}”")
-    section("\U0001f4e6", "Ready to deliver", att["to_deliver"], lambda x: x["title"])
+    section(
+        "\U0001f4e6",
+        "Gallery handoffs",
+        att["to_deliver"],
+        lambda x: (
+            f"{x['title']} — {x['handoff_label']}; "
+            f"{x['favorite_count']} favorite"
+            f"{'' if x['favorite_count'] == 1 else 's'}, "
+            f"{x['comment_count']} note{'' if x['comment_count'] == 1 else 's'}"
+        ),
+    )
     section("✍️", "Awaiting signature", att["awaiting_contract"],
             lambda x: x["title"] + (f" — {x['client_name']}" if x.get("client_name") else ""))
     section("Proposal follow-up", "Awaiting proposal acceptance", att["proposal_acceptance"],
