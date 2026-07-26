@@ -190,6 +190,18 @@
       imminent, or galleries undelivered.</p>
   {% else %}
     <div class="grid cols-2">
+      {% if attention.pipeline_issues %}
+      <div class="stack" style="gap:6px">
+        <div class="label"><span class="dot down" style="margin-right:5px"></span>Gallery processing issues · {{ attention.pipeline_issues|length }}</div>
+        {% for r in attention.pipeline_issues %}
+        <div>
+          <a href="/pipeline/{{ r.id }}">Run #{{ r.id }}</a>
+          <span class="muted">· {{ r.gallery_title or 'Gallery unavailable' }}</span>
+          <span class="pill danger">{{ r.status_label }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
       {% if attention.leads %}
       <div class="stack" style="gap:6px">
         <div class="label"><span class="dot ember" style="margin-right:5px"></span>New leads · {{ attention.leads|length }}</div>
@@ -327,16 +339,30 @@
   </div>
 
   <div class="card stack">
-    <h3>Recent pipeline runs</h3>
+    <h3>Gallery processing</h3>
     {% if runs %}
+      <p class="muted">Runs needing attention stay first, including older work that was re-queued.</p>
       <table>
-        <thead><tr><th>Run</th><th>Gallery</th><th>Status</th></tr></thead>
+        <thead><tr><th>Run / gallery</th><th>Status</th><th>Updated</th></tr></thead>
         <tbody>
         {% for r in runs %}
           <tr>
-            <td><a href="/pipeline/{{ r.id }}">#{{ r.id }}</a></td>
-            <td>{{ r.source_id }}</td>
-            <td><span class="pill {{ 'on' if r.status == 'done' else 'off' }}">{{ r.status }}</span></td>
+            <td>
+              <a href="/pipeline/{{ r.id }}">Run #{{ r.id }}</a><br>
+              {% if r.gallery_id %}
+                <a href="/galleries/{{ r.gallery_id }}">{{ r.gallery_title }}</a>
+              {% else %}
+                <span class="muted">Gallery unavailable</span>
+              {% endif %}
+            </td>
+            <td><span class="pill {{ r.status_class }}">{{ r.status_label }}</span></td>
+            <td class="muted">
+              {% if r.updated_at %}
+                <time datetime="{{ r.updated_at }}">{{ r.updated_label }}</time>
+              {% else %}
+                Time unavailable
+              {% endif %}
+            </td>
           </tr>
         {% endfor %}
         </tbody>

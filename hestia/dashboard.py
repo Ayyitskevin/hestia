@@ -38,9 +38,100 @@ _SOURCE_LABELS = {
     "other": "Other source",
 }
 
+_PIPELINE_STATUS_LABELS = {
+    "error": "Needs review",
+    "running": "Processing",
+    "queued": "Queued",
+    "done": "Complete",
+    "unknown": "Needs review",
+}
+_PIPELINE_STATUS_CLASSES = {
+    "error": "danger",
+    "running": "info",
+    "queued": "warn",
+    "done": "on",
+    "unknown": "danger",
+}
+_MAX_PIPELINE_HEALTH = 100
 
-def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8) -> dict:
+
+def pipeline_health(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    *,
+    limit: int = 6,
+) -> list[dict]:
+    """Bounded, redacted gallery-processing summaries for the owner dashboard.
+
+    A run can be re-armed years after it was created, so current operating state is
+    ordered by status and ``updated_at`` rather than by the immutable creation time.
+    Only fixed presentation fields cross this boundary: raw steps, errors, offer URLs,
+    and malformed relationship identifiers remain inside the pipeline domain.
+    """
+    safe_limit = min(_MAX_PIPELINE_HEALTH, max(0, limit))
+    rows = conn.execute(
+        """
+        SELECT r.id,
+               g.id AS gallery_id,
+               g.title AS gallery_title,
+               CASE r.status
+                   WHEN 'error' THEN 'error'
+                   WHEN 'running' THEN 'running'
+                   WHEN 'queued' THEN 'queued'
+                   WHEN 'done' THEN 'done'
+                   ELSE 'unknown'
+               END AS status,
+               CASE
+                   WHEN datetime(r.updated_at) IS NOT NULL
+                   THEN strftime('%Y-%m-%dT%H:%M:%SZ', r.updated_at)
+                   ELSE NULL
+               END AS updated_at,
+               CASE
+                   WHEN datetime(r.updated_at) IS NOT NULL
+                   THEN strftime('%Y-%m-%d %H:%M UTC', r.updated_at)
+                   ELSE NULL
+               END AS updated_label
+          FROM pipeline_runs r
+          LEFT JOIN galleries g
+            ON g.id = CAST(r.source_id AS INTEGER)
+           AND CAST(g.id AS TEXT) = r.source_id
+           AND g.tenant_id = r.tenant_id
+         WHERE r.tenant_id = ?
+           AND r.source = 'gallery'
+         ORDER BY CASE r.status
+                      WHEN 'error' THEN 0
+                      WHEN 'running' THEN 1
+                      WHEN 'queued' THEN 2
+                      WHEN 'done' THEN 3
+                      ELSE 0
+                  END,
+                  CASE WHEN datetime(r.updated_at) IS NULL THEN 1 ELSE 0 END,
+                  datetime(r.updated_at) DESC,
+                  r.id DESC
+         LIMIT ?
+        """,
+        (tenant_id, safe_limit),
+    ).fetchall()
+    summaries = [dict(row) for row in rows]
+    for summary in summaries:
+        summary["status_label"] = _PIPELINE_STATUS_LABELS[summary["status"]]
+        summary["status_class"] = _PIPELINE_STATUS_CLASSES[summary["status"]]
+    return summaries
+
+
+def needs_attention(
+    conn: sqlite3.Connection,
+    tenant_id: str,
+    *,
+    limit: int = 8,
+    pipeline_runs: list[dict] | None = None,
+) -> dict:
     """Actionable items for the dashboard, each scoped to the tenant."""
+    if pipeline_runs is None:
+        pipeline_runs = pipeline_health(conn, tenant_id, limit=6)
+    pipeline_issues = [
+        run for run in pipeline_runs if run.get("status") in {"error", "unknown"}
+    ]
     leads = [dict(r) for r in conn.execute(
         "SELECT p.id, p.name, p.created_at, p.shoot_type, c.name AS client_name "
         "FROM projects p LEFT JOIN clients c ON c.id = p.client_id AND c.tenant_id = p.tenant_id "
@@ -173,10 +264,11 @@ def needs_attention(conn: sqlite3.Connection, tenant_id: str, *, limit: int = 8)
         "proposal_acceptance": proposal_followup["awaiting_acceptance"],
         "proposal_booking": proposal_followup["finish_booking"],
         "proposal_followup": proposal_followup,
+        "pipeline_issues": pipeline_issues,
         "total": (len(leads) + len(unpaid) + len(upcoming) + len(to_deliver)
                   + len(to_confirm) + len(album_changes)
                   + len(awaiting_contract) + len(awaiting_questionnaire)
-                  + proposal_followup["total"]),
+                  + len(pipeline_issues) + proposal_followup["total"]),
     }
 
 
@@ -614,6 +706,15 @@ def build_owner_digest(conn: sqlite3.Connection, tenant_id: str,
             f"{x['favorite_count']} favorite"
             f"{'' if x['favorite_count'] == 1 else 's'}, "
             f"{x['comment_count']} note{'' if x['comment_count'] == 1 else 's'}"
+        ),
+    )
+    section(
+        "⚠️",
+        "Gallery processing issues",
+        att["pipeline_issues"],
+        lambda x: (
+            f"Run #{x['id']} — {x['gallery_title'] or 'Gallery unavailable'}"
+            f" — {x['status_label']}"
         ),
     )
     section("✍️", "Awaiting signature", att["awaiting_contract"],
