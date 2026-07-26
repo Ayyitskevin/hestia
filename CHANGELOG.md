@@ -6,6 +6,11 @@ All notable changes to Hestia are documented in this file. The format follows [K
 
 ### Added
 
+- Client proofing galleries now open after unlock with the owner-selected visible cover
+  when it has a browse thumbnail, otherwise the first authorized visible browse image.
+  Galleries without one keep the text header. The responsive, no-JavaScript presentation
+  uses existing proofing authority, keeps PIN-locked responses media-dark, and leaves the
+  normal grid, lightbox, favorites, notes, and selection packet unchanged.
 - Added a dedicated, isolated Chromium acceptance gate for public proofing: native-dialog
   navigation, keyboard guards, and focus return at 1280x900, plus the complete 320x568
   touch, favorite, note, confirmed-submission, reload, and owner-visible packet journey.

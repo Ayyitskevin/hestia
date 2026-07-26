@@ -33,6 +33,7 @@ from ..galleries import (
     apply_quality_cull,
     create_gallery,
     gallery_proofing_url,
+    gallery_story_cover_image,
     get_gallery,
     image_count,
     list_galleries,
@@ -211,6 +212,11 @@ def gallery_detail(
                           if (analysis.get(im["id"]) or {}).get("flags") and not im["hidden"])
     hidden_count = sum(1 for im in images if im["hidden"])
     visible_image_count = len(images) - hidden_count
+    client_story_cover = gallery_story_cover_image(
+        images,
+        gallery.get("cover_image_id"),
+    )
+    client_story_cover_id = client_story_cover["id"] if client_story_cover else None
     if not project:
         proof_recipient_status = "no_project"
     elif not project_client:
@@ -237,6 +243,7 @@ def gallery_detail(
                   cull=cull, cull_pending=cull_pending, hidden_count=hidden_count, analysis=analysis, hero_ids=hero_ids,
                   flagged_pending=flagged_pending, too_large=too_large,
                   cover_id=gallery.get("cover_image_id"), delivery_link=delivery_link,
+                  client_story_cover_id=client_story_cover_id,
                   delivery_is_expired=delivery_is_expired,
                   proofing_link=proofing_link, ai_usage=ai_usage, ai_subsidy=ai_subsidy,
                   publish_automation_count=publish_automation_count,

@@ -73,6 +73,27 @@ def gallery_proofing_url(settings: Settings, tenant_slug: str, gallery_slug: str
     return f"{settings.public_url.rstrip('/')}/g/{tenant_slug}/{gallery_slug}"
 
 
+def gallery_story_cover_image(
+    images: list[dict],
+    cover_image_id: int | None,
+) -> dict | None:
+    """Choose the client-gallery story image from already-authorized rows.
+
+    A story hero adds an eager image request above the normal browse grid, so it must
+    use a real thumbnail rather than ``Storage.thumb_url``'s full-original fallback.
+    Hidden rows are excluded here too so owner and client views can share this rule.
+    """
+    fallback = None
+    for image in images:
+        if image.get("hidden") or not image.get("thumb_key"):
+            continue
+        if fallback is None:
+            fallback = image
+        if image["id"] == cover_image_id:
+            return image
+    return fallback
+
+
 # ── Galleries ───────────────────────────────────────────────────────────────
 
 

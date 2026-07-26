@@ -9,6 +9,7 @@ from ..campaigns import discount_bundle, get_active_campaign
 from ..dashboard import owner_digest_recipient
 from ..email import notify
 from ..galleries import (
+    gallery_story_cover_image,
     get_gallery_by_slug,
     get_image,
     list_images,
@@ -156,8 +157,13 @@ def client_gallery(request: Request, slug: str, gallery_slug: str):
             else []
         )
         offer = None
+        story_cover_image = None
         lightbox_image_id = None
         if unlocked:
+            story_cover_image = gallery_story_cover_image(
+                images,
+                gallery.get("cover_image_id"),
+            )
             record_gallery_view(conn, gallery["id"])      # client opened their proofing gallery
             from ..sales import get_offer_for_gallery, offer_public_url
             from .deps import settings_of
@@ -189,7 +195,7 @@ def client_gallery(request: Request, slug: str, gallery_slug: str):
     return render(request, "client_gallery.html", auth=None, tenant=tenant, gallery=gallery,
                   images=images, unlocked=unlocked, storage=storage_of(request), offer_url=offer,
                   favorites=favorites, comments=comments, selection_packet=packet, alts=alts,
-                  lightbox_image_id=lightbox_image_id)
+                  story_cover_image=story_cover_image, lightbox_image_id=lightbox_image_id)
 
 
 @router.post("/g/{slug}/{gallery_slug}/favorite/{image_id}")
