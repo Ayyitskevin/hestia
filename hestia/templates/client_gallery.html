@@ -18,8 +18,9 @@
       <div class="client-gallery-story-copy">
         <div class="client-gallery-story-eyebrow">{{ tenant.name }}</div>
         <h1>{{ gallery.title }}</h1>
-        <p>{{ images|length }} photograph{{ '' if images|length == 1 else 's' }} · selected for you</p>
-        <a class="client-gallery-story-action" href="#gallery-photos">View gallery</a>
+        <p>{{ gallery_images|length }} photograph{{ '' if gallery_images|length == 1 else 's' }} · in this gallery</p>
+        <a class="client-gallery-story-action"
+           href="{{ '#gallery-photos' if images else '#gallery-view-heading' }}">View gallery</a>
       </div>
     </div>
   </header>
@@ -37,6 +38,7 @@
         <div class="card narrow stack" style="margin:40px auto">
           <h3>🔒 This gallery is protected</h3>
           <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/pin">
+            {% if gallery_view == 'selected' %}<input type="hidden" name="view" value="selected">{% endif %}
             <label for="pin">Enter your PIN</label>
             <input type="text" id="pin" name="pin" autofocus required>
             <div class="form-actions"><button class="btn" type="submit">Unlock</button></div>
@@ -62,6 +64,9 @@
                 · ready to send when you are done
               {% endif %}
             </p>
+            {% if unavailable_selected_photos %}
+              <p class="muted">Some photos selected earlier are no longer available.</p>
+            {% endif %}
           </div>
           {% endif %}
           {% if gallery.selections_submitted_at %}
@@ -73,14 +78,38 @@
           {% else %}
             <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/submit" style="margin-bottom:14px"
                   data-confirm="Send your {{ selection_packet.favorite_count }} favorite{{ '' if selection_packet.favorite_count == 1 else 's' }} to {{ tenant.name }}?">
+              {% if gallery_view == 'selected' %}<input type="hidden" name="view" value="selected">{% endif %}
               <button class="btn" type="submit">✓ I'm done — send my {{ selection_packet.favorite_count }} favorite{{ '' if selection_packet.favorite_count == 1 else 's' }} to {{ tenant.name }}</button>
             </form>
           {% endif %}
         </div>
+        {% if gallery_images %}
+          <nav class="gallery-view-nav" aria-label="Gallery view">
+            <a class="gallery-view-link" href="/g/{{ tenant.slug }}/{{ gallery.slug }}#gallery-view-heading"
+               {% if gallery_view == 'all' %}aria-current="page"{% endif %}>
+              <span>All photos</span>
+              <span class="gallery-view-count">{{ gallery_images|length }}</span>
+            </a>
+            <a class="gallery-view-link" href="/g/{{ tenant.slug }}/{{ gallery.slug }}?view=selected#gallery-view-heading"
+               {% if gallery_view == 'selected' %}aria-current="page"{% endif %}>
+              <span>Selected photos</span>
+              <span class="gallery-view-count">{{ favorites|length }}</span>
+            </a>
+          </nav>
+          <div class="gallery-view-heading">
+            <h2 id="gallery-view-heading" tabindex="-1">{{ 'Selected photos' if gallery_view == 'selected' else 'All photos' }}</h2>
+            <p class="gallery-help">
+              {% if gallery_view == 'selected' %}
+                Review the photos you've hearted. Remove a heart to take one out.
+              {% else %}
+                Choose a photo to view it large. Use the heart and notes to build your selection.
+              {% endif %}
+            </p>
+          </div>
+        {% endif %}
         {% if images %}
-          <p class="gallery-help">Choose a photo to view it large. Use the heart and notes to build your selection.</p>
           <section class="thumb-grid client-grid" id="gallery-photos" tabindex="-1"
-                   aria-label="Gallery photos">
+                   aria-label="{{ 'Selected photos' if gallery_view == 'selected' else 'Gallery photos' }}">
             {% for img in images %}
               {% set is_favorite = img.id in favorites %}
               <figure class="thumb proof {{ 'is-fav' if is_favorite else '' }}" id="img-{{ img.id }}"
@@ -94,6 +123,7 @@
                   <form class="proof-favorite-form" method="post"
                         action="/g/{{ tenant.slug }}/{{ gallery.slug }}/favorite/{{ img.id }}">
                     <input type="hidden" name="favorite" value="{{ '0' if is_favorite else '1' }}">
+                    {% if gallery_view == 'selected' %}<input type="hidden" name="view" value="selected">{% endif %}
                     <button class="fav-btn {{ 'on' if is_favorite else '' }}" type="submit"
                             aria-pressed="{{ 'true' if is_favorite else 'false' }}"
                             aria-label="{{ 'Remove photo from favorites' if is_favorite else 'Add photo to favorites' }}"
@@ -108,6 +138,7 @@
                     </div>
                     <form class="proof-comment-form" method="post"
                           action="/g/{{ tenant.slug }}/{{ gallery.slug }}/comment/{{ img.id }}">
+                      {% if gallery_view == 'selected' %}<input type="hidden" name="view" value="selected">{% endif %}
                       <label for="author-{{ img.id }}">Your name <span class="muted">(optional)</span></label>
                       <input type="text" id="author-{{ img.id }}" name="author_name" autocomplete="name">
                       <label for="comment-{{ img.id }}">Note about this photo</label>
@@ -120,6 +151,18 @@
             {% endfor %}
           </section>
           {% include "_client_gallery_lightbox.html" %}
+        {% elif gallery_images and gallery_view == 'selected' %}
+          <div class="card gallery-empty gallery-selected-empty" role="status">
+            {% if unavailable_selected_photos %}
+              <h2>No selected photos are available to review.</h2>
+              <p class="muted">Earlier selections remain in your saved packet, but they are no longer shown in this gallery.</p>
+            {% else %}
+              <h2>No selected photos yet.</h2>
+              <p class="muted">Heart photos in All photos, then return here to review them together.</p>
+            {% endif %}
+            <a class="btn secondary gallery-view-action"
+               href="/g/{{ tenant.slug }}/{{ gallery.slug }}#gallery-view-heading">Show all photos</a>
+          </div>
         {% else %}
           <div class="card gallery-empty" role="status">
             <h2>No photos are available in this gallery yet.</h2>

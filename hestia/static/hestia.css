@@ -862,8 +862,40 @@ body.client th, body.client td { border-color: rgba(255, 255, 255, .06); }
 
 /* ── Client gallery lightbox ────────────────────────────────────────────── */
 .gallery-help { color: var(--ink-client-2); margin: 22px 0 14px; }
+.gallery-view-nav {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+  max-width: 560px; margin: 22px 0 0;
+}
+.gallery-view-link {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 44px; padding: 8px 12px; border: 1px solid var(--hairline);
+  border-radius: var(--radius-control); background: var(--surface-3);
+  color: var(--ink-client-2); font-size: .82rem; line-height: 1.25;
+}
+.gallery-view-link:hover { border-color: rgba(232, 135, 58, .55); text-decoration: none; }
+.gallery-view-link[aria-current="page"] {
+  border-color: var(--ember); background: var(--ember-tint);
+  box-shadow: inset 0 -3px 0 var(--ember); color: var(--ink-client); font-weight: 700;
+}
+.gallery-view-count {
+  display: inline-grid; place-items: center; min-width: 24px; min-height: 24px;
+  padding: 0 6px; border-radius: 999px; background: rgba(255, 255, 255, .08);
+  color: inherit; font-size: .72rem; font-variant-numeric: tabular-nums;
+}
+.gallery-view-heading { margin-top: 22px; }
+.gallery-view-heading h2 { color: var(--ink-client); font-size: 1.2rem; margin: 0; }
+.gallery-view-heading .gallery-help { margin: 6px 0 14px; }
+.gallery-view-action { display: inline-flex; min-height: 44px; margin-top: 8px; }
+.gallery-view-link:focus-visible, #gallery-view-heading:focus-visible,
+.gallery-view-action:focus-visible {
+  outline: 3px solid var(--ember-soft); outline-offset: 3px;
+}
 .gallery-empty { margin-top: 22px; text-align: center; }
 .gallery-empty h2 { color: var(--ink-client); margin-top: 0; }
+.gallery-selected-empty { padding-block: 28px; }
+body.client .client-grid .fav-btn {
+  display: inline-grid; place-items: center; min-width: 44px; min-height: 44px;
+}
 .proof-image-link { display: block; background: #090806; overflow: hidden; }
 .proof-image-link img { transition: transform .2s ease, opacity .2s ease; }
 .proof-image-link:hover img { transform: scale(1.015); opacity: .94; }

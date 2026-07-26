@@ -12,7 +12,7 @@
       <button class="lightbox-icon" type="button" data-lightbox-close aria-label="Close image viewer">×</button>
     </header>
     <div class="lightbox-layout">
-      <section class="lightbox-stage" aria-label="Selected gallery photo">
+      <section class="lightbox-stage" aria-label="Current gallery photo">
         <button class="lightbox-nav previous" type="button" data-lightbox-prev{% if images|length == 1 %} disabled{% endif %}
                 aria-label="Previous image">‹</button>
         <img data-lightbox-image alt="">
@@ -25,6 +25,7 @@
               data-lightbox-favorite-form>
           <input type="hidden" name="favorite" value="{{ '0' if first_favorite else '1' }}" data-lightbox-favorite-value>
           <input type="hidden" name="return_to" value="lightbox">
+          {% if gallery_view == 'selected' %}<input type="hidden" name="view" value="selected">{% endif %}
           <button class="lightbox-favorite {{ 'on' if first_favorite else '' }}" type="submit"
                   aria-pressed="{{ 'true' if first_favorite else 'false' }}" data-lightbox-favorite>
             <span aria-hidden="true">{{ '♥' if first_favorite else '♡' }}</span>
@@ -40,6 +41,7 @@
           <form method="post" action="/g/{{ tenant.slug }}/{{ gallery.slug }}/comment/{{ first.id }}"
                 data-lightbox-comment-form>
             <input type="hidden" name="return_to" value="lightbox">
+            {% if gallery_view == 'selected' %}<input type="hidden" name="view" value="selected">{% endif %}
             <label for="lightbox-author">Your name <span class="muted">(optional)</span></label>
             <input type="text" id="lightbox-author" name="author_name" autocomplete="name">
             <label for="lightbox-comment">Note about this photo</label>
