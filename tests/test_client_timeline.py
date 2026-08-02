@@ -1,5 +1,7 @@
 """Client activity timeline — chronological aggregation across the whole loop."""
 
+from datetime import date, timedelta
+
 from conftest import login_owner, onboard_studio
 
 from hestia.contracts import create_contract
@@ -18,6 +20,8 @@ from hestia.tenants import create_tenant
 
 
 def test_timeline_aggregates_the_loop(conn, settings):
+    # A session date safely in the future so the "newest first" sort assertion holds any day of the year.
+    future_session = (date.today() + timedelta(days=30)).isoformat() + " 10:00"
     t = create_tenant(conn, name="Studio", shoot_type="wedding")
     c = create_client(conn, tenant_id=t["id"], name="Sarah", email="s@example.com")
     p = create_project(conn, tenant_id=t["id"], name="Wedding", client_id=c["id"])
@@ -30,9 +34,9 @@ def test_timeline_aggregates_the_loop(conn, settings):
     conn.execute("UPDATE invoices SET status = 'paid', paid_at = datetime('now') WHERE id = ?",
                  (inv["id"],))
     ap = create_appointment(conn, tenant_id=t["id"], title="Engagement",
-                            options=["2026-08-01 10:00"], client_id=c["id"])
-    conn.execute("UPDATE appointments SET status = 'confirmed', starts_at = '2026-08-01 10:00' "
-                 "WHERE id = ?", (ap["id"],))
+                            options=[future_session], client_id=c["id"])
+    conn.execute("UPDATE appointments SET status = 'confirmed', starts_at = ? "
+                 "WHERE id = ?", (future_session, ap["id"]))
     q = create_questionnaire(conn, tenant_id=t["id"], title="Intake", prompts=["Q"], client_id=c["id"])
     conn.execute("UPDATE questionnaires SET status = 'completed' WHERE id = ?", (q["id"],))
     g = create_gallery(conn, tenant_id=t["id"], title="Finals")
